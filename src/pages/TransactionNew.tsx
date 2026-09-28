@@ -34,8 +34,7 @@ export function TransactionNew() {
   const errors = {
     description: description.trim().length < 4 ? 'ระบุรายละเอียดอย่างน้อย 4 ตัวอักษร' : undefined,
     gross: grossNum <= 0 ? 'ยอด gross ต้องมากกว่า 0' : undefined,
-    slipRef: !slipRef.trim() ? 'เลขที่อ้างอิงสลิปจำเป็น (ห้ามซ้ำ)' : dup ? 'เลขที่อ้างอิงนี้ถูกใช้แล้ว' : undefined,
-    slip: !slipName ? 'แนบสลิปโอนเงิน (จำเป็น)' : undefined,
+    slipRef: slipRef.trim() && dup ? 'เลขที่อ้างอิงนี้ถูกใช้แล้ว' : undefined,
     vendorTaxId:
       vendorTaxId.trim() === ''
         ? 'กรุณากรอกเลขบัตรผู้ขาย 13 หลัก (จำเป็น — ใช้ล็อกหน้าผู้ขาย)'
@@ -68,7 +67,7 @@ export function TransactionNew() {
     <div className="mx-auto max-w-3xl space-y-5">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">สร้างรายการใหม่</h1>
-        <p className="mt-1 text-sm text-ink-500">ธนาคารเท่านั้น · แนบสลิปจำเป็น · หมายเลขใบเสร็จออกเมื่อผู้ขายเซ็นเท่านั้น</p>
+        <p className="mt-1 text-sm text-ink-500">ธนาคารเท่านั้น · หมายเลขใบเสร็จออกเมื่อผู้ขายเซ็นเท่านั้น</p>
       </div>
 
       <Card>
@@ -95,7 +94,7 @@ export function TransactionNew() {
           </div>
 
           <div>
-            <Label hint={`${vendorTaxId.replace(/\D/g, '').length}/13 หลัก · เก็บแบบ hash เท่านั้น`}>เลขบัตรประชาชนผู้ขาย</Label>
+            <Label hint={`${vendorTaxId.replace(/\D/g, '').length}/13 หลัก`}>เลขบัตรประชาชนผู้ขาย</Label>
             <Input
               value={vendorTaxId}
               onChange={(e) => setVendorTaxId(e.target.value.replace(/\D/g, '').slice(0, 13))}
@@ -153,13 +152,13 @@ export function TransactionNew() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <Label>เลขที่อ้างอิงสลิป</Label>
+              <Label hint="ไม่บังคับ — แนบภายหลังได้">เลขที่อ้างอิงสลิป</Label>
               <Input value={slipRef} onChange={(e) => setSlipRef(e.target.value)} placeholder="เช่น TRF-881201" />
               {touched && <FieldError msg={errors.slipRef} />}
               {slipRef && !dup && <p className="mt-1.5 text-[13px] text-emerald-600">เลขนี้ยังไม่ซ้ำ ✓</p>}
             </div>
             <div>
-              <Label>สลิปโอนเงิน</Label>
+              <Label hint="ไม่บังคับ">สลิปโอนเงิน</Label>
               <label className="flex h-11 cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3.5 text-sm font-medium text-ink-700 hover:border-ink-900">
                 <UploadCloud size={17} />
                 <span className="truncate">{slipName || 'เลือกไฟล์สลิป…'}</span>
@@ -170,7 +169,6 @@ export function TransactionNew() {
                   onChange={(e) => setSlipName(e.target.files?.[0]?.name ?? '')}
                 />
               </label>
-              {touched && <FieldError msg={errors.slip} />}
             </div>
           </div>
 
