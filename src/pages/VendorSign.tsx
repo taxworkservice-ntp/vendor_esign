@@ -141,9 +141,9 @@ export function VendorSign() {
               {tried && address.trim().length < 6 && <FieldError msg="กรุณากรอกที่อยู่ให้ครบ" />}
             </div>
             <div>
-              <Label hint="13 หลัก — เก็บเฉพาะตัวเลข">เลขบัตรประชาชน</Label>
+              <Label hint={`${tid.length}/13 หลัก — เก็บเฉพาะตัวเลข`}>เลขบัตรประชาชน</Label>
               <Input value={tid} onChange={(e) => setTid(e.target.value.replace(/\D/g, '').slice(0, 13))} placeholder="x-xxxx-xxxxx-xx-x" inputMode="numeric" />
-              {tid.length > 0 && !idOk && <FieldError msg="เลขไม่ครบ 13 หลักหรือไม่ถูกต้อง — ตรวจสอบอีกครั้ง" />}
+              {(tid.length === 13 || tried) && !idOk && <FieldError msg="เลขไม่ถูกต้อง — ตรวจสอบอีกครั้ง" />}
               {idOk && <p className="mt-1.5 flex items-center gap-1 text-[13px] font-medium text-emerald-600"><CheckCircle2 size={14} /> เลขถูกต้อง</p>}
             </div>
           </CardBody>
