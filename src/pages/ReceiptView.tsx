@@ -104,22 +104,15 @@ export function ReceiptView() {
           </div>
 
           <p className="mt-6 text-[12.5px] leading-relaxed text-ink-400">
-            ผู้ขายมิได้จดทะเบียนภาษีมูลค่าเพิ่ม ออกโดยผู้แทนลูกค้าในนามและโดยได้รับมอบอำนาจจากผู้ขายเฉพาะธุรกรรมนี้
+            ผู้ขายมิได้จดทะเบียนภาษีมูลค่าเพิ่ม
           </p>
 
-          <div className="mt-10 grid grid-cols-2 gap-10 text-center text-sm">
-            <div>
-              <div className="flex h-16 items-end justify-center">
-                {auth && <img src={auth.signaturePng} alt="ลายเซ็นผู้ขาย" className="max-h-16 object-contain" />}
-              </div>
-              <p className="border-t border-slate-300 pt-2 text-[13px]">ลายเซ็นผู้ขาย</p>
-              <p className="text-xs text-ink-400">({auth?.vendorName ?? '—'})</p>
+          <div className="mt-10 max-w-[240px] text-center text-sm">
+            <div className="flex h-16 items-end justify-center">
+              {auth && <img src={auth.signaturePng} alt="ลายเซ็นผู้ขาย" className="max-h-16 object-contain" />}
             </div>
-            <div>
-              <div className="h-16" />
-              <p className="border-t border-slate-300 pt-2 text-[13px]">ลายเซ็นผู้แทน</p>
-              <p className="text-xs text-ink-400">เซ็นบนกระดาษหลังพิมพ์</p>
-            </div>
+            <p className="border-t border-slate-300 pt-2 text-[13px]">ลายเซ็นผู้ขาย</p>
+            <p className="text-xs text-ink-400">({auth?.vendorName ?? '—'})</p>
           </div>
 
           <div className="mt-10 flex items-end justify-between gap-4 border-t border-slate-200 pt-4">

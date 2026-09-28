@@ -123,8 +123,9 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
   row('ยอดรับสุทธิ', `฿${thb(input.netAmount)}`, true, `(${input.amountWords})`)
   y -= 6
 
-  // Legal statements
-  for (const line of wrap('ผู้ขายมิได้จดทะเบียนภาษีมูลค่าเพิ่ม — เอกสารนี้เป็นใบเสร็จรับเงินเท่านั้น ไม่ใช่ใบกำกับภาษี · ออกโดยผู้แทนลูกค้าในนามและโดยได้รับมอบอำนาจจากผู้ขายเฉพาะธุรกรรมนี้', regular, 10, maxW)) {
+  // Legal statements — vendor is presented as the sole issuer (owner decision,
+  // overriding the representative-statement rule in the original spec).
+  for (const line of wrap('ผู้ขายมิได้จดทะเบียนภาษีมูลค่าเพิ่ม — เอกสารนี้เป็นใบเสร็จรับเงินเท่านั้น ไม่ใช่ใบกำกับภาษี', regular, 10, maxW)) {
     text(line, M, y, 10, regular, MUTED)
     y -= 15
   }
@@ -143,8 +144,6 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
   }
   text('ลายเซ็นผู้ขาย', M, sigY - 14, 10)
   text(input.vendor.name, M, sigY - 28, 10, regular, MUTED)
-  const rx = M + maxW / 2
-  text('ลายเซ็นผู้แทน (เซ็นบนกระดาษหลังพิมพ์)', rx, sigY - 14, 10)
   y = sigY - 52
 
   // Verification footer + QR
