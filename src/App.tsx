@@ -15,7 +15,7 @@ const qc = new QueryClient()
 export default function App() {
   return (
     <QueryClientProvider client={qc}>
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           {/* Vendor + public verify: no account, standalone pages (no portal chrome) */}
           <Route path="/v/:token" element={<VendorSign />} />
