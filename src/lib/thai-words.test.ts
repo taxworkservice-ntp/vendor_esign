@@ -27,8 +27,11 @@ describe('thai amount in words', () => {
 })
 
 describe('thai id checksum', () => {
-  it('accepts a valid id, rejects bad checksum / short input', () => {
+  it('accepts valid ids, rejects bad checksum / short input', () => {
+    // '1234567890121' hand-verified: weights 13..2 → sum 352, 352%11=0 → check 1
+    expect(validateThaiId('1234567890121')).toBe(true)
     expect(validateThaiId('1101700230708')).toBe(true)
+    expect(validateThaiId('1234567890122')).toBe(false)
     expect(validateThaiId('1101700230701')).toBe(false)
     expect(validateThaiId('123')).toBe(false)
     expect(validateThaiId('')).toBe(false)

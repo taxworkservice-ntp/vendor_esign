@@ -58,6 +58,6 @@ export function validateThaiId(id: string): boolean {
   const d = id.replace(/\D/g, '')
   if (!/^[1-9]\d{12}$/.test(d)) return false
   let sum = 0
-  for (let i = 0; i < 12; i++) sum += Number(d[i]) * (13 - (i + 1))
+  for (let i = 0; i < 12; i++) sum += Number(d[i]) * (13 - i)
   return (11 - (sum % 11)) % 10 === Number(d[12])
 }
