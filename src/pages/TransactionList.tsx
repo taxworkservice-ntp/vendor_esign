@@ -93,7 +93,7 @@ export function TransactionList() {
                     </p>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3.5">{fmtDateTH(t.transferDate)}</td>
-                  <td className="whitespace-nowrap px-4 py-3.5 font-mono text-[13px]">{t.slipReference}</td>
+                  <td className="whitespace-nowrap px-4 py-3.5 font-mono text-[13px]">{t.slipReference || <span className="font-sans text-ink-400">—</span>}</td>
                   <td className="whitespace-nowrap px-4 py-3.5 text-right tabular-nums">฿{fmtTHB(t.grossAmount)}</td>
                   <td className="whitespace-nowrap px-4 py-3.5 text-right tabular-nums text-ink-500">
                     {t.whtRate}% · ฿{fmtTHB(t.whtAmount)}

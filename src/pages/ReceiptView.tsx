@@ -77,7 +77,7 @@ export function ReceiptView() {
             </thead>
             <tbody>
               <tr className="border-b border-slate-200">
-                <td className="py-2">{t.description}<br /><span className="text-xs text-ink-500">โอน {fmtDateTH(t.transferDate)} · อ้างอิง {t.slipReference}</span></td>
+                <td className="py-2">{t.description}<br /><span className="text-xs text-ink-500">โอน {fmtDateTH(t.transferDate)} · อ้างอิง {t.slipReference || '—'}</span></td>
                 <td className="py-2 text-right tabular-nums">฿{fmtTHB(t.grossAmount)}</td>
               </tr>
               {t.whtRate > 0 && (

@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { TriangleAlert, UploadCloud } from 'lucide-react'
 import { PILOT_CONFIG, calcWht, isDuplicateSlipRef } from '../lib/config'
-import { validateThaiId } from '../lib/thai-words'
 import { VENDORS } from '../lib/mock'
 import { useAllSlipRefs, useCreateTransaction } from '../hooks/useTransactions'
 import { Card, CardBody } from '../components/ui/card'
@@ -36,11 +35,7 @@ export function TransactionNew() {
     gross: grossNum <= 0 ? 'ยอด gross ต้องมากกว่า 0' : undefined,
     slipRef: slipRef.trim() && dup ? 'เลขที่อ้างอิงนี้ถูกใช้แล้ว' : undefined,
     vendorTaxId:
-      vendorTaxId.trim() === ''
-        ? 'กรุณากรอกเลขบัตรผู้ขาย 13 หลัก (จำเป็น — ใช้ล็อกหน้าผู้ขาย)'
-        : !validateThaiId(vendorTaxId)
-          ? 'เลขไม่ถูกต้อง — ตรวจสอบอีกครั้ง'
-          : undefined,
+      vendorTaxId.replace(/\D/g, '').length !== 13 ? 'กรุณากรอกเลขบัตรผู้ขายให้ครบ 13 หลัก' : undefined,
   }
   const invalid = Object.values(errors).some(Boolean)
 
@@ -102,19 +97,13 @@ export function TransactionNew() {
               inputMode="numeric"
             />
             {(() => {
+              // Length-only for now — checksum policy comes later.
               const digits = vendorTaxId.replace(/\D/g, '').length
-              const ok = validateThaiId(vendorTaxId)
               return (
-                <div className="mt-1.5 space-y-0.5 text-[13px]">
+                <div className="mt-1.5 text-[13px]">
                   <p className={digits === 13 ? 'font-medium text-emerald-600' : 'text-ink-400'}>
-                    {digits === 13 ? '✓' : '•'} ครบ 13 หลัก ({digits}/13)
+                    {digits === 13 ? '✓ ครบ 13 หลัก — ใช้ล็อกหน้าผู้ขายได้' : `• ครบ 13 หลัก (${digits}/13)`}
                   </p>
-                  {digits === 13 &&
-                    (ok ? (
-                      <p className="font-medium text-emerald-600">✓ เลขถูกต้อง — ใช้ล็อกหน้าผู้ขายได้</p>
-                    ) : (
-                      <p className="font-medium text-red-600">เลขไม่ถูกต้อง — ตรวจสอบทีละหลัก (มักสลับตำแหน่งกัน)</p>
-                    ))}
                 </div>
               )
             })()}

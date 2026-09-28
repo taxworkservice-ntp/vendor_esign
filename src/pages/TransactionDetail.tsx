@@ -131,7 +131,7 @@ export function TransactionDetail() {
           <Card>
             <CardBody className="space-y-3">
               <h2 className="font-bold">เอกสาร</h2>
-              <p className="text-sm text-ink-500">สลิป {t.slipReference} · {t.slipName}</p>
+              <p className="text-sm text-ink-500">สลิป {t.slipReference || '— ยังไม่แนบ'} · {t.slipName || '—'}</p>
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="secondary" disabled title="PDF ออกเมื่อผู้ขายเซ็น (Phase 3)"><Download size={15} /> PDF (Phase 3)</Button>
                 <Button variant="secondary" onClick={() => window.print()}><Download size={15} /> พิมพ์</Button>

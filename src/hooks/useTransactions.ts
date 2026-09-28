@@ -47,7 +47,8 @@ export function useCreateTransaction() {
   return useMutation({
     mutationFn: async (input: CreateTxnInput) => {
       const all = read()
-      if (isDuplicateSlipRef(input.slipReference, all.map((t) => t.slipReference))) {
+      const slipRef = input.slipReference.trim()
+      if (slipRef && isDuplicateSlipRef(slipRef, all.map((t) => t.slipReference))) {
         throw new Error('เลขที่อ้างอิงสลิปนี้ถูกใช้แล้ว — ตรวจสอบสลิปซ้ำ')
       }
       const { wht, net } = calcWht(input.grossAmount, input.whtRate)
@@ -74,7 +75,7 @@ export function useCreateTransaction() {
         taxIdLast4: taxIdLast4(input.vendorTaxId),
         timeline: [{ at: now, label: 'สร้างรายการ', detail: 'ธุรกรรมฉบับร่าง' }],
         checks: [
-          { key: 'slip', label: 'สลิปตรงยอดสุทธิ', state: 'pass' },
+          { key: 'slip', label: slipRef ? 'สลิปตรงยอดสุทธิ' : 'ยังไม่มีสลิป — รอแนบภายหลัง', state: slipRef ? 'pass' : 'warn' },
           { key: 'name', label: 'ชื่อผู้รับตรงกับผู้ขาย', state: 'pass' },
           { key: 'wht', label: 'WHT ตรงตาม config', state: 'pass' },
         ],

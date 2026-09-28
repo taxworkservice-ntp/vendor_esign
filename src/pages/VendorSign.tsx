@@ -5,7 +5,7 @@ import { GATE_MAX_TRIES, gateRemaining, isGateUnlocked, tryGateUnlock, useVendor
 import { maskTaxId } from '../lib/taxid'
 import { PILOT_CONFIG } from '../lib/config'
 import { fmtTHB, fmtDateTH } from '../lib/format'
-import { amountToThaiWords, validateThaiId } from '../lib/thai-words'
+import { amountToThaiWords } from '../lib/thai-words'
 import { Card, CardBody } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { FieldError, Input, Label } from '../components/ui/input'
@@ -106,7 +106,8 @@ export function VendorSign() {
       />
     )
 
-  const idOk = validateThaiId(tid)
+  // Length-only for now — checksum policy comes later.
+  const idOk = tid.replace(/\D/g, '').length === 13
   const emptyPad = !drew || padRef.current?.isEmpty()
   const valid = name.trim().length >= 2 && address.trim().length >= 6 && idOk && consent && !emptyPad
 
@@ -243,8 +244,8 @@ export function VendorSign() {
               <div>
                 <Label hint={`${tid.length}/13 หลัก — เก็บเฉพาะตัวเลข`}>เลขบัตรประชาชน</Label>
                 <Input value={tid} onChange={(e) => setTid(e.target.value.replace(/\D/g, '').slice(0, 13))} placeholder="x-xxxx-xxxxx-xx-x" inputMode="numeric" />
-                {(tid.length === 13 || tried) && !idOk && <FieldError msg="เลขไม่ถูกต้อง — ตรวจสอบอีกครั้ง" />}
-                {idOk && <p className="mt-1.5 flex items-center gap-1 text-[13px] font-medium text-emerald-600"><CheckCircle2 size={14} /> เลขถูกต้อง</p>}
+                {tried && !idOk && <FieldError msg="กรุณากรอกให้ครบ 13 หลัก" />}
+                {idOk && <p className="mt-1.5 flex items-center gap-1 text-[13px] font-medium text-emerald-600"><CheckCircle2 size={14} /> ครบ 13 หลัก</p>}
               </div>
             )}
           </CardBody>

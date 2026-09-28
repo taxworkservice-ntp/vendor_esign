@@ -90,7 +90,7 @@ export function ReviewList() {
                   </div>
                   <div className="mt-2 flex items-center gap-2 rounded-xl bg-slate-50 p-3 text-sm">
                     <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-200 font-mono text-[10px]">SLIP</span>
-                    <span>สลิป {t.slipReference} · {t.slipName} <span className="text-ink-400">(เทียบยอด/ชื่อด้วยตา)</span></span>
+                    <span>สลิป {t.slipReference || '— ยังไม่แนบ'} · {t.slipName || '—'} <span className="text-ink-400">(เทียบยอด/ชื่อด้วยตา)</span></span>
                     <Link to={`/transactions/${t.id}`} className="ml-auto shrink-0 font-semibold text-ink-700 underline">เปิดรายการ</Link>
                   </div>
                   {r?.note && <p className="mt-2 text-sm text-ink-500">หมายเหตุ: {r.note}</p>}
