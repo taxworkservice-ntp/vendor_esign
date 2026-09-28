@@ -24,6 +24,9 @@ const check = (name, cond, extra = '') => {
 
 const token = randomBytes(32).toString('hex')
 const tokenHash = createHash('sha256').update(token).digest('hex')
+// Known test ID (fake): gate expects this exact value.
+const TEST_TAX_ID = '1101700230708'
+const testTaxHash = createHash('sha256').update(TEST_TAX_ID).digest('hex')
 
 // Fresh vendor + txn + request (idempotent reruns)
 const v = await sql.query(
@@ -34,10 +37,11 @@ const ref = `SMOKE-${stamp}`
 const slip = `SMOKE-SLIP-${stamp}`
 const t = await sql.query(
   `insert into payment_transactions (tenant_id, ref, vendor_id, payment_type, description,
-    gross_amount, wht_rate, wht_amount, net_amount, transfer_date, slip_reference, status, created_by)
+    gross_amount, wht_rate, wht_amount, net_amount, transfer_date, slip_reference, status, created_by,
+    tax_id_hash, tax_id_last4)
    values ('ABC', $1, $2, 'ค่าบริการ', 'smoke test (fake)', 3000, 3, 90, 2910,
-    CURRENT_DATE, $3, 'draft', 'smoke') returning id`,
-  [ref, vendorId, slip])
+    CURRENT_DATE, $3, 'draft', 'smoke', $4, '0708') returning id`,
+  [ref, vendorId, slip, testTaxHash])
 const txnId = t[0].id
 await sql.query(
   `insert into vendor_requests (tenant_id, transaction_id, token_hash, expires_at)
@@ -49,20 +53,44 @@ await sql.query(`update payment_transactions set status='sent' where id=$1`, [tx
 let r = await fetch(`${BASE}/api/vendor/${token}`)
 check('GET vendor → 200', r.status === 200, `got ${r.status}`)
 const payload = await r.json()
-check('payload masked (no ID/slip path)', payload.vendorName === undefined && Number(payload.netAmount) === 2910)
+check('payload masked (no secrets)', payload.token_hash === undefined && payload.slip_file_path === undefined && Number(payload.netAmount) === 2910)
+check('payload flags gate + prefill', payload.gated === true && payload.idLast4 === '0708' && !!payload.vendorName)
 
-// 2. sign (single-use)
+// 1b. direct sign without unlock is rejected
 const sigPng = (await QRCode.toBuffer('smoke-signature', { width: 200 })).toString('base64')
+const signBody = (name, addr) => JSON.stringify({
+  vendorName: name, vendorAddress: addr,
+  idNumberEncrypted: 'enc:FAKE-SMOKE', idLast4: '0708',
+  signaturePng: `data:image/png;base64,${sigPng}`, consentVersion: 'v1',
+})
+r = await fetch(`${BASE}/api/vendor/${token}/sign`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: signBody('Smoke Test', 'Bangkok'),
+})
+check('sign without unlock → 403', r.status === 403, `got ${r.status}`)
+
+// 1c. wrong Tax ID rejected, right one unlocks + prefills
+r = await fetch(`${BASE}/api/vendor/${token}/unlock`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ idNumber: '1101700230700' }),
+})
+check('unlock wrong ID → 401', r.status === 401, `got ${r.status}`)
+r = await fetch(`${BASE}/api/vendor/${token}/unlock`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ idNumber: TEST_TAX_ID }),
+})
+const unlocked = await r.json()
+check('unlock right ID → 200 + prefill', r.status === 200 && unlocked.vendorName === 'Smoke Test (fake)', `got ${r.status}`)
+
+// 2. sign with an edited address (correction must be recorded + reported)
 r = await fetch(`${BASE}/api/vendor/${token}/sign`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    vendorName: 'Smoke Test', vendorAddress: 'Bangkok',
-    idNumberEncrypted: 'enc:FAKE-SMOKE', idLast4: '0000',
-    signaturePng: `data:image/png;base64,${sigPng}`, consentVersion: 'v1',
-  }),
+  body: signBody('Smoke Test (fake)', 'Chiang Mai (corrected)'),
 })
+const signed = await r.json()
 check('POST sign → 200', r.status === 200, `got ${r.status}`)
+check('correction reported', Array.isArray(signed.corrections) && signed.corrections.some((x) => x.field === 'address'),
+  JSON.stringify(signed.corrections))
 
 // 3. token reuse blocked
 r = await fetch(`${BASE}/api/vendor/${token}`)

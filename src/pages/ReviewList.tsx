@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle2, Flag, PencilLine, ShieldAlert } from 'lucide-react'
 import { useTransactions } from '../hooks/useTransactions'
+import { getAuth } from '../hooks/useVendor'
 import { mockReceiptNumber } from '../lib/receipt'
 import { fmtTHB, fmtDateTH } from '../lib/format'
 import { Card, CardBody } from '../components/ui/card'
@@ -65,6 +66,11 @@ export function ReviewList() {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono text-[13px] text-ink-500">{mockReceiptNumber(t.id)}</span>
                     <StatusBadge status={t.status} />
+                    {(getAuth(t.id)?.corrections?.length ?? 0) > 0 && (
+                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
+                        ผู้ขายแก้ไขข้อมูล
+                      </span>
+                    )}
                     {r && (
                       <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${r.decision === 'approved' ? 'bg-emerald-100 text-emerald-800' : r.decision === 'needs-fix' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'}`}>
                         {DECISION_TH[r.decision]}

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { CheckCircle2, Eraser, Lock, ReceiptText, ShieldAlert } from 'lucide-react'
-import { useVendorActions, useVendorTxn } from '../hooks/useVendor'
+import { GATE_MAX_TRIES, gateRemaining, isGateUnlocked, tryGateUnlock, useVendorActions, useVendorTxn } from '../hooks/useVendor'
+import { maskTaxId } from '../lib/taxid'
 import { PILOT_CONFIG } from '../lib/config'
 import { fmtTHB, fmtDateTH } from '../lib/format'
 import { amountToThaiWords, validateThaiId } from '../lib/thai-words'
@@ -57,6 +58,22 @@ export function VendorSign() {
   const [done, setDone] = useState(false)
   const [tried, setTried] = useState(false)
 
+  // Tax ID gate: wrong-recipient guard. Legacy rows without a stored hash
+  // skip the gate with a notice.
+  const [gateId, setGateId] = useState('')
+  const [gateBusy, setGateBusy] = useState(false)
+  const [gateErr, setGateErr] = useState('')
+  const [remaining, setRemaining] = useState(GATE_MAX_TRIES)
+  const [unlocked, setUnlocked] = useState(false)
+  const [gatePassed, setGatePassed] = useState(false)
+
+  useEffect(() => {
+    if (token) {
+      setUnlocked(isGateUnlocked(token))
+      setRemaining(gateRemaining(token))
+    }
+  }, [token, t?.id])
+
   useEffect(() => {
     if (t?.id && t.status === 'sent') acts.markOpened(t.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -93,6 +110,68 @@ export function VendorSign() {
   const emptyPad = !drew || padRef.current?.isEmpty()
   const valid = name.trim().length >= 2 && address.trim().length >= 6 && idOk && consent && !emptyPad
 
+  const needsGate = !!t.taxIdHash && !unlocked
+
+  const unlock = async () => {
+    if (!token || gateBusy) return
+    setGateBusy(true)
+    setGateErr('')
+    const res = await tryGateUnlock(token, t, gateId)
+    setRemaining(res.remaining)
+    setGateBusy(false)
+    if (res.ok) {
+      setUnlocked(true)
+      setGatePassed(!!t.taxIdHash)
+      setTid(gateId) // reuse verified ID for the signing snapshot
+      // Prefill from client records — vendor confirms instead of retyping.
+      setName(t.vendor.name)
+      setAddress(t.vendor.address)
+      setGateId('')
+      window.scrollTo(0, 0)
+    } else {
+      setGateErr(
+        res.remaining <= 0
+          ? 'ลองเกินกำหนด — ลิงก์นี้ถูกล็อกชั่วคราว กรุณาติดต่อผู้จ่ายเงิน'
+          : `เลขไม่ตรงกับที่ผู้จ่ายระบุ (เหลือ ${res.remaining} ครั้ง) — หากไม่ใช่ท่าน กรุณาอย่าดำเนินการต่อ`,
+      )
+    }
+  }
+
+  if (needsGate)
+    return (
+      <Shell>
+        <Card>
+          <CardBody className="space-y-4">
+            <p className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-ink-900 text-white">
+              <Lock size={22} />
+            </p>
+            <div className="text-center">
+              <h2 className="text-lg font-bold">ยืนยันตัวตนก่อนเปิดเอกสาร</h2>
+              <p className="mx-auto mt-1 max-w-sm text-[15px] text-ink-500">
+                ลิงก์นี้ส่งถึงผู้รับเงินโดยเฉพาะ — กรอกเลขบัตรประชาชน 13 หลัก
+                {t.taxIdLast4 ? ` (ลงท้าย ${t.taxIdLast4}) ` : ' '}
+                เพื่อเปิดแบบฟอร์ม
+              </p>
+            </div>
+            <div>
+              <Label hint={`${gateId.length}/13 หลัก`}>เลขบัตรประชาชนของท่าน</Label>
+              <Input
+                value={gateId}
+                onChange={(e) => setGateId(e.target.value.replace(/\D/g, '').slice(0, 13))}
+                placeholder="กรอก 13 หลักเพื่อยืนยันว่าเป็นท่าน"
+                inputMode="numeric"
+              />
+              {gateErr && <FieldError msg={gateErr} />}
+            </div>
+            <Button className="w-full py-3.5 text-base" disabled={gateId.length !== 13 || gateBusy || remaining <= 0} onClick={unlock}>
+              {gateBusy ? 'กำลังตรวจสอบ…' : 'เปิดเอกสาร'}
+            </Button>
+            <p className="text-center text-xs text-ink-400">พิมพ์ผิดได้ไม่เกิน {GATE_MAX_TRIES} ครั้ง · ระบบไม่แสดงข้อมูลใด ๆ จนกว่าจะยืนยันสำเร็จ</p>
+          </CardBody>
+        </Card>
+      </Shell>
+    )
+
   const submit = () => {
     setTried(true)
     if (!valid || !padRef.current) return
@@ -104,6 +183,7 @@ export function VendorSign() {
       verificationMethod: 'stub-deferred',
       consentVersion: 'v1',
       signedAt: new Date().toISOString(),
+      corrections: [], // computed at submit (diff vs client records)
     })
     setDone(true)
     window.scrollTo(0, 0)
@@ -112,6 +192,17 @@ export function VendorSign() {
   return (
     <Shell>
       <div className="space-y-4">
+        {!t.taxIdHash ? (
+          <p className="flex gap-2 rounded-xl bg-amber-50 p-3 text-[13px] font-medium text-amber-800">
+            <ShieldAlert size={16} className="mt-0.5 shrink-0" />
+            รายการเก่า: ลิงก์นี้ไม่มีการล็อกด้วยเลขบัตร — โปรดตรวจสอบว่าเป็นท่านก่อนเซ็น
+          </p>
+        ) : (
+          <p className="flex gap-2 rounded-xl bg-emerald-50 p-3 text-[13px] font-medium text-emerald-800">
+            <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
+            ยืนยันตัวตนแล้ว {t.taxIdLast4 ? `(${maskTaxId(t.taxIdLast4)})` : ''} — ลิงก์นี้เปิดได้เฉพาะท่าน
+          </p>
+        )}
         <Card className="border-emerald-200">
           <CardBody>
             <p className="flex items-center gap-1.5 text-[13px] font-semibold text-ink-500">
@@ -129,7 +220,10 @@ export function VendorSign() {
 
         <Card>
           <CardBody className="space-y-4">
-            <h2 className="font-bold">1 · ข้อมูลของท่าน</h2>
+            <h2 className="font-bold">1 · {gatePassed ? 'ตรวจข้อมูลของท่าน' : 'ข้อมูลของท่าน'}</h2>
+            {gatePassed && (
+              <p className="text-[13px] text-ink-500">กรอกจากประวัติที่ผู้จ่ายบันทึกไว้ — ตรวจว่าตรงกับบัตรของท่าน แก้ไขได้หากไม่ตรง</p>
+            )}
             <div>
               <Label>ชื่อ–นามสกุล (ตามบัตรประชาชน)</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="เช่น สมชาย ใจดี" autoComplete="name" />
@@ -140,12 +234,19 @@ export function VendorSign() {
               <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="บ้านเลขที่ ถนน ตำบล อำเภอ จังหวัด" />
               {tried && address.trim().length < 6 && <FieldError msg="กรุณากรอกที่อยู่ให้ครบ" />}
             </div>
-            <div>
-              <Label hint={`${tid.length}/13 หลัก — เก็บเฉพาะตัวเลข`}>เลขบัตรประชาชน</Label>
-              <Input value={tid} onChange={(e) => setTid(e.target.value.replace(/\D/g, '').slice(0, 13))} placeholder="x-xxxx-xxxxx-xx-x" inputMode="numeric" />
-              {(tid.length === 13 || tried) && !idOk && <FieldError msg="เลขไม่ถูกต้อง — ตรวจสอบอีกครั้ง" />}
-              {idOk && <p className="mt-1.5 flex items-center gap-1 text-[13px] font-medium text-emerald-600"><CheckCircle2 size={14} /> เลขถูกต้อง</p>}
-            </div>
+            {gatePassed && t.taxIdLast4 ? (
+              <div className="rounded-xl bg-emerald-50 p-3.5 text-[15px]">
+                <Label>เลขบัตรประชาชน</Label>
+                <p className="font-mono font-semibold">{maskTaxId(t.taxIdLast4)} <span className="font-sans text-[13px] font-medium text-emerald-700">✓ ยืนยันแล้ว ไม่ต้องกรอกซ้ำ</span></p>
+              </div>
+            ) : (
+              <div>
+                <Label hint={`${tid.length}/13 หลัก — เก็บเฉพาะตัวเลข`}>เลขบัตรประชาชน</Label>
+                <Input value={tid} onChange={(e) => setTid(e.target.value.replace(/\D/g, '').slice(0, 13))} placeholder="x-xxxx-xxxxx-xx-x" inputMode="numeric" />
+                {(tid.length === 13 || tried) && !idOk && <FieldError msg="เลขไม่ถูกต้อง — ตรวจสอบอีกครั้ง" />}
+                {idOk && <p className="mt-1.5 flex items-center gap-1 text-[13px] font-medium text-emerald-600"><CheckCircle2 size={14} /> เลขถูกต้อง</p>}
+              </div>
+            )}
           </CardBody>
         </Card>
 

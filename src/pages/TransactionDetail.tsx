@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, CheckCircle2, Copy, Download, Link2, ShieldAlert } from 'lucide-react'
 import { useTransaction, useTransactionActions } from '../hooks/useTransactions'
+import { getAuth } from '../hooks/useVendor'
 import { Card, CardBody } from '../components/ui/card'
 import { StatusBadge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
@@ -27,6 +28,7 @@ export function TransactionDetail() {
   }
 
   const link = t.inviteToken ? `${location.origin}/v/${t.inviteToken}` : ''
+  const corrections = getAuth(t.id)?.corrections ?? []
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(link)
@@ -55,6 +57,16 @@ export function TransactionDetail() {
               <p className="mt-1 text-sm text-ink-500">
                 {t.vendor.name} · {t.vendor.address} · ID {t.vendor.maskedId}
               </p>
+              {corrections.length > 0 && (
+                <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm">
+                  <p className="font-bold text-amber-800">ผู้ขายแก้ไขข้อมูลที่กรอกไว้:</p>
+                  <ul className="mt-1 list-disc pl-5 text-amber-800">
+                    {corrections.map((x, i) => (
+                      <li key={i}>{x.field === 'name' ? 'ชื่อ' : 'ที่อยู่'}: {x.from} → <b>{x.to}</b></li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <dl className="mt-5 grid grid-cols-2 gap-3 text-[15px] sm:grid-cols-4">
                 <div className="rounded-xl bg-slate-50 p-3"><dt className="text-xs text-ink-500">gross</dt><dd className="font-bold tabular-nums">฿{fmtTHB(t.grossAmount)}</dd></div>
                 <div className="rounded-xl bg-slate-50 p-3"><dt className="text-xs text-ink-500">WHT {t.whtRate}%</dt><dd className="font-bold tabular-nums">฿{fmtTHB(t.whtAmount)}</dd></div>
@@ -103,6 +115,9 @@ export function TransactionDetail() {
                     <Button variant="ghost" onClick={() => { acts.revoke(t.id); }}>เพิกถอน</Button>
                   </div>
                   <p className="text-xs text-ink-500">ส่งลิงก์นี้ในแชท LINE ของคุณเอง — ระบบไม่ส่งข้อความ · ลิงก์ใช้ครั้งเดียว มีวันหมดอายุ เพิกถอนได้</p>
+                  <p className={`text-xs font-semibold ${t.taxIdLast4 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                    {t.taxIdLast4 ? `🔒 ล็อกด้วย Tax ID (ลงท้าย ${t.taxIdLast4}) — คนผิดเปิดไม่ได้` : '⚠ รายการเก่า — ไม่มี Tax ID gate'}
+                  </p>
                 </>
               ) : (
                 <p className="text-sm text-ink-500">ลิงก์ถูกเพิกถอน / ใช้แล้ว — กด “ส่งลิงก์” เพื่อออกใหม่อีกครั้ง (backend จริงใน Phase 1)</p>

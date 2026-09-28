@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { sql, withTenant } from '../../src/server/db'
@@ -35,6 +35,26 @@ function rateLimited(ip: string, max = 30): boolean {
   return h.n > max
 }
 
+// Gate attempts: 5 wrong IDs per token per 10 min (single process;
+// move to Postgres behind multiple replicas — same caveat as rate limits).
+const GATE_MAX = 5
+const gateFails = new Map<string, { n: number; until: number }>()
+function gateBlocked(tokenHash: string): boolean {
+  const f = gateFails.get(tokenHash)
+  if (!f) return false
+  if (Date.now() > f.until) {
+    gateFails.delete(tokenHash)
+    return false
+  }
+  return f.n >= GATE_MAX
+}
+function gateFail(tokenHash: string): number {
+  const f = gateFails.get(tokenHash) ?? { n: 0, until: Date.now() + 10 * 60 * 1000 }
+  f.n += 1
+  gateFails.set(tokenHash, f)
+  return Math.max(0, GATE_MAX - f.n)
+}
+
 async function audit(entityType: string, entityId: string, eventType: string, actor: string | null, metadata: unknown, ip: string) {
   const db = sql()
   await db`insert into audit_events (tenant_id, entity_type, entity_id, event_type, actor, metadata, ip)
@@ -52,10 +72,11 @@ app.get('/api/vendor/:token', async (c) => {
   const token = c.req.param('token')
   const db = sql()
   const rows = await db`
-    select vr.id as req_id, vr.expires_at, vr.used_at, vr.revoked_at,
+    select vr.id as req_id, vr.expires_at, vr.used_at, vr.revoked_at, vr.unlocked_at,
       t.id, t.ref, t.description, t.payment_type, t.gross_amount, t.wht_rate,
       t.wht_amount, t.net_amount, t.transfer_date, t.slip_reference, t.status,
-      v.name as vendor_name
+      t.tax_id_hash, t.tax_id_last4,
+      v.name as vendor_name, v.address as vendor_address
     from vendor_requests vr
     join payment_transactions t on t.id = vr.transaction_id
     join vendors v on v.id = t.vendor_id
@@ -75,7 +96,60 @@ app.get('/api/vendor/:token', async (c) => {
     grossAmount: r.gross_amount, whtRate: r.wht_rate, whtAmount: r.wht_amount,
     netAmount: r.net_amount, transferDate: r.transfer_date,
     slipReference: r.slip_reference, status: r.status,
+    // Gate + confirm-and-sign prefill (name/address are not secret).
+    gated: (r as Record<string, unknown>).tax_id_hash != null,
+    idLast4: (r as Record<string, unknown>).tax_id_last4 ?? null,
+    vendorName: r.vendor_name, vendorAddress: r.vendor_address,
+    unlocked: (r as Record<string, unknown>).unlocked_at != null,
   })
+})
+
+// Tax ID gate: proves the opener is the intended vendor before ANY
+// document content is revealed. Legacy rows without tax_id_hash skip it.
+app.post('/api/vendor/:token/unlock', async (c) => {
+  const ip = c.req.header('x-forwarded-for') ?? 'local'
+  if (rateLimited(`unlock:${ip}`, 10)) return c.json({ error: 'too-many-requests' }, 429)
+  const token = c.req.param('token')
+  const th = sha256hex(token)
+  if (gateBlocked(th)) return c.json({ error: 'gate-locked', remaining: 0 }, 429)
+  const body = await c.req.json().catch(() => null) as { idNumber?: string } | null
+  const idNumber = (body?.idNumber ?? '').replace(/\D/g, '')
+  if (!/^\d{13}$/.test(idNumber)) return c.json({ error: 'invalid-body' }, 400)
+
+  const db = sql()
+  const rows = await db`
+    select vr.id as req_id, vr.expires_at, vr.used_at, vr.revoked_at, vr.unlocked_at,
+      t.id, t.status, t.tax_id_hash, t.tax_id_last4,
+      v.name as vendor_name, v.address as vendor_address
+    from vendor_requests vr
+    join payment_transactions t on t.id = vr.transaction_id
+    join vendors v on v.id = t.vendor_id
+    where vr.token_hash = ${th} and vr.tenant_id = ${TENANT}`
+  const r = one<Record<string, unknown>>(rows)
+  if (!r || r.used_at || r.revoked_at || new Date(String(r.expires_at)) < new Date())
+    return c.json({ error: 'invalid-or-expired' }, 410)
+  if (!r.tax_id_hash) {
+    // Legacy row: no gate — mark unlocked so sign can proceed.
+    await db`update vendor_requests set unlocked_at = coalesce(unlocked_at, now()) where id = ${String(r.req_id)}`
+    return c.json({ ok: true, legacy: true, vendorName: r.vendor_name, vendorAddress: r.vendor_address })
+  }
+  const a = Buffer.from(sha256hex(idNumber), 'hex')
+  const b = Buffer.from(String(r.tax_id_hash), 'hex')
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    const remaining = gateFail(th)
+    await withTenant(TENANT, 'client', async () =>
+      audit('vendor_requests', String(r.req_id), 'vendor.gate-failed', 'vendor', { remaining }, ip))
+    return c.json(
+      remaining <= 0 ? { error: 'gate-locked', remaining: 0 } : { error: 'wrong-id', remaining },
+      remaining <= 0 ? 429 : 401,
+    )
+  }
+  gateFails.delete(th)
+  await db`update vendor_requests set unlocked_at = now() where id = ${String(r.req_id)}`
+  await withTenant(TENANT, 'client', async () =>
+    audit('vendor_requests', String(r.req_id), 'vendor.unlocked', 'vendor', {}, ip))
+  // Prefill for confirm-and-sign: vendor confirms instead of retyping.
+  return c.json({ ok: true, vendorName: r.vendor_name, vendorAddress: r.vendor_address, idLast4: r.tax_id_last4 })
 })
 
 // Vendor: sign. Single-use — consumes the token. Verification is
@@ -102,32 +176,47 @@ app.post('/api/vendor/:token/sign', async (c) => {
     return c.json({ error: 'invalid-signature' }, 400)
 
   const rows = await db`
-    select vr.id as req_id, vr.expires_at, vr.used_at, vr.revoked_at,
-      t.id, t.status, t.net_amount
+    select vr.id as req_id, vr.expires_at, vr.used_at, vr.revoked_at, vr.unlocked_at,
+      t.id, t.status, t.net_amount, t.tax_id_hash,
+      v.name as record_name, v.address as record_address
     from vendor_requests vr
     join payment_transactions t on t.id = vr.transaction_id
+    join vendors v on v.id = t.vendor_id
     where vr.token_hash = ${sha256hex(token)} and vr.tenant_id = ${TENANT}`
   const r = one<Record<string, unknown>>(rows)
   if (!r || r.used_at || r.revoked_at || new Date(String(r.expires_at)) < new Date())
     return c.json({ error: 'invalid-or-expired' }, 410)
+  // Gate cannot be bypassed by direct POST: gated rows need unlocked_at.
+  if (r.tax_id_hash && !r.unlocked_at) return c.json({ error: 'not-unlocked' }, 403)
   if (!['sent', 'opened'].includes(String(r.status)))
     return c.json({ error: 'already-signed' }, 409)
 
   const txnId = String(r.id)
+  // Corrections: diff submitted info against client records server-side,
+  // stored on the authorization and reported back to the client.
+  const corrections: { field: string; from: string; to: string }[] = []
+  const subName = String(body.vendorName).slice(0, 200)
+  const subAddr = String(body.vendorAddress).slice(0, 500)
+  if (subName !== String(r.record_name))
+    corrections.push({ field: 'name', from: String(r.record_name), to: subName })
+  if (subAddr !== String(r.record_address))
+    corrections.push({ field: 'address', from: String(r.record_address), to: subAddr })
   const sigPath = saveBytes('signatures', `${txnId}.png`, png)
   await db`insert into authorizations
     (tenant_id, transaction_id, vendor_name, vendor_address, vendor_masked_id,
-     signature_image_path, verification_method, line_user_id, ip, user_agent, consent_text_version)
-    values (${TENANT}, ${txnId}, ${String(body.vendorName).slice(0, 200)},
-      ${String(body.vendorAddress).slice(0, 500)}, ${`x-xxxx-xxxxx-${last4.slice(0, 2)}-${last4.slice(2)}`},
+     signature_image_path, verification_method, line_user_id, ip, user_agent,
+     consent_text_version, corrections)
+    values (${TENANT}, ${txnId}, ${subName}, ${subAddr},
+      ${`x-xxxx-xxxxx-${last4.slice(0, 2)}-${last4.slice(2)}`},
       ${sigPath}, 'stub-deferred', ${body.lineUserId ?? null}, ${ip},
-      ${(c.req.header('user-agent') ?? '').slice(0, 500)}, 'v1')`
+      ${(c.req.header('user-agent') ?? '').slice(0, 500)}, 'v1',
+      ${JSON.stringify(corrections)})`
   await db`update vendor_requests set used_at = now() where id = ${String(r.req_id)}`
   await db`update payment_transactions set status = 'signed' where id = ${txnId}`
   await withTenant(TENANT, 'client', async () =>
     audit('payment_transactions', txnId, 'vendor.signed', 'vendor',
-      { verificationMethod: 'stub-deferred', consentVersion: 'v1' }, ip))
-  return c.json({ ok: true, transactionId: txnId })
+      { verificationMethod: 'stub-deferred', consentVersion: 'v1', corrections }, ip))
+  return c.json({ ok: true, transactionId: txnId, corrections })
 })
 
 // Finalize: assign series number + receipt row + PDF in one flow.

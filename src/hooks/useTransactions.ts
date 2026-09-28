@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { CreateTxnInput, PaymentTransaction } from '../lib/types'
 import { calcWht, isDuplicateSlipRef } from '../lib/config'
+import { taxIdHash, taxIdLast4 } from '../lib/taxid'
 import { loadTxns, saveTxns, VENDORS } from '../lib/mock'
 
 const QK = ['transactions'] as const
@@ -68,6 +69,9 @@ export function useCreateTransaction() {
         status: 'draft',
         createdAt: now,
         inviteToken: `tok_${Math.random().toString(36).slice(2, 10)}`,
+        // Gate: hash at creation; plaintext never stored.
+        taxIdHash: await taxIdHash(input.vendorTaxId),
+        taxIdLast4: taxIdLast4(input.vendorTaxId),
         timeline: [{ at: now, label: 'สร้างรายการ', detail: 'ธุรกรรมฉบับร่าง' }],
         checks: [
           { key: 'slip', label: 'สลิปตรงยอดสุทธิ', state: 'pass' },

@@ -32,6 +32,9 @@ export interface PaymentTransaction {
   timeline: { at: string; label: string; detail?: string }[]
   voidReason?: string
   inviteToken?: string
+  // Tax ID gate: hash-only. Full ID is never stored (mock or server).
+  taxIdHash?: string
+  taxIdLast4?: string
   checks: { key: string; label: string; state: 'pass' | 'warn' | 'fail' }[]
 }
 
@@ -44,4 +47,5 @@ export interface CreateTxnInput {
   transferDate: string
   slipReference: string
   slipName: string
+  vendorTaxId: string // plaintext in transit only — hashed before storage
 }
