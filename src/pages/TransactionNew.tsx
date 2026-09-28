@@ -94,14 +94,30 @@ export function TransactionNew() {
           </div>
 
           <div>
-            <Label hint={`${vendorTaxId.replace(/\D/g, '').length}/13 หลัก`}>เลขบัตรประชาชนผู้ขาย</Label>
+            <Label>เลขบัตรประชาชนผู้ขาย</Label>
             <Input
               value={vendorTaxId}
               onChange={(e) => setVendorTaxId(e.target.value.replace(/\D/g, '').slice(0, 13))}
-              placeholder="กรอกเพื่อล็อก — ผู้ขายต้องกรอกเลขนี้จึงเปิดลิงก์ได้"
+              placeholder="13 หลัก — ใช้ล็อกหน้าผู้ขาย"
               inputMode="numeric"
             />
-            {touched && <FieldError msg={errors.vendorTaxId} />}
+            {(() => {
+              const digits = vendorTaxId.replace(/\D/g, '').length
+              const ok = validateThaiId(vendorTaxId)
+              return (
+                <div className="mt-1.5 space-y-0.5 text-[13px]">
+                  <p className={digits === 13 ? 'font-medium text-emerald-600' : 'text-ink-400'}>
+                    {digits === 13 ? '✓' : '•'} ครบ 13 หลัก ({digits}/13)
+                  </p>
+                  {digits === 13 &&
+                    (ok ? (
+                      <p className="font-medium text-emerald-600">✓ เลขถูกต้อง — ใช้ล็อกหน้าผู้ขายได้</p>
+                    ) : (
+                      <p className="font-medium text-red-600">เลขไม่ถูกต้อง — ตรวจสอบทีละหลัก (มักสลับตำแหน่งกัน)</p>
+                    ))}
+                </div>
+              )
+            })()}
           </div>
 
           <div>
