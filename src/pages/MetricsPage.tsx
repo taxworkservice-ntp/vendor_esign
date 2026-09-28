@@ -1,6 +1,7 @@
 import { useTransactions } from '../hooks/useTransactions'
 import { computeMetrics } from '../lib/receipt'
 import { Card, CardBody } from '../components/ui/card'
+import { PageHeader } from '../components/ui/page-header'
 
 export function MetricsPage() {
   const { data } = useTransactions('', 'all')
@@ -14,10 +15,10 @@ export function MetricsPage() {
   ]
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Pilot metrics</h1>
-        <p className="mt-1 text-sm text-ink-500">สำหรับเจ้าของ — คำนวณจากข้อมูล mock ในเครื่อง (backend จริงจะ aggregate จาก audit_events)</p>
-      </div>
+      <PageHeader
+        title="Pilot metrics"
+        sub="สำหรับเจ้าของ — คำนวณจากข้อมูล mock ในเครื่อง (backend จริงจะ aggregate จาก audit_events)"
+      />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {cards.map(([label, v]) => (
           <Card key={label}><CardBody className="text-center">

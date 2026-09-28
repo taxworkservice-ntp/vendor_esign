@@ -6,6 +6,7 @@ import { getAuth } from '../hooks/useVendor'
 import { mockReceiptNumber } from '../lib/receipt'
 import { fmtTHB, fmtDateTH } from '../lib/format'
 import { Card, CardBody } from '../components/ui/card'
+import { PageHeader } from '../components/ui/page-header'
 import { StatusBadge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Input, Label } from '../components/ui/input'
@@ -49,12 +50,10 @@ export function ReviewList() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">ตรวจสอบโดยนักบัญชี</h1>
-        <p className="mt-1 text-sm text-ink-500">
-          สลิปอยู่ข้างทุกรายการ · เช็กด้วยตา · เหลือรอตรวจ {pending} รายการ (mock — บันทึกในเครื่อง)
-        </p>
-      </div>
+      <PageHeader
+        title="ตรวจสอบโดยนักบัญชี"
+        sub={`สลิปอยู่ข้างทุกรายการ · เช็กด้วยตา · เหลือรอตรวจ ${pending} รายการ (mock — บันทึกในเครื่อง)`}
+      />
 
       <div className="grid gap-3">
         {rows.map((t) => {

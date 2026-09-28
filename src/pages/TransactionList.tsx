@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ChevronLeft, Plus, Search } from 'lucide-react'
 import { useTransactions } from '../hooks/useTransactions'
 import { Card, CardBody } from '../components/ui/card'
+import { PageHeader } from '../components/ui/page-header'
 import { StatusBadge } from '../components/ui/badge'
 import { Input } from '../components/ui/input'
 import { Button } from '../components/ui/button'
@@ -30,17 +31,17 @@ export function TransactionList() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">ธุรกรรมผู้ขาย</h1>
-          <p className="mt-1 text-sm text-ink-500">สร้างรายการ · ส่งลิงก์ LINE · ติดตามสถานะจนออกใบเสร็จ</p>
-        </div>
-        <Link to="/transactions/new">
-          <Button>
-            <Plus size={17} /> สร้างรายการใหม่
-          </Button>
-        </Link>
-      </div>
+      <PageHeader
+        title="ธุรกรรมผู้ขาย"
+        sub="สร้างรายการ · ส่งลิงก์ LINE · ติดตามสถานะจนออกใบเสร็จ"
+        actions={
+          <Link to="/transactions/new">
+            <Button>
+              <Plus size={17} /> สร้างรายการใหม่
+            </Button>
+          </Link>
+        }
+      />
 
       <Card>
         <CardBody className="flex flex-col gap-3 sm:flex-row sm:items-center">

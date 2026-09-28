@@ -5,6 +5,7 @@ import { PILOT_CONFIG, calcWht, isDuplicateSlipRef } from '../lib/config'
 import { VENDORS } from '../lib/mock'
 import { useAllSlipRefs, useCreateTransaction } from '../hooks/useTransactions'
 import { Card, CardBody } from '../components/ui/card'
+import { PageHeader } from '../components/ui/page-header'
 import { Button } from '../components/ui/button'
 import { FieldError, Input, Label, inputCls } from '../components/ui/input'
 import { fmtTHB } from '../lib/format'
@@ -60,10 +61,10 @@ export function TransactionNew() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">สร้างรายการใหม่</h1>
-        <p className="mt-1 text-sm text-ink-500">ธนาคารเท่านั้น · หมายเลขใบเสร็จออกเมื่อผู้ขายเซ็นเท่านั้น</p>
-      </div>
+      <PageHeader
+        title="สร้างรายการใหม่"
+        sub="ธนาคารเท่านั้น · หมายเลขใบเสร็จออกเมื่อผู้ขายเซ็นเท่านั้น"
+      />
 
       <Card>
         <CardBody className="space-y-5">
