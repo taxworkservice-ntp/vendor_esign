@@ -41,6 +41,6 @@ for (const f of files) {
   const text = readFileSync(join(root, f), 'utf8')
   const stmts = splitStatements(text)
   console.log(`${f}: ${stmts.length} statements`)
-  for (const s of stmts) await sql(s)
+  for (const s of stmts) await sql.query(s)
 }
 console.log('migrate: OK')

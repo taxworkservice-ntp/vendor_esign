@@ -16,5 +16,5 @@ if (!url) {
 }
 const sql = neon(url)
 const text = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'db', 'seeds', 'seed_demo.sql'), 'utf8')
-await sql(text)
+await sql.query(text)
 console.log('seed: OK (fake demo data)')
