@@ -1,10 +1,8 @@
-import { neon, neonConfig } from '@neondatabase/serverless'
+import { neon } from '@neondatabase/serverless'
 
 // Server-only. Never import from browser code.
 // Reads pooled Neon URL from env (set in .env.local, gitignored).
 // Supports both plain Postgres hosts and Netlify DB.
-
-neonConfig.fetchConnectionCache = true
 
 function connectionString(): string {
   const url =
