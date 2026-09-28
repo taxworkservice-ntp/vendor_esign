@@ -13,6 +13,10 @@ const SigPad = forwardRef<SigPadHandle, { className?: string; onDraw?: () => voi
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const drawing = useRef(false)
     const strokes = useRef(0)
+    // Latest callback without re-running setup: parent re-renders (typing,
+    // ticking consent) must NEVER reset canvas size — that wipes the drawing.
+    const onDrawRef = useRef(onDraw)
+    onDrawRef.current = onDraw
 
     useImperativeHandle(ref, () => ({
       clear() {
@@ -55,7 +59,7 @@ const SigPad = forwardRef<SigPadHandle, { className?: string; onDraw?: () => voi
         ctx.lineTo(p.x, p.y)
         ctx.stroke()
         strokes.current += 1
-        onDraw?.()
+        onDrawRef.current?.()
       }
       const end = () => (drawing.current = false)
       c.addEventListener('pointerdown', start)
@@ -68,7 +72,7 @@ const SigPad = forwardRef<SigPadHandle, { className?: string; onDraw?: () => voi
         c.removeEventListener('pointerup', end)
         c.removeEventListener('pointercancel', end)
       }
-    }, [onDraw])
+    }, [])
 
     return (
       <canvas
