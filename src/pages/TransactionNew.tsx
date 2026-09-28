@@ -36,7 +36,12 @@ export function TransactionNew() {
     gross: grossNum <= 0 ? 'ยอด gross ต้องมากกว่า 0' : undefined,
     slipRef: !slipRef.trim() ? 'เลขที่อ้างอิงสลิปจำเป็น (ห้ามซ้ำ)' : dup ? 'เลขที่อ้างอิงนี้ถูกใช้แล้ว' : undefined,
     slip: !slipName ? 'แนบสลิปโอนเงิน (จำเป็น)' : undefined,
-    vendorTaxId: !validateThaiId(vendorTaxId) ? 'เลขบัตรผู้ขาย 13 หลักต้องถูกต้อง — ใช้ล็อกหน้าผู้ขาย (เก็บแบบ hash)' : undefined,
+    vendorTaxId:
+      vendorTaxId.trim() === ''
+        ? 'กรุณากรอกเลขบัตรผู้ขาย 13 หลัก (จำเป็น — ใช้ล็อกหน้าผู้ขาย)'
+        : !validateThaiId(vendorTaxId)
+          ? 'เลขไม่ถูกต้อง — ตรวจสอบอีกครั้ง'
+          : undefined,
   }
   const invalid = Object.values(errors).some(Boolean)
 
@@ -90,7 +95,7 @@ export function TransactionNew() {
           </div>
 
           <div>
-            <Label hint="ใช้ล็อกหน้าผู้ขาย — เก็บแบบ hash เท่านั้น">เลขบัตรประชาชนผู้ขาย (13 หลัก)</Label>
+            <Label hint={`${vendorTaxId.replace(/\D/g, '').length}/13 หลัก · เก็บแบบ hash เท่านั้น`}>เลขบัตรประชาชนผู้ขาย</Label>
             <Input
               value={vendorTaxId}
               onChange={(e) => setVendorTaxId(e.target.value.replace(/\D/g, '').slice(0, 13))}
