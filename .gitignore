@@ -5,3 +5,6 @@ dist
 .env.*.local
 storage/
 backups/
+
+# embedded postgres (db:live)
+.pgdata-live/

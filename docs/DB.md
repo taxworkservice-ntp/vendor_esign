@@ -40,9 +40,16 @@ Then: `cp .env.example .env.local` and paste the string as `DATABASE_URL=...`
 (`NETLIFY_DATABASE_URL=` also works). Never commit `.env.local`.
 
 ## Run
-- `npm run db:migrate` — applies `001`…`008` in order (`$$`-aware splitter).
+- `npm run db:live` — **no DATABASE_URL needed**: spins up an embedded Postgres,
+  applies `001`…`008`, and asserts tables, functions, RLS and numbering. Local only.
+- `npm run db:migrate` — applies `001`…`008` in order (`$$`-aware splitter) to `DATABASE_URL`.
 - `npm run db:seed` — fake demo rows only (`SEED-*`, `enc:FAKE-*`).
-- `npm run db:verify` — read-only: tables, RLS, `generate_doc_number()`, config.
+- `npm run db:verify` — read-only: tables, RLS, `generate_doc_number()`, config (Neon HTTP).
+
+> **RLS note.** Policies are enforced for **non-owner** roles. The server connects
+> as the DB owner (owns the tables) and therefore also scopes every query with an
+> explicit `where user_id = …` — RLS is defence-in-depth (and what Supabase's
+> client-side access will rely on). `db:live` proves isolation via a non-owner role.
 
 ## Architecture notes (hosting-sensitive, [DECISION])
 - Browser never connects to Postgres. Only `scripts/*` and the server ops

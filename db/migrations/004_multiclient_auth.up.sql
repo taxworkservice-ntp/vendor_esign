@@ -33,7 +33,7 @@ END $$;
 -- via POST /api/admin/* with a temp password (hashed in Node, shown once).
 CREATE TABLE IF NOT EXISTS app_users (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  email citext,
+  email text,
   password_hash text NOT NULL,
   must_change_pw boolean NOT NULL DEFAULT true,
   status text NOT NULL DEFAULT 'active' CHECK (status IN ('active','disabled')),
@@ -41,11 +41,7 @@ CREATE TABLE IF NOT EXISTS app_users (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
--- citext may be unavailable on minimal hosts: fall back to lower(email) uniqueness.
-DO $$ BEGIN
-  CREATE EXTENSION IF NOT EXISTS citext;
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
+-- Uniqueness on lower(email) — no citext dependency (portable across hosts).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_app_users_email ON app_users (lower(email));
 
 DROP TRIGGER IF EXISTS trg_app_users_updated ON app_users;

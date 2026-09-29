@@ -22,6 +22,7 @@ ALTER TABLE vendor_authorizations  RENAME COLUMN tenant_id TO user_id;
 ALTER TABLE vendor_requests        RENAME COLUMN tenant_id TO user_id;
 ALTER TABLE audit_events           RENAME COLUMN tenant_id TO user_id;
 ALTER TABLE config                 RENAME COLUMN tenant_id TO user_id;
+ALTER TABLE doc_number_sequences   RENAME COLUMN tenant_id TO user_id;
 
 -- client_members: workspace vs member keys (host convention)
 ALTER TABLE client_members RENAME COLUMN user_id TO member_user_id;
