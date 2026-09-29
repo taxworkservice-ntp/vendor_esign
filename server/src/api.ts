@@ -11,6 +11,7 @@ import { getVendorMemory } from './vendor-memory'
 import { authRoutes, requireClient } from './client-auth'
 import { corsMw } from './cors'
 import { getTenantSettings, saveTenantSettings } from './settings'
+import { dataRoutes } from './data'
 import {
   CLIENT_DISPLAY,
   PILOT_BE_YEAR,
@@ -56,6 +57,9 @@ app.use('*', corsMw())
 
 // Client portal auth (login/logout/me/change-password).
 app.route('/api/auth', authRoutes)
+
+// Client portal data (vendors + items) — session-guarded, workspace-scoped.
+app.route('/api/client', dataRoutes)
 
 app.get('/api/health', (c) => c.json({ ok: true, operation: 'public', tenant: TENANT }))
 

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { loadVendors, maskFromLast4, saveVendor, type ClientVendor } from '../lib/vendors-mock'
+import { apiGet, apiSend, hasServer } from '../lib/api-client'
 import { getVendorMemorySource, vendorMemoryEnabled } from '../lib/vendor-memory-source'
 import type { VendorMemory } from '../lib/vendor-memory'
 import { forgetVendorId, recallVendorId } from '../lib/vendor-id'
@@ -7,14 +8,19 @@ import { useClientAuth } from '../lib/client-auth'
 
 const QK = ['vendors'] as const
 
+// Runs on the server when VITE_API_BASE is set, else the local mock store.
+async function fetchVendors(activeTenant: string): Promise<ClientVendor[]> {
+  if (hasServer) return (await apiGet<{ vendors: ClientVendor[] }>('/api/client/vendors')).vendors
+  return loadVendors(activeTenant)
+}
+
 export function useVendors(search = '') {
   const { activeTenant } = useClientAuth()
   return useQuery({
     queryKey: [...QK, activeTenant, search],
     queryFn: async (): Promise<ClientVendor[]> => {
-      return loadVendors(activeTenant).filter(
-        (v) => !search || v.name.includes(search) || v.address.includes(search),
-      )
+      const all = await fetchVendors(activeTenant)
+      return all.filter((v) => !search || v.name.includes(search) || v.address.includes(search))
     },
   })
 }
@@ -24,13 +30,17 @@ export function useVendor(id?: string) {
   return useQuery({
     queryKey: [...QK, 'detail', activeTenant, id],
     enabled: !!id,
-    queryFn: async () => loadVendors(activeTenant).find((v) => v.id === id),
+    queryFn: async () => (await fetchVendors(activeTenant)).find((v) => v.id === id),
   })
 }
 
 export function useAllVendors(): ClientVendor[] {
   const { activeTenant } = useClientAuth()
-  return loadVendors(activeTenant)
+  const q = useQuery({
+    queryKey: [...QK, 'all', activeTenant],
+    queryFn: async () => fetchVendors(activeTenant),
+  })
+  return q.data ?? []
 }
 
 // Remembered defaults for a vendor, derived from transaction history.
@@ -81,6 +91,10 @@ export function useCreateVendor() {
       const name = input.name.trim()
       if (name.length < 2) throw new Error('กรุณากรอกชื่อผู้ขาย')
       if (input.address.trim().length < 4) throw new Error('กรุณากรอกที่อยู่ผู้ขาย')
+      if (hasServer) {
+        const res = await apiSend<{ ok: boolean; vendor: ClientVendor }>('/api/client/vendors', 'POST', input)
+        return res.vendor
+      }
       const taxId = input.taxId.replace(/\D/g, '').slice(0, 13)
       const row: ClientVendor = {
         id: `v-${Date.now().toString(36)}`,
@@ -105,6 +119,10 @@ export function useUpdateVendor(id?: string) {
   const { activeTenant } = useClientAuth()
   return useMutation({
     mutationFn: async (patch: Partial<Pick<ClientVendor, 'name' | 'address' | 'lineUserId'>>) => {
+      if (hasServer) {
+        await apiSend(`/api/client/vendors/${id}`, 'PATCH', patch)
+        return { ok: true }
+      }
       const cur = loadVendors(activeTenant).find((v) => v.id === id)
       if (!cur) throw new Error('ไม่พบผู้ขาย')
       saveVendor({ ...cur, ...patch, name: (patch.name ?? cur.name).trim(), address: (patch.address ?? cur.address).trim() })

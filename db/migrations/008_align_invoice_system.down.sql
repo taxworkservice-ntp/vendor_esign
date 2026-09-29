@@ -6,6 +6,7 @@ DROP POLICY IF EXISTS p_wht_records ON wht_records;
 DROP FUNCTION IF EXISTS generate_wht_certificate_no(text, date, uuid);
 DROP TABLE IF EXISTS wht_records;
 DROP TABLE IF EXISTS wht_vendors;
+DROP TABLE IF EXISTS items;
 DROP TABLE IF EXISTS document_line_items;
 
 DROP FUNCTION IF EXISTS generate_doc_number(text, text, integer, text);

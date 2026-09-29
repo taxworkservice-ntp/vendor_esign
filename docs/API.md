@@ -45,6 +45,10 @@ ADMIN_EMAIL=you@taxwork.local npm run db:seed-admin  # bootstrap super_admin (pr
 - `GET /api/cron/vendor-link-expiry` — **protected** (`Authorization: Bearer $CRON_SECRET`);
   marks payments whose vendor link lapsed as `expired`. `503` if `CRON_SECRET` unset.
 - `GET /api/settings`, `PUT /api/settings` — tenant settings (session-guarded; owner/manager writes).
+- **Client data (session-guarded, workspace-scoped, RLS):**
+  - `GET/POST /api/client/vendors`, `PATCH /api/client/vendors/:id` — vendor (payee) directory; tax IDs encrypted at rest.
+  - `GET/POST /api/client/items`, `PATCH/DELETE /api/client/items/:id` — item catalog.
+  When `VITE_API_BASE` is set the portal hooks use these; otherwise they run on the mock store.
 - `POST /api/wht/*` — WHT certificates are rendered client-side from the exact
   invoice-system template (`/wht/print`, see `src/pages/WhtPrint.tsx`).
 - `GET /api/vendors/:id/memory` — remembered defaults for a vendor, derived from

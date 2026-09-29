@@ -141,6 +141,15 @@ export const whtRecords = pgTable('wht_records', {
   status: text('status').notNull().default('active'),
 })
 
+export const items = pgTable('items', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id').notNull(),
+  name: text('name').notNull(),
+  unit: text('unit').notNull().default('รายการ'),
+  unitPrice: numeric('unit_price', { precision: 12, scale: 2 }).notNull().default('0'),
+  isActive: boolean('is_active').notNull().default(true),
+})
+
 export const sessions = pgTable('sessions', {
   id: uuid('id').defaultRandom().primaryKey(),
   userId: uuid('user_id').notNull(),

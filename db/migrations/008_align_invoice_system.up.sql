@@ -142,6 +142,19 @@ BEGIN
   RETURN v_yymm || lpad(v_seq::text, 3, '0');
 END; $$ LANGUAGE plpgsql;
 
+-- ── 6b. Item catalog (host-shaped) ──
+CREATE TABLE IF NOT EXISTS items (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     text NOT NULL,
+  name        text NOT NULL,
+  unit        text NOT NULL DEFAULT 'รายการ',
+  unit_price  numeric(12,2) NOT NULL DEFAULT 0,
+  is_active   boolean NOT NULL DEFAULT true,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_items_user ON items (user_id);
+
 -- ── 7. RLS helper: app_user_id() (→ auth.uid() on Supabase) ──
 -- withTenant() sets app.user_id/app.role; the helper keeps policies identical to
 -- the host's `user_id = auth.uid()` shape.
@@ -216,4 +229,9 @@ CREATE POLICY p_wht_records ON wht_records FOR ALL USING (
 ALTER TABLE wht_vendors ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS p_wht_vendors ON wht_vendors;
 CREATE POLICY p_wht_vendors ON wht_vendors FOR ALL USING (
+  user_id = app_user_id() OR app_is_bookkeeper() OR app_is_super_admin());
+
+ALTER TABLE items ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS p_items ON items;
+CREATE POLICY p_items ON items FOR ALL USING (
   user_id = app_user_id() OR app_is_bookkeeper() OR app_is_super_admin());

@@ -22,7 +22,8 @@ Drizzle `src/server/schema.ts` mirrors it for typed server queries only.
 > | `authorizations` | `vendor_authorizations` |
 > | `tenant_id` columns | `user_id` (workspace key) |
 >
-> Added: `wht_records` (column-exact host shape), `client_permission_audit`.
+> Added: `wht_vendors` + `wht_records` (column-exact host shape),
+> `document_line_items`, `items` (catalog), `client_permission_audit`.
 > `config` remains a Neon-only settings shim until P2 folds it into
 > `client_profiles`/`doc_number_sequences`. `[VERIFY]` — run this migration on a
 > real DB and reconcile `wht_records` columns against invoice-system
