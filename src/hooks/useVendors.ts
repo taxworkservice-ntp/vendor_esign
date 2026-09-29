@@ -61,7 +61,16 @@ export function useRecalledVendorId(vendorId?: string) {
     queryKey: ['vendor-id', vendorId],
     enabled: !!vendorId,
     staleTime: 30_000,
-    queryFn: async (): Promise<string | null> => recallVendorId(vendorId as string),
+    queryFn: async (): Promise<string | null> => {
+      if (hasServer) {
+        try {
+          return (await apiGet<{ taxId: string | null }>(`/api/client/vendors/${vendorId}/tax-id`)).taxId
+        } catch {
+          return null
+        }
+      }
+      return recallVendorId(vendorId as string)
+    },
   })
 }
 

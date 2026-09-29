@@ -13,6 +13,7 @@ import { corsMw } from './cors'
 import { getTenantSettings, saveTenantSettings } from './settings'
 import { dataRoutes } from './data'
 import { txnRoutes } from './transactions'
+import { whtRoutes } from './wht'
 import {
   CLIENT_DISPLAY,
   PILOT_BE_YEAR,
@@ -64,6 +65,9 @@ app.route('/api/client', dataRoutes)
 
 // Client transactions (list/get/create/send/revoke/void).
 app.route('/api/client', txnRoutes)
+
+// Client WHT records + vendors.
+app.route('/api/client', whtRoutes)
 
 app.get('/api/health', (c) => c.json({ ok: true, operation: 'public', tenant: TENANT }))
 

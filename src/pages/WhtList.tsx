@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom'
 import { FileText, Printer } from 'lucide-react'
-import { useClientAuth } from '../lib/client-auth'
-import { loadWht } from '../lib/wht-mock'
+import { useWht } from '../hooks/useWht'
 import { fmtWhtDate, fmtWhtNum } from '../lib/wht'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
@@ -10,8 +9,9 @@ import { Button } from '../components/ui/button'
 const thCls = 'px-3 py-2 text-left text-label font-semibold uppercase tracking-wide text-ink-500'
 
 export function WhtList() {
-  const { activeTenant } = useClientAuth()
-  const { records, vendors } = loadWht(activeTenant)
+  const { data } = useWht()
+  const records = data?.records ?? []
+  const vendors = data?.vendors ?? []
   const vendorName = (id: string) => vendors.find((v) => v.id === id)?.name ?? '—'
   const ids = (list: string[]) => list.join(',')
 

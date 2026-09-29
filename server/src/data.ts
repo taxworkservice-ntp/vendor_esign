@@ -92,6 +92,26 @@ dataRoutes.post('/vendors', async (c) => {
   return c.json({ ok: true, vendor: toVendor(row) })
 })
 
+// Full (decrypted) tax ID for a vendor — owner/manager only, for form prefill.
+dataRoutes.get('/vendors/:id/tax-id', async (c) => {
+  const g = await guard(c)
+  if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  const rows = await withTenant(g.ws, 'owner', async () => {
+    const db = sql()
+    return (await db`select id_number_encrypted from vendor_payees where id = ${c.req.param('id')} and user_id = ${g.ws}`) as unknown as { id_number_encrypted: string | null }[]
+  })
+  const enc = rows[0]?.id_number_encrypted
+  let taxId: string | null = null
+  if (enc) {
+    try {
+      taxId = decryptId(enc)
+    } catch {
+      taxId = null
+    }
+  }
+  return c.json({ taxId })
+})
+
 dataRoutes.patch('/vendors/:id', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)

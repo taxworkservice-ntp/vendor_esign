@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Download, Printer } from 'lucide-react'
-import { loadWhtByIds } from '../lib/wht-mock'
+import { fetchWhtByIds } from '../lib/wht-source'
 import { loadSettings } from '../lib/settings'
 import {
   fmtWhtDate,
@@ -219,13 +219,20 @@ export function WhtPrint() {
   const [err, setErr] = useState('')
 
   useEffect(() => {
-    const { records: recs, tenantId } = loadWhtByIds(ids)
-    setRecords(recs)
-    if (tenantId) {
-      const s = loadSettings(tenantId)
-      setProfile({ company_name_th: s.displayName, tax_id: s.taxId, address: s.address })
-    } else {
-      setErr('ไม่พบข้อมูลใบรับรอง')
+    let cancelled = false
+    void (async () => {
+      const { records: recs, tenantId } = await fetchWhtByIds(ids)
+      if (cancelled) return
+      setRecords(recs)
+      if (tenantId) {
+        const s = loadSettings(tenantId)
+        setProfile({ company_name_th: s.displayName, tax_id: s.taxId, address: s.address })
+      } else {
+        setErr('ไม่พบข้อมูลใบรับรอง')
+      }
+    })()
+    return () => {
+      cancelled = true
     }
   }, [params])
 
