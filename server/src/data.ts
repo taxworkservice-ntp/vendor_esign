@@ -13,7 +13,7 @@ export const dataRoutes = new Hono()
 
 type Guarded = { error: 401 | 403 } | { u: SessionUser; ws: string }
 
-async function guard(c: { req: { header: (n: string) => string | undefined } }): Promise<Guarded> {
+export async function guard(c: { req: { header: (n: string) => string | undefined } }): Promise<Guarded> {
   const u = await requireClient(c)
   const ws = u?.memberships[0]?.tenantId
   if (!u || !ws) return { error: 401 }

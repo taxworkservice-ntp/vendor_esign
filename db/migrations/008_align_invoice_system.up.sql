@@ -142,6 +142,18 @@ BEGIN
   RETURN v_yymm || lpad(v_seq::text, 3, '0');
 END; $$ LANGUAGE plpgsql;
 
+-- ── 5c. Payables: ensure host-side fields exist (idempotent) ──
+ALTER TABLE vendor_payables
+  ADD COLUMN IF NOT EXISTS void_reason text,
+  ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS created_by text,
+  ADD COLUMN IF NOT EXISTS tax_id_hash text,
+  ADD COLUMN IF NOT EXISTS tax_id_last4 text;
+
+-- ── 5b. Vendor request link: store the capability token so the client can
+-- re-copy the signing link later (hash stays for lookup verification). ──
+ALTER TABLE vendor_requests ADD COLUMN IF NOT EXISTS token text;
+
 -- ── 6b. Item catalog (host-shaped) ──
 CREATE TABLE IF NOT EXISTS items (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),

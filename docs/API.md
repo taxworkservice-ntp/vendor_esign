@@ -48,6 +48,9 @@ ADMIN_EMAIL=you@taxwork.local npm run db:seed-admin  # bootstrap super_admin (pr
 - **Client data (session-guarded, workspace-scoped, RLS):**
   - `GET/POST /api/client/vendors`, `PATCH /api/client/vendors/:id` — vendor (payee) directory; tax IDs encrypted at rest.
   - `GET/POST /api/client/items`, `PATCH/DELETE /api/client/items/:id` — item catalog.
+  - `GET /api/client/transactions`, `GET /api/client/transactions/:id`, `POST /api/client/transactions`
+    (create; WHT via `src/lib/wht-calc`, tax ID hashed), `POST /api/client/transactions/:id/send|revoke|void`.
+    `send` returns the one-time `token` and stores it (with its hash) for later link re-copy.
   When `VITE_API_BASE` is set the portal hooks use these; otherwise they run on the mock store.
 - `POST /api/wht/*` — WHT certificates are rendered client-side from the exact
   invoice-system template (`/wht/print`, see `src/pages/WhtPrint.tsx`).
