@@ -25,10 +25,14 @@ export function sql() {
 }
 
 // Per-request tenant isolation for RLS: call at the start of every server txn.
-export type AppRole = 'client' | 'client_user' | 'client_admin' | 'bookkeeper' | 'super_admin'
-export async function withTenant<T>(tenantId: string, role: AppRole, fn: () => Promise<T>, userId?: string): Promise<T> {
+// app.user_id is the WORKSPACE key (host RLS reads it via app_user_id(), which
+// becomes auth.uid() on the Supabase move). actorId is the audit actor only.
+export type AppRole = 'client' | 'client_user' | 'client_admin' | 'owner' | 'manager' | 'officer' | 'bookkeeper' | 'super_admin'
+export async function withTenant<T>(tenantId: string, role: string, fn: () => Promise<T>, actorId?: string): Promise<T> {
   const db = sql()
-  await db`select set_config('app.tenant_id', ${tenantId}, true), set_config('app.role', ${role}, true)`
-  if (userId) await db`select set_config('app.user_id', ${userId}, true)`
+  await db`select set_config('app.user_id', ${tenantId}, true),
+    set_config('app.tenant_id', ${tenantId}, true),
+    set_config('app.role', ${role}, true)`
+  if (actorId) await db`select set_config('app.actor_id', ${actorId}, true)`
   return fn()
 }

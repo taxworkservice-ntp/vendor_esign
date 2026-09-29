@@ -8,8 +8,8 @@ describe('admin multi-client (mock slice)', () => {
     expect(t?.beYear).toBe(2569)
     expect(t?.status).toBe('active')
   })
-  it('seeds super_admin membership for ABC', () => {
+  it('seeds an owner (top role) for ABC', () => {
     const users = loadTenantUsers()['ABC'] ?? []
-    expect(users.some((u) => u.role === 'super_admin')).toBe(true)
+    expect(users.some((u) => u.role === 'owner')).toBe(true)
   })
 })

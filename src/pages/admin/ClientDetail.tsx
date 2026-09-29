@@ -16,7 +16,7 @@ export function ClientDetail() {
   const actions = useUserActions(id)
   const [tab, setTab] = useState<'info' | 'users' | 'config'>('info')
   const [email, setEmail] = useState('')
-  const [role, setRole] = useState<'client_user' | 'client_admin'>('client_user')
+  const [role, setRole] = useState<'owner' | 'manager' | 'officer'>('officer')
   const [tempPw, setTempPw] = useState('')
   const [err, setErr] = useState('')
 
@@ -81,8 +81,9 @@ export function ClientDetail() {
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Input placeholder="email@client.co.th" value={email} onChange={(e) => setEmail(e.target.value)} className="flex-1" />
                 <select value={role} onChange={(e) => setRole(e.target.value as typeof role)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-[15px]">
-                  <option value="client_user">client_user — ใช้งานทั่วไป</option>
-                  <option value="client_admin">client_admin — จัดการผู้ใช้ในลูกค้านี้</option>
+                  <option value="owner">owner — เจ้าของบัญชี (จัดการได้ทุกอย่าง)</option>
+                  <option value="manager">manager — ผู้จัดการ (ตามสิทธิ์ที่กำหนด)</option>
+                  <option value="officer">officer — เจ้าหน้าที่ (ตามสิทธิ์ที่กำหนด)</option>
                 </select>
                 <Button onClick={makeUser} disabled={createUser.isPending || !email.trim()}>
                   {createUser.isPending ? 'กำลังสร้าง…' : 'สร้าง + ออกรหัสชั่วคราว'}

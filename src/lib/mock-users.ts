@@ -19,11 +19,12 @@ export const MOCK_USERS: MockUser[] = [
   {
     email: 'client@taxwork.local',
     password: MOCK_PASSWORD,
-    memberships: [{ tenantId: 'ABC', role: 'client_user' }],
+    memberships: [{ tenantId: 'ABC', role: 'owner' }],
   },
-  { email: 'admin@demo.co.th', password: MOCK_PASSWORD, memberships: [{ tenantId: 'DEMO', role: 'client_admin' }] },
-  { email: 'user@demo.co.th', password: MOCK_PASSWORD, memberships: [{ tenantId: 'DEMO', role: 'client_user' }] },
-  { email: 'admin@taxwork.local', password: MOCK_PASSWORD, memberships: [{ tenantId: 'ABC', role: 'super_admin' }] },
+  { email: 'admin@demo.co.th', password: MOCK_PASSWORD, memberships: [{ tenantId: 'DEMO', role: 'owner' }] },
+  { email: 'manager@demo.co.th', password: MOCK_PASSWORD, memberships: [{ tenantId: 'DEMO', role: 'manager' }] },
+  { email: 'user@demo.co.th', password: MOCK_PASSWORD, memberships: [{ tenantId: 'DEMO', role: 'officer' }] },
+  { email: 'super@taxwork.local', password: MOCK_PASSWORD, memberships: [{ tenantId: 'ABC', role: 'super_admin' }] },
 ]
 
 export function findMockUser(email: string, password: string): MockUser | null {
@@ -31,7 +32,8 @@ export function findMockUser(email: string, password: string): MockUser | null {
   return MOCK_USERS.find((u) => u.email === e && u.password === password) ?? null
 }
 
-export const CLIENT_ROLES = ['client_user', 'client_admin'] as const
+// Client-facing roles (owner-only model: owner is the top role; manager/officer are staff).
+export const CLIENT_ROLES = ['owner', 'manager', 'officer', 'client_user', 'client_admin'] as const
 export const ADMIN_ROLES = ['super_admin', 'bookkeeper'] as const
 
 export function hasRole(user: MockUser, roles: readonly string[]): boolean {
@@ -39,4 +41,4 @@ export function hasRole(user: MockUser, roles: readonly string[]): boolean {
 }
 
 // Shown on the login pages during mock mode so the credentials are discoverable.
-export const MOCK_HINT = 'client@taxwork.local / demo1234 · admin@taxwork.local / demo1234'
+export const MOCK_HINT = 'client@taxwork.local / demo1234 · super@taxwork.local / demo1234'

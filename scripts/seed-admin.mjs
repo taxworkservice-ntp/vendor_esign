@@ -30,20 +30,24 @@ const hash = `scrypt$16384$8$1$${salt.toString('hex')}$${key.toString('hex')}`
 const tempExpires = new Date(Date.now() + 7 * 86400 * 1000).toISOString()
 
 const sql = neon(url)
-const existing = await sql`select id from app_users where lower(email) = ${email}`
+const existing = await sql`select id from profiles where lower(email) = ${email}`
 let userId = existing[0]?.id
 if (!userId) {
-  const ins = await sql`insert into app_users (email, password_hash, must_change_pw, status, temp_expires_at)
-    values (${email}, ${hash}, true, 'active', ${tempExpires}) returning id`
+  const ins = await sql`insert into profiles (email, status, role) values (${email}, 'active', 'owner') returning id`
   userId = ins[0].id
+  await sql`insert into auth_credentials (user_id, password_hash, must_change_pw, temp_expires_at)
+    values (${userId}, ${hash}, true, ${tempExpires})`
 } else {
-  await sql`update app_users set password_hash = ${hash}, must_change_pw = true,
-    status = 'active', temp_expires_at = ${tempExpires}, updated_at = now() where id = ${userId}`
+  await sql`insert into auth_credentials (user_id, password_hash, must_change_pw, temp_expires_at)
+    values (${userId}, ${hash}, true, ${tempExpires})
+    on conflict (user_id) do update set password_hash = excluded.password_hash,
+      must_change_pw = true, temp_expires_at = excluded.temp_expires_at, updated_at = now()`
+  await sql`update profiles set status = 'active', updated_at = now() where id = ${userId}`
 }
-// Global membership marker: super_admin on the pilot tenant row.
-await sql`insert into user_tenants (user_id, tenant_id, role)
-  values (${userId}, 'ABC', 'super_admin')
-  on conflict (user_id, tenant_id) do update set role = 'super_admin'`
+// Workspace membership: owner of the pilot workspace (008 alignment).
+await sql`insert into client_members (member_user_id, workspace_user_id, role)
+  values (${userId}, 'ABC', 'owner')
+  on conflict (member_user_id, workspace_user_id) do update set role = 'owner'`
 
 const tokenHash = createHash('sha256').update(email).digest('hex').slice(0, 12)
 console.log(`seed-admin: OK user=${email} id=${userId} ref=${tokenHash}`)

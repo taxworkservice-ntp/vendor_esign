@@ -66,8 +66,9 @@ authRoutes.post('/login', async (c) => {
   if (lockedUntil(email)) return c.json({ error: 'locked' }, 429)
 
   const db = sql()
-  const rows = (await db`select id, email, password_hash, must_change_pw, status, temp_expires_at
-    from app_users where lower(email) = ${email}`) as unknown as
+  const rows = (await db`select u.id, u.email, c.password_hash, c.must_change_pw, u.status, c.temp_expires_at
+    from profiles u join auth_credentials c on c.user_id = u.id
+    where lower(u.email) = ${email}`) as unknown as
     { id: string; email: string; password_hash: string; must_change_pw: boolean; status: string; temp_expires_at: string | null }[]
   const u = one<(typeof rows)[number]>(rows)
 
@@ -80,17 +81,17 @@ authRoutes.post('/login', async (c) => {
   if (u.temp_expires_at && new Date(String(u.temp_expires_at)) < new Date() && u.must_change_pw)
     return c.json({ error: 'temp-expired' }, 403)
 
-  const mems = (await db`select tenant_id, role from user_tenants where user_id = ${String(u.id)}`) as unknown as
-    { tenant_id: string; role: string }[]
-  const memberships = mems.map((m) => ({ tenantId: String(m.tenant_id), role: String(m.role) }))
-  if (!memberships.some((m) => m.role === 'client_user' || m.role === 'client_admin'))
+  const mems = (await db`select workspace_user_id, role from client_members where member_user_id = ${String(u.id)}`) as unknown as
+    { workspace_user_id: string; role: string }[]
+  const memberships = mems.map((m) => ({ tenantId: String(m.workspace_user_id), role: String(m.role) }))
+  if (!memberships.some((m) => m.role === 'client_user' || m.role === 'client_admin' || m.role === 'owner' || m.role === 'manager' || m.role === 'officer'))
     return c.json({ error: 'not-a-client-user' }, 403)
 
   fails.delete(email)
   const { token, expiresAt } = await createSession(String(u.id), ip, c.req.header('user-agent') ?? '')
   const tenantId = memberships[0]?.tenantId ?? PILOT_TENANT
   await withTenant(tenantId, 'client_user', async () =>
-    audit(tenantId, 'app_users', String(u.id), 'user.login', 'user', { channel: 'client' }, ip))
+    audit(tenantId, 'profiles', String(u.id), 'user.login', 'user', { channel: 'client' }, ip))
   return new Response(
     JSON.stringify({ ok: true, email: u.email, mustChangePw: Boolean(u.must_change_pw), memberships }),
     { headers: { 'Content-Type': 'application/json', 'Set-Cookie': sessionCookie(token, expiresAt, SESSION_COOKIE) } },
@@ -122,13 +123,13 @@ authRoutes.post('/change-password', async (c) => {
   if (!body?.oldPassword || !body?.newPassword || body.newPassword.length < 8)
     return c.json({ error: 'invalid-body' }, 400)
   const db = sql()
-  const rows = (await db`select password_hash from app_users where id = ${u.userId}`) as unknown as { password_hash: string }[]
+  const rows = (await db`select password_hash from auth_credentials where user_id = ${u.userId}`) as unknown as { password_hash: string }[]
   if (!(await verifyPassword(body.oldPassword, String(rows[0]?.password_hash ?? ''))))
     return c.json({ error: 'invalid-credentials' }, 401)
-  await db`update app_users set password_hash = ${await hashPassword(body.newPassword)},
-    must_change_pw = false, temp_expires_at = null, updated_at = now() where id = ${u.userId}`
+  await db`update auth_credentials set password_hash = ${await hashPassword(body.newPassword)},
+    must_change_pw = false, temp_expires_at = null, updated_at = now() where user_id = ${u.userId}`
   const tenantId = u.memberships[0]?.tenantId ?? PILOT_TENANT
   await withTenant(tenantId, 'client_user', async () =>
-    audit(tenantId, 'app_users', u.userId, 'user.password-changed', 'user', {}, 'local'))
+    audit(tenantId, 'profiles', u.userId, 'user.password-changed', 'user', {}, 'local'))
   return c.json({ ok: true })
 })

@@ -8,8 +8,8 @@ export async function getTenantSettings(tenantId: string): Promise<TenantSetting
   return withTenant(tenantId, 'client', async () => {
     const db = sql()
     const tRows = (await db`select client_code, display_name, name, address, tax_id, contact_name, be_year
-      from tenants where id = ${tenantId}`) as unknown as Record<string, unknown>[]
-    const cfg = (await db`select key, value from config where tenant_id = ${tenantId}`) as unknown as
+      from client_profiles where id = ${tenantId}`) as unknown as Record<string, unknown>[]
+    const cfg = (await db`select key, value from config where user_id = ${tenantId}`) as unknown as
       { key: string; value: unknown }[]
     const row = tRows[0] ?? {}
     const m = new Map(cfg.map((r) => [r.key, r.value]))
@@ -40,13 +40,13 @@ export async function getTenantSettings(tenantId: string): Promise<TenantSetting
 export async function saveTenantSettings(tenantId: string, s: TenantSettings): Promise<void> {
   await withTenant(tenantId, 'client_admin', async () => {
     const db = sql()
-    await db`update tenants set display_name = ${s.displayName}, name = ${s.displayName},
+    await db`update client_profiles set display_name = ${s.displayName}, name = ${s.displayName},
       address = ${s.address}, tax_id = ${s.taxId}, contact_name = ${s.contactName},
       client_code = ${s.clientCode}, be_year = ${s.beYear}, updated_at = now()
       where id = ${tenantId}`
     const put = async (key: string, value: unknown) => {
-      await db`insert into config (tenant_id, key, value, updated_at) values (${tenantId}, ${key}, ${JSON.stringify(value)}::jsonb, now())
-        on conflict (tenant_id, key) do update set value = excluded.value, updated_at = now()`
+      await db`insert into config (user_id, key, value, updated_at) values (${tenantId}, ${key}, ${JSON.stringify(value)}::jsonb, now())
+        on conflict (user_id, key) do update set value = excluded.value, updated_at = now()`
     }
     await put('wht_rates', s.whtRates.map((r) => ({ paymentType: r.paymentType, rate: r.value, label: r.label })))
     await put('payment_types', s.paymentTypes)

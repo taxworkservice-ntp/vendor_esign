@@ -113,7 +113,7 @@ export function useTenantUsers(tenantId?: string) {
 export function useCreateUser(tenantId?: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (input: { email: string; role: 'client_user' | 'client_admin' }): Promise<{ tempPassword: string }> => {
+    mutationFn: async (input: { email: string; role: 'owner' | 'manager' | 'officer' }): Promise<{ tempPassword: string }> => {
       if (API && tenantId) {
         return api<{ ok: boolean; tempPassword: string }>(`/api/admin/tenants/${tenantId}/users`, {
           method: 'POST',

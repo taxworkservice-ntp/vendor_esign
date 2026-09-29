@@ -30,13 +30,13 @@ const testTaxHash = createHash('sha256').update(TEST_TAX_ID).digest('hex')
 
 // Fresh vendor + txn + request (idempotent reruns)
 const v = await sql.query(
-  `insert into vendors (tenant_id, name, address, id_number_encrypted)
+  `insert into vendor_payees (user_id, name, address, id_number_encrypted)
    values ('ABC','Smoke Test (fake)','Bangkok (fake)','enc:FAKE-SMOKE') returning id`)
 const vendorId = v[0].id
 const ref = `SMOKE-${stamp}`
 const slip = `SMOKE-SLIP-${stamp}`
 const t = await sql.query(
-  `insert into payment_transactions (tenant_id, ref, vendor_id, payment_type, description,
+  `insert into vendor_payables (user_id, ref, vendor_id, payment_type, description,
     gross_amount, wht_rate, wht_amount, net_amount, transfer_date, slip_reference, status, created_by,
     tax_id_hash, tax_id_last4)
    values ('ABC', $1, $2, 'ค่าบริการ', 'smoke test (fake)', 3000, 3, 90, 2910,
@@ -44,10 +44,10 @@ const t = await sql.query(
   [ref, vendorId, slip, testTaxHash])
 const txnId = t[0].id
 await sql.query(
-  `insert into vendor_requests (tenant_id, transaction_id, token_hash, expires_at)
+  `insert into vendor_requests (user_id, transaction_id, token_hash, expires_at)
    values ('ABC', $1, $2, now() + interval '7 days')`,
   [txnId, tokenHash])
-await sql.query(`update payment_transactions set status='sent' where id=$1`, [txnId])
+await sql.query(`update vendor_payables set status='sent' where id=$1`, [txnId])
 
 // 1. vendor loads own txn
 let r = await fetch(`${BASE}/api/vendor/${token}`)

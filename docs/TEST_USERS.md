@@ -8,28 +8,33 @@ be used in production.
 
 | Email | Password | Access |
 | --- | --- | --- |
-| `client@taxwork.local` | `demo1234` | Client portal, company **ABC** |
-| `admin@demo.co.th` | `demo1234` | Client portal, company **DEMO** (client_admin) |
-| `user@demo.co.th` | `demo1234` | Client portal, company **DEMO** (client_user) |
+| `client@taxwork.local` | `demo1234` | Company **ABC** — **owner** (full access) |
+| `admin@demo.co.th` | `demo1234` | Company **DEMO** — **owner** |
+| `manager@demo.co.th` | `demo1234` | Company **DEMO** — **manager** (settings) |
+| `user@demo.co.th` | `demo1234` | Company **DEMO** — **officer** (read-only) |
+
+Roles follow the owner-only model: `owner` (top role, everything) · `manager` ·
+`officer` (permission-gated). There is no separate system admin; the platform
+operator is seeded as an `owner` (see `npm run db:seed-admin`).
 
 ## Admin — `/admin/login`
 
 | Email | Password | Access |
 | --- | --- | --- |
-| `admin@taxwork.local` | `demo1234` | Admin: clients + users management (super_admin) |
+| `super@taxwork.local` | `demo1234` | Admin operation (operator), manages client workspaces |
 
 ## How to use
 
 1. `npm run dev`
 2. Open http://localhost:5173/login (client) or http://localhost:5173/admin/login (admin)
 3. Enter a credential pair above. The login page also shows these in the amber
-   “โหมดทดสอบ (mock)” box.
+   “โหมดทดสอบ (ในเครื่องนี้)” box.
 
 ## Notes
 
 - Mock mode only: when `VITE_API_BASE` is set, logins are validated by the server
-  and these credentials are ignored. Real users are created by an admin; the
+  and these credentials are ignored. Real users are created by an owner/manager; the
   server generates a one-time temporary password (shown once) and forces a
   password change on first login.
-- One client user belongs to exactly one company; there is no tenant switcher.
-  To see a different company's data, log in as that company's user.
+- One user belongs to exactly one workspace; there is no tenant switcher. To see a
+  different company's data, log in as that company's user.

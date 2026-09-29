@@ -1,9 +1,10 @@
 import { pgTable, text, uuid, boolean, numeric, date, timestamp, integer, jsonb } from 'drizzle-orm/pg-core'
 
-// Mirror of db/migrations/001+004 — source of truth is the SQL migration.
-// This schema exists so future Netlify Functions can use typed queries.
+// Mirror of db/migrations/001+004+008 — source of truth is the SQL migration.
+// Names/shapes follow invoice-system conventions so the later Supabase move is a
+// copy + RLS-helper swap (app_user_id() → auth.uid()).
 
-export const tenants = pgTable('tenants', {
+export const clientProfiles = pgTable('client_profiles', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   clientCode: text('client_code'),
@@ -17,9 +18,34 @@ export const tenants = pgTable('tenants', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 })
 
-export const vendors = pgTable('vendors', {
+export const profiles = pgTable('profiles', {
   id: uuid('id').defaultRandom().primaryKey(),
-  tenantId: text('tenant_id').notNull(),
+  email: text('email').notNull(),
+  role: text('role').notNull().default('owner'),
+  status: text('status').notNull().default('active'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+})
+
+export const authCredentials = pgTable('auth_credentials', {
+  userId: uuid('user_id').primaryKey(),
+  passwordHash: text('password_hash').notNull(),
+  mustChangePw: boolean('must_change_pw').notNull().default(true),
+  tempExpiresAt: timestamp('temp_expires_at', { withTimezone: true }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+})
+
+export const clientMembers = pgTable('client_members', {
+  memberUserId: uuid('member_user_id').notNull(),
+  workspaceUserId: text('workspace_user_id').notNull(),
+  role: text('role').notNull(),
+  status: text('status').notNull().default('active'),
+  passwordChanged: boolean('password_changed').notNull().default(true),
+  permissions: jsonb('permissions').notNull().default({}),
+})
+
+export const vendorPayees = pgTable('vendor_payees', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id').notNull(),
   name: text('name').notNull(),
   address: text('address').notNull(),
   idNumberEncrypted: text('id_number_encrypted').notNull(),
@@ -27,9 +53,9 @@ export const vendors = pgTable('vendors', {
   isVatRegistered: boolean('is_vat_registered').default(false),
 })
 
-export const paymentTransactions = pgTable('payment_transactions', {
+export const vendorPayables = pgTable('vendor_payables', {
   id: uuid('id').defaultRandom().primaryKey(),
-  tenantId: text('tenant_id').notNull(),
+  userId: text('user_id').notNull(),
   ref: text('ref').notNull(),
   vendorId: uuid('vendor_id').notNull(),
   paymentType: text('payment_type').notNull(),
@@ -47,34 +73,72 @@ export const paymentTransactions = pgTable('payment_transactions', {
   status: text('status').notNull(),
 })
 
-export const receipts = pgTable('receipts', {
+export const vendorReceipts = pgTable('vendor_receipts', {
   id: uuid('id').defaultRandom().primaryKey(),
-  tenantId: text('tenant_id').notNull(),
+  userId: text('user_id').notNull(),
+  docType: text('doc_type').notNull().default('vendor_receipt'),
   transactionId: uuid('transaction_id').notNull(),
   number: text('number').notNull(),
+  docNumber: text('doc_number'),
   issueDate: date('issue_date').notNull(),
   verificationCode: text('verification_code').notNull(),
+  subtotal: numeric('subtotal', { precision: 12, scale: 2 }).notNull().default('0'),
+  vatAmount: numeric('vat_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  whtAmount: numeric('wht_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  netPayable: numeric('net_payable', { precision: 12, scale: 2 }).notNull().default('0'),
+  pdfKey: text('pdf_key'),
   status: text('status').notNull(),
 })
 
-export const receiptCounters = pgTable('receipt_counters', {
-  tenantId: text('tenant_id').notNull(),
+export const documentLineItems = pgTable('document_line_items', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  documentId: uuid('document_id').notNull(),
+  userId: text('user_id').notNull(),
+  itemName: text('item_name').notNull(),
+  unit: text('unit').notNull().default('รายการ'),
+  quantity: numeric('quantity', { precision: 12, scale: 3 }).notNull().default('1'),
+  unitPrice: numeric('unit_price', { precision: 12, scale: 2 }).notNull().default('0'),
+  discount: numeric('discount', { precision: 12, scale: 2 }).notNull().default('0'),
+  lineTotal: numeric('line_total', { precision: 12, scale: 2 }).notNull().default('0'),
+  sortOrder: integer('sort_order').notNull().default(0),
+})
+
+export const docNumberSequences = pgTable('doc_number_sequences', {
+  userId: text('user_id').notNull(),
+  docType: text('doc_type').notNull().default('vendor_receipt'),
   beYear: integer('be_year').notNull(),
+  prefix: text('prefix'),
+  resetYearly: boolean('reset_yearly').notNull().default(true),
   lastNumber: integer('last_number').notNull().default(0),
 })
 
-export const appUsers = pgTable('app_users', {
+export const whtVendors = pgTable('wht_vendors', {
   id: uuid('id').defaultRandom().primaryKey(),
-  email: text('email').notNull(),
-  passwordHash: text('password_hash').notNull(),
-  mustChangePw: boolean('must_change_pw').notNull().default(true),
-  status: text('status').notNull().default('active'),
+  userId: text('user_id').notNull(),
+  name: text('name').notNull(),
+  taxId: text('tax_id'),
+  address: text('address'),
+  contactName: text('contact_name'),
+  phone: text('phone'),
+  email: text('email'),
+  note: text('note'),
+  vendorType: text('vendor_type').notNull().default('company'),
+  isActive: boolean('is_active').notNull().default(true),
 })
 
-export const userTenants = pgTable('user_tenants', {
-  userId: uuid('user_id').notNull(),
-  tenantId: text('tenant_id').notNull(),
-  role: text('role').notNull(),
+export const whtRecords = pgTable('wht_records', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id').notNull(),
+  vendorId: uuid('vendor_id').notNull(),
+  formType: text('form_type').notNull().default('pnd3'),
+  issueDate: date('issue_date').notNull(),
+  amount: numeric('amount', { precision: 15, scale: 2 }).notNull().default('0'),
+  whtRate: numeric('wht_rate', { precision: 5, scale: 2 }).notNull().default('0'),
+  whtAmount: numeric('wht_amount', { precision: 15, scale: 2 }).notNull().default('0'),
+  certificateNo: text('certificate_no'),
+  description: text('description'),
+  note: text('note'),
+  status: text('status').notNull().default('active'),
 })
 
 export const sessions = pgTable('sessions', {

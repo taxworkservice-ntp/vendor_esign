@@ -42,6 +42,11 @@ ADMIN_EMAIL=you@taxwork.local npm run db:seed-admin  # bootstrap super_admin (pr
   `note` header; empty/legacy rows fall back to `description` + `gross_amount`.
   Errors: `not-signed` (422), `already-issued` (409).
 - `GET /api/verify/:code` — public: number, status, issue date, masked vendor.
+- `GET /api/cron/vendor-link-expiry` — **protected** (`Authorization: Bearer $CRON_SECRET`);
+  marks payments whose vendor link lapsed as `expired`. `503` if `CRON_SECRET` unset.
+- `GET /api/settings`, `PUT /api/settings` — tenant settings (session-guarded; owner/manager writes).
+- `POST /api/wht/*` — WHT certificates are rendered client-side from the exact
+  invoice-system template (`/wht/print`, see `src/pages/WhtPrint.tsx`).
 - `GET /api/vendors/:id/memory` — remembered defaults for a vendor, derived from
   history (excludes `draft`/`void`/`cancelled`): `{ last: { lineItems, paymentType,
   whtRate, note } | null, items: [{ description, lastAmount, timesUsed, lastUsedAt }] }`

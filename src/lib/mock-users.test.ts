@@ -16,7 +16,7 @@ describe('mock credentials (dev only)', () => {
 
   it('routes client vs admin roles', () => {
     const client = findMockUser('client@taxwork.local', MOCK_PASSWORD)!
-    const admin = findMockUser('admin@taxwork.local', MOCK_PASSWORD)!
+    const admin = findMockUser('super@taxwork.local', MOCK_PASSWORD)!
     expect(hasRole(client, CLIENT_ROLES)).toBe(true)
     expect(hasRole(client, ADMIN_ROLES)).toBe(false)
     expect(hasRole(admin, ADMIN_ROLES)).toBe(true)

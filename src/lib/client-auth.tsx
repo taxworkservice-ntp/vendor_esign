@@ -44,7 +44,8 @@ function stateFrom(email: string, memberships: Membership[], mustChangePw: boole
     memberships,
     activeTenant: activeTenantOf(memberships),
     mustChangePw,
-    isClientAdmin: memberships.some((m) => m.role === 'client_admin'),
+    // owner (top role) and manager may manage workspace settings; officer is read-only.
+    isClientAdmin: memberships.some((m) => m.role === 'owner' || m.role === 'manager' || m.role === 'client_admin'),
     ready: true,
   }
 }

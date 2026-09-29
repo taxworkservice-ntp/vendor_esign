@@ -16,13 +16,13 @@ export interface AdminTenant {
 export interface AdminUser {
   id: string
   email: string
-  role: 'client_user' | 'client_admin' | 'bookkeeper' | 'super_admin'
+  role: 'owner' | 'manager' | 'officer' | 'client_user' | 'client_admin' | 'bookkeeper' | 'super_admin'
   status: 'active' | 'disabled'
   mustChangePw: boolean
 }
 
-const TKEY = 'taxwork-admin-tenants-v2'
-const UKEY = 'taxwork-admin-users-v2'
+const TKEY = 'taxwork-admin-tenants-v3'
+const UKEY = 'taxwork-admin-users-v3'
 
 function seedTenants(): AdminTenant[] {
   return [
@@ -68,10 +68,11 @@ export function saveTenants(t: AdminTenant[]) {
 
 export function loadTenantUsers(): Record<string, AdminUser[]> {
   return read<Record<string, AdminUser[]>>(UKEY, () => ({
-    ABC: [{ id: 'u-admin', email: 'admin@taxwork.local', role: 'super_admin', status: 'active', mustChangePw: false }],
+    ABC: [{ id: 'u-owner', email: 'owner@abc.co.th', role: 'owner', status: 'active', mustChangePw: false }],
     DEMO: [
-      { id: 'u-demo-admin', email: 'admin@demo.co.th', role: 'client_admin', status: 'active', mustChangePw: false },
-      { id: 'u-demo-user', email: 'user@demo.co.th', role: 'client_user', status: 'active', mustChangePw: true },
+      { id: 'u-demo-owner', email: 'owner@demo.co.th', role: 'owner', status: 'active', mustChangePw: false },
+      { id: 'u-demo-manager', email: 'manager@demo.co.th', role: 'manager', status: 'active', mustChangePw: false },
+      { id: 'u-demo-officer', email: 'officer@demo.co.th', role: 'officer', status: 'active', mustChangePw: true },
     ],
   }))
 }

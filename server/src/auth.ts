@@ -101,20 +101,22 @@ export async function sessionUser(
   if (!token) return null
   const db = sql()
   const rows = (await db`
-    select u.id, u.email, u.must_change_pw, u.status
-    from sessions s join app_users u on u.id = s.user_id
+    select u.id, u.email, c.must_change_pw, u.status
+    from sessions s
+    join profiles u on u.id = s.user_id
+    join auth_credentials c on c.user_id = u.id
     where s.token_hash = ${sha256hex(token)} and s.expires_at > now() and u.status = 'active'`) as unknown as
     { id: string; email: string; must_change_pw: boolean; status: string }[]
   const u = rows[0]
   if (!u) return null
-  const mems = (await db`select tenant_id, role from user_tenants where user_id = ${u.id}`) as unknown as
-    { tenant_id: string; role: string }[]
+  const mems = (await db`select workspace_user_id, role from client_members where member_user_id = ${u.id}`) as unknown as
+    { workspace_user_id: string; role: string }[]
   return {
     userId: String(u.id),
     email: String(u.email),
     mustChangePw: Boolean(u.must_change_pw),
     status: String(u.status),
-    memberships: mems.map((m) => ({ tenantId: String(m.tenant_id), role: String(m.role) })),
+    memberships: mems.map((m) => ({ tenantId: String(m.workspace_user_id), role: String(m.role) })),
   }
 }
 

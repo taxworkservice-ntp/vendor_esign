@@ -14,8 +14,8 @@ export async function getVendorMemory(tenantId: string, vendorId: string): Promi
 
     const lastRows = (await db`
       select line_items, note, payment_type, wht_rate, wht_mode
-      from payment_transactions
-      where tenant_id = ${tenantId} and vendor_id = ${vendorId}
+      from vendor_payables
+      where user_id = ${tenantId} and vendor_id = ${vendorId}
         and status not in ('draft','void','cancelled')
       order by created_at desc, id desc
       limit 1`) as unknown as
@@ -26,9 +26,9 @@ export async function getVendorMemory(tenantId: string, vendorId: string): Promi
              (array_agg((it->>'amount')::numeric order by t.created_at desc))[1] as last_amount,
              count(*)::int as times_used,
              max(t.created_at) as last_used_at
-      from payment_transactions t
+      from vendor_payables t
       cross join lateral jsonb_array_elements(coalesce(t.line_items, '[]'::jsonb)) it
-      where t.tenant_id = ${tenantId} and t.vendor_id = ${vendorId}
+      where t.user_id = ${tenantId} and t.vendor_id = ${vendorId}
         and t.status not in ('draft','void','cancelled')
         and coalesce(it->>'description', '') <> ''
       group by 1

@@ -41,13 +41,13 @@ export async function audit(
   ip: string,
 ) {
   const db = sql()
-  await db`insert into audit_events (tenant_id, entity_type, entity_id, event_type, actor, metadata, ip)
+  await db`insert into audit_events (user_id, entity_type, entity_id, event_type, actor, metadata, ip)
     values (${tenantId}, ${entityType}, ${entityId}, ${eventType}, ${actor}, ${JSON.stringify(metadata ?? {})}, ${ip})`
 }
 
 export async function withAuditTenant<T>(
   tenantId: string,
-  role: 'client' | 'client_user' | 'client_admin' | 'bookkeeper' | 'super_admin',
+  role: string,
   userId: string | undefined,
   fn: () => Promise<T>,
 ): Promise<T> {
@@ -59,7 +59,7 @@ export async function tenantProfile(
 ): Promise<{ code: string; beYear: number; display: string } | null> {
   const db = sql()
   const rows = (await db`select id, client_code, display_name, name, be_year
-    from tenants where id = ${tenantId} and status = 'active'`) as unknown as
+    from client_profiles where id = ${tenantId} and status = 'active'`) as unknown as
     { id: string; client_code: string | null; display_name: string | null; name: string; be_year: number }[]
   const t = rows[0]
   if (!t) return null

@@ -35,6 +35,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <NavLink to="/items" className={({ isActive }) => `rounded-lg px-3 py-2 ${isActive ? 'bg-slate-100' : 'text-ink-500 hover:text-ink-900'}`}>
               สินค้า/บริการ
             </NavLink>
+            <NavLink to="/wht" className={({ isActive }) => `rounded-lg px-3 py-2 ${isActive ? 'bg-slate-100' : 'text-ink-500 hover:text-ink-900'}`}>
+              ภาษีหัก ณ ที่จ่าย
+            </NavLink>
             <NavLink to="/review" className={({ isActive }) => `rounded-lg px-3 py-2 ${isActive ? 'bg-slate-100' : 'text-ink-500 hover:text-ink-900'}`}>
               ตรวจสอบ
             </NavLink>
