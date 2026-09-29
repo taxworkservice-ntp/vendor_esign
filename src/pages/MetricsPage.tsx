@@ -22,8 +22,8 @@ export function MetricsPage() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {cards.map(([label, v]) => (
           <Card key={label}><CardBody className="text-center">
-            <p className="text-2xl font-bold tabular-nums">{v}</p>
-            <p className="mt-1 text-xs text-ink-500">{label}</p>
+            <p className="text-2xl font-semibold tabular-nums">{v}</p>
+            <p className="mt-1 text-label text-ink-500">{label}</p>
           </CardBody></Card>
         ))}
       </div>

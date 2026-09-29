@@ -15,31 +15,31 @@ export function VerifyPage() {
   return (
     <div className="mx-auto max-w-xl space-y-4">
       <div className="flex items-center gap-2.5">
-        <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-700 text-white">
+        <span className="grid h-9 w-9 place-items-center rounded-control bg-emerald-700 text-white">
           <ShieldCheck size={18} />
         </span>
         <div className="leading-tight">
-          <p className="text-[15px] font-bold">ตรวจสอบใบเสร็จ</p>
-          <p className="text-xs text-ink-500">Taxwork pilot · แสดงเฉพาะข้อมูลที่จำเป็น</p>
+          <p className="text-body font-semibold">ตรวจสอบใบเสร็จ</p>
+          <p className="text-label text-ink-500">Taxwork pilot · แสดงเฉพาะข้อมูลที่จำเป็น</p>
         </div>
       </div>
       {!t ? (
         <Card><CardBody className="py-10 text-center">
-          <p className="font-bold">ไม่พบรหัสตรวจสอบนี้</p>
-          <p className="mt-1 text-sm text-ink-500">ตรวจตัวอักษรอีกครั้ง หรือสแกน QR บนเอกสารใหม่</p>
+          <p className="font-semibold">ไม่พบรหัสตรวจสอบนี้</p>
+          <p className="mt-1 text-body text-ink-500">ตรวจตัวอักษรอีกครั้ง หรือสแกน QR บนเอกสารใหม่</p>
         </CardBody></Card>
       ) : (
-        <Card><CardBody className="space-y-3 text-[15px]">
+        <Card><CardBody className="space-y-3 text-body">
           <div className="flex items-center justify-between">
-            <span className="font-mono text-sm">{t.receiptNumber ?? mockReceiptNumber(t.id, t.tenantId)}</span>
+            <span className="font-mono text-body">{t.receiptNumber ?? mockReceiptNumber(t.id, t.tenantId)}</span>
             <StatusBadge status={t.status} />
           </div>
-          <p className="flex justify-between border-t border-slate-100 pt-3"><span className="text-ink-500">วันที่ออก</span><span className="font-semibold">{fmtDateTH(t.transferDate)}</span></p>
+          <p className="flex justify-between border-t border-card-border pt-3"><span className="text-ink-500">วันที่ออก</span><span className="font-semibold">{fmtDateTH(t.transferDate)}</span></p>
           <p className="flex justify-between"><span className="text-ink-500">ผู้ขาย</span><span className="font-semibold">{maskVendorName(t.vendor.name)}</span></p>
-          <p className="text-xs text-ink-400">รหัส {code?.toUpperCase()} · รายละเอียดเต็มอยู่บนเอกสารต้นฉบับเท่านั้น</p>
+          <p className="text-label text-ink-400">รหัส {code?.toUpperCase()} · รายละเอียดเต็มอยู่บนเอกสารต้นฉบับเท่านั้น</p>
         </CardBody></Card>
       )}
-      <p className="text-center text-sm"><Link to="/" className="font-semibold underline">กลับหน้าแรก</Link></p>
+      <p className="text-center text-body"><Link to="/" className="font-semibold underline">กลับหน้าแรก</Link></p>
     </div>
   )
 }

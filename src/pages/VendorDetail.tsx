@@ -17,7 +17,7 @@ export function VendorDetail() {
   const [lineUserId, setLineUserId] = useState('')
   const [editing, setEditing] = useState(false)
 
-  if (!v) return <p className="py-10 text-center text-sm text-ink-500">กำลังโหลด…</p>
+  if (!v) return <p className="py-10 text-center text-body text-ink-500">กำลังโหลด…</p>
   const curName = editing && name ? name : v.name
   const curAddr = editing && address ? address : v.address
 
@@ -69,17 +69,17 @@ export function VendorDetail() {
                 : <p className="font-mono">{v.lineUserId || '—'}</p>}
             </div>
           </div>
-          <div className="rounded-xl bg-slate-50 p-3.5 text-sm">
+          <div className="rounded-control bg-ink-50 p-3.5 text-body">
             <Label>เลขบัตรประชาชนที่บันทึกไว้</Label>
             {v.encryptedId ? (
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="font-mono">
                   {v.taxLast4 ? `x-xxxx-xxxxx-${v.taxLast4.slice(0, 2)}-${v.taxLast4.slice(2)}` : 'บันทึกไว้'}
-                  <span className="ml-2 font-sans text-[13px] text-emerald-700">เข้ารหัส (AES-256-GCM)</span>
+                  <span className="ml-2 font-sans text-body text-emerald-700">เข้ารหัส (AES-256-GCM)</span>
                 </p>
                 <Button
                   variant="ghost"
-                  className="h-9 px-3 text-[13px]"
+                  className="h-9 px-3 text-body"
                   disabled={forget.isPending}
                   onClick={() => forget.mutate(v.id)}
                 >
@@ -87,7 +87,7 @@ export function VendorDetail() {
                 </Button>
               </div>
             ) : (
-              <p className="text-[13px] text-ink-500">ยังไม่บันทึก — ระบบจะบันทึกแบบเข้ารหัสอัตโนมัติเมื่อสร้างรายการแรก</p>
+              <p className="text-body text-ink-500">ยังไม่บันทึก — ระบบจะบันทึกแบบเข้ารหัสอัตโนมัติเมื่อสร้างรายการแรก</p>
             )}
           </div>
           {editing && (

@@ -8,7 +8,7 @@ import { Button } from '../components/ui/button'
 import { FieldError } from '../components/ui/input'
 import { fmtTHB } from '../lib/format'
 
-const thCls = 'px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-500'
+const thCls = 'px-3 py-2 text-left text-label font-semibold uppercase tracking-wide text-ink-500'
 
 const empty = { id: '' as string | undefined, name: '', unit: 'รายการ', unitPrice: '' }
 
@@ -44,10 +44,10 @@ export function ItemsList() {
       <Card>
         <CardBody className="space-y-4">
           <div className="flex items-center gap-2">
-            <span className="grid h-7 w-7 place-items-center rounded-lg bg-ink-900 text-white">
+            <span className="grid h-7 w-7 place-items-center rounded-control bg-ink-900 text-white">
               {editing ? <Pencil size={14} /> : <Plus size={16} />}
             </span>
-            <h2 className="font-bold">{editing ? 'แก้ไขรายการ' : 'เพิ่มรายการใหม่'}</h2>
+            <h2 className="font-semibold">{editing ? 'แก้ไขรายการ' : 'เพิ่มรายการใหม่'}</h2>
           </div>
           <div className="grid gap-3 sm:grid-cols-[1fr_140px_160px_auto]">
             <div>
@@ -94,9 +94,9 @@ export function ItemsList() {
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[560px] border-collapse text-[14px]">
+          <table className="w-full min-w-[560px] border-collapse text-body">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/80">
+              <tr className="border-b border-card-border bg-ink-50/80">
                 <th className={thCls}>รายการ</th>
                 <th className={thCls}>หน่วย</th>
                 <th className={`${thCls} text-right`}>ราคา</th>
@@ -105,7 +105,7 @@ export function ItemsList() {
             </thead>
             <tbody>
               {data?.map((it) => (
-                <tr key={it.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                <tr key={it.id} className="border-b border-card-border last:border-0 hover:bg-ink-50">
                   <td className="px-3 py-2.5 font-semibold">{it.name}</td>
                   <td className="px-3 py-2.5 text-ink-500">{it.unit || '—'}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">฿{fmtTHB(it.unitPrice)}</td>
@@ -113,14 +113,14 @@ export function ItemsList() {
                     <div className="flex justify-end gap-1">
                       <button
                         onClick={() => setForm({ id: it.id, name: it.name, unit: it.unit, unitPrice: String(it.unitPrice) })}
-                        className="grid h-8 w-8 place-items-center rounded-lg text-ink-500 hover:bg-slate-100"
+                        className="grid h-8 w-8 place-items-center rounded-control text-ink-500 hover:bg-ink-100"
                         title="แก้ไข"
                       >
                         <Pencil size={15} />
                       </button>
                       <button
                         onClick={() => del.mutate(it.id)}
-                        className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-slate-100 hover:text-red-600"
+                        className="grid h-8 w-8 place-items-center rounded-control text-ink-400 hover:bg-ink-100 hover:text-red-600"
                         title="ลบ"
                       >
                         <Trash2 size={15} />
@@ -132,11 +132,11 @@ export function ItemsList() {
             </tbody>
           </table>
         </div>
-        {isLoading && <p className="px-4 py-6 text-sm text-ink-500">กำลังโหลด…</p>}
+        {isLoading && <p className="px-4 py-6 text-body text-ink-500">กำลังโหลด…</p>}
         {data?.length === 0 && !isLoading && (
           <div className="px-4 py-12 text-center">
             <p className="font-semibold">ยังไม่มีรายการในแคตตาล็อก</p>
-            <p className="mt-1 text-sm text-ink-500">เพิ่มรายการด้านบนเพื่อดึงไปใช้ตอนสร้างธุรกรรม</p>
+            <p className="mt-1 text-body text-ink-500">เพิ่มรายการด้านบนเพื่อดึงไปใช้ตอนสร้างธุรกรรม</p>
           </div>
         )}
       </Card>

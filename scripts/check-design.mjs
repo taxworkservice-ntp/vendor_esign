@@ -10,6 +10,7 @@ const files = execSync('git ls-files "src/**/*.tsx"', { encoding: 'utf8' })
   .split('\n')
   .filter(Boolean)
   .filter((f) => !f.includes('components/print/')) // print layer is exempt
+  .filter((f) => !f.endsWith('pages/WhtPrint.tsx')) // exact external WHT template (pixel-locked)
 
 const RULES = [
   { name: 'arbitrary text size', re: /text-\[[0-9.]+px\]/g },

@@ -16,7 +16,7 @@ import type { LineItem } from '../lib/types'
 // Number/code derivation lives in lib/receipt (mock) — the real backend assigns
 // the series number inside the finalization txn + random verification code.
 
-const label = 'text-[10px] font-bold uppercase tracking-[0.14em] text-ink-400'
+const label = 'text-micro font-semibold uppercase tracking-[0.14em] text-ink-400'
 
 export function ReceiptView() {
   const { id } = useParams()
@@ -28,7 +28,7 @@ export function ReceiptView() {
   if (!t) {
     return (
       <div className="space-y-3">
-        <Link to="/" className="text-sm font-semibold text-ink-500">← กลับรายการ</Link>
+        <Link to="/" className="text-body font-semibold text-ink-500">← กลับรายการ</Link>
         <p>ไม่พบรายการ</p>
       </div>
     )
@@ -61,7 +61,7 @@ export function ReceiptView() {
       <div className="no-print flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <StatusBadge status={t.status} />
-          <span className="text-sm text-ink-500">สำเนาใบเสร็จ · A4</span>
+          <span className="text-body text-ink-500">สำเนาใบเสร็จ · A4</span>
         </div>
         <div className="flex gap-2">
           <Button onClick={download} disabled={busy} title="ดาวน์โหลด PDF (ตรงกับตัวอย่างนี้)">
@@ -69,36 +69,36 @@ export function ReceiptView() {
           </Button>
         </div>
       </div>
-      {err && <p className="no-print text-sm font-medium text-red-600">{err}</p>}
+      {err && <p className="no-print text-body font-medium text-red-600">{err}</p>}
 
       <div className="print-area relative">
-        <div ref={sheetRef} className="receipt-sheet relative mx-auto flex w-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-[18mm] font-[Sarabun] shadow-card">
+        <div ref={sheetRef} className="receipt-sheet relative mx-auto flex w-full flex-col overflow-hidden rounded-card border border-card-border bg-white p-[18mm] font-[Sarabun] shadow-card">
           <div className="absolute inset-x-0 top-0 h-1.5 bg-teal-700" />
           {isVoid && (
             <div className="pointer-events-none absolute inset-0 grid place-items-center">
-              <span className="rotate-[-18deg] rounded-xl border-4 border-red-600 px-8 py-2 text-4xl font-bold text-red-600/70">VOID</span>
+              <span className="rotate-[-18deg] rounded-control border-4 border-red-600 px-8 py-2 text-4xl font-semibold text-red-600/70">VOID</span>
             </div>
           )}
 
           {/* Header: vendor (left) · document type (right) */}
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-[16px] font-bold leading-snug">{auth?.vendorName ?? t.vendor.name}</p>
-              <p className="mt-0.5 text-[13px] leading-relaxed text-ink-600">
+              <p className="text-title font-semibold leading-snug">{auth?.vendorName ?? t.vendor.name}</p>
+              <p className="mt-0.5 text-body leading-relaxed text-ink-600">
                 <span className="text-ink-400">ที่อยู่: </span>{auth?.vendorAddress ?? t.vendor.address}
               </p>
-              <p className="mt-0.5 text-[12px] text-ink-600">
+              <p className="mt-0.5 text-label text-ink-600">
                 <span className="text-ink-400">เลขบัตรประชาชน: </span>
                 <span className="font-mono">{t.vendor.taxId ?? t.vendor.maskedId}</span>
               </p>
             </div>
             <div className="shrink-0 text-right">
-              <h1 className="text-[24px] font-bold leading-none tracking-tight">ใบเสร็จรับเงิน</h1>
-              <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-400">Receipt</p>
-              <div className="ml-auto mt-3 w-max space-y-1 text-[13px]">
+              <h1 className="text-page font-semibold leading-none tracking-tight">ใบเสร็จรับเงิน</h1>
+              <p className="mt-1.5 text-micro font-semibold uppercase tracking-[0.2em] text-ink-400">Receipt</p>
+              <div className="ml-auto mt-3 w-max space-y-1 text-body">
                 <div className="flex items-baseline gap-3">
                   <span className="w-12 shrink-0 text-left text-ink-500">เลขที่:</span>
-                  <span className="text-left font-mono font-bold">{number}</span>
+                  <span className="text-left font-mono font-semibold">{number}</span>
                 </div>
                 <div className="flex items-baseline gap-3">
                   <span className="w-12 shrink-0 text-left text-ink-500">วันที่:</span>
@@ -111,22 +111,22 @@ export function ReceiptView() {
           <hr className="my-5 border-ink-900" />
 
           {/* Client (full width) */}
-          <div className="rounded-xl bg-slate-50 p-3.5 text-sm">
+          <div className="rounded-control bg-ink-50 p-3.5 text-body">
             <p className={label}>ผู้ซื้อ · ลูกค้า</p>
-            <p className="mt-1.5 font-bold">{client.displayName}</p>
-            <p className="mt-0.5 text-[13px] leading-relaxed text-ink-600">
+            <p className="mt-1.5 font-semibold">{client.displayName}</p>
+            <p className="mt-0.5 text-body leading-relaxed text-ink-600">
               <span className="text-ink-400">ที่อยู่: </span>{client.address}
             </p>
-            <p className="mt-0.5 text-[12px] text-ink-600">
+            <p className="mt-0.5 text-label text-ink-600">
               <span className="text-ink-400">เลขประจำตัวผู้เสียภาษี: </span>
               <span className="font-mono">{client.taxId}</span>
             </p>
           </div>
 
-          {t.note && <p className="mt-4 text-[14px] text-ink-500">{t.note}</p>}
+          {t.note && <p className="mt-4 text-body text-ink-500">{t.note}</p>}
 
           {/* Items */}
-          <div className="mt-5 text-[13px]">
+          <div className="mt-5 text-body">
             <div className="flex items-baseline gap-2 border-b border-ink-900 pb-1.5">
               <span className={`${label} w-6 shrink-0`}>#</span>
               <span className={label}>รายละเอียด</span>
@@ -136,8 +136,8 @@ export function ReceiptView() {
               <span className={`${label} w-24 shrink-0 text-right`}>จำนวนเงิน</span>
             </div>
             {items.map((it, i) => (
-              <div key={i} className="flex items-baseline gap-2 border-b border-slate-100 py-1.5 last:border-0">
-                <span className="w-6 shrink-0 text-right font-mono text-[12px] text-ink-400">{i + 1}</span>
+              <div key={i} className="flex items-baseline gap-2 border-b border-card-border py-1.5 last:border-0">
+                <span className="w-6 shrink-0 text-right font-mono text-label text-ink-400">{i + 1}</span>
                 <span className="min-w-0 flex-1 leading-snug">{it.description}</span>
                 <span className="w-28 shrink-0 text-right tabular-nums">{it.quantity ?? 1} {it.unit || 'รายการ'}</span>
                 <span className="w-24 shrink-0 text-right tabular-nums">฿{fmtTHB(it.unitPrice ?? it.amount)}</span>
@@ -150,7 +150,7 @@ export function ReceiptView() {
           </div>
 
           {/* Totals */}
-          <div className="mt-5 text-sm">
+          <div className="mt-5 text-body">
             <div className="flex justify-between py-1">
               <span className="text-ink-500">รวมเป็นเงิน</span>
               <span className="font-semibold tabular-nums">฿{fmtTHB(t.grossAmount)}</span>
@@ -162,13 +162,13 @@ export function ReceiptView() {
               </div>
             )}
             <div className="mt-2 flex items-baseline justify-between border-t-2 border-ink-900 pt-2.5">
-              <span className="font-bold">ยอดรับสุทธิ</span>
-              <span className="text-xl font-bold tabular-nums">฿{fmtTHB(t.netAmount)}</span>
+              <span className="font-semibold">ยอดรับสุทธิ</span>
+              <span className="text-xl font-semibold tabular-nums">฿{fmtTHB(t.netAmount)}</span>
             </div>
-            <p className="mt-1.5 text-[13px] text-ink-500">({amountToThaiWords(t.netAmount)})</p>
+            <p className="mt-1.5 text-body text-ink-500">({amountToThaiWords(t.netAmount)})</p>
           </div>
 
-          {isVoid && <p className="mt-4 text-[11px] text-ink-400">void: {t.voidReason}</p>}
+          {isVoid && <p className="mt-4 text-label text-ink-400">void: {t.voidReason}</p>}
 
           {/* Signature centered */}
           <div className="mt-auto flex justify-center pt-10">
@@ -176,8 +176,8 @@ export function ReceiptView() {
               <div className="flex h-14 items-end justify-center">
                 {auth && <img src={auth.signaturePng} alt="ผู้มีอำนาจลงนาม" className="max-h-14 object-contain" />}
               </div>
-              <p className="border-t border-slate-300 pt-2 text-[13px] font-bold">ผู้มีอำนาจลงนาม</p>
-              <p className="text-[12px] text-ink-400">{auth?.vendorName ?? t.vendor.name}</p>
+              <p className="border-t border-ink-300 pt-2 text-body font-semibold">ผู้มีอำนาจลงนาม</p>
+              <p className="text-label text-ink-400">{auth?.vendorName ?? t.vendor.name}</p>
             </div>
           </div>
         </div>

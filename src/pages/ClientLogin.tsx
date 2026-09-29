@@ -50,7 +50,7 @@ export function ClientLogin() {
             {busy ? 'กำลังตรวจสอบ…' : 'เข้าสู่ระบบ'}
           </Button>
           {MOCK_MODE && (
-            <div className="rounded-xl bg-amber-50 p-3 text-[13px] text-amber-800">
+            <div className="rounded-control bg-amber-50 p-3 text-body text-amber-800">
               <p className="font-semibold">โหมดทดสอบ (ในเครื่องนี้)</p>
               <p className="mt-0.5 font-mono">{MOCK_HINT}</p>
             </div>

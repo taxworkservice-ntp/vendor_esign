@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import { cn } from '../../lib/cn'
+import { colors } from '../../design/tokens'
 
 export interface SigPadHandle {
   clear: () => void
@@ -38,7 +39,7 @@ const SigPad = forwardRef<SigPadHandle, { className?: string; onDraw?: () => voi
       ctx.scale(dpr, dpr)
       ctx.lineWidth = 2.4
       ctx.lineCap = 'round'
-      ctx.strokeStyle = '#1a2332'
+      ctx.strokeStyle = colors.ink[900]
 
       const pos = (e: PointerEvent) => {
         const r = c.getBoundingClientRect()
@@ -77,7 +78,7 @@ const SigPad = forwardRef<SigPadHandle, { className?: string; onDraw?: () => voi
     return (
       <canvas
         ref={canvasRef}
-        className={cn('h-[200px] w-full touch-none rounded-xl bg-white', className)}
+        className={cn('h-[200px] w-full touch-none rounded-control bg-white', className)}
         aria-label="ช่องเซ็นชื่อ"
       />
     )

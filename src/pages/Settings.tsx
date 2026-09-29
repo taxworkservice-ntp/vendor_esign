@@ -13,10 +13,10 @@ function Section({ step, title, desc, children }: { step: string; title: string;
     <Card>
       <CardBody className="space-y-4">
         <div className="flex items-start gap-3">
-          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-ink-900 text-[13px] font-bold text-white">{step}</span>
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-control bg-ink-900 text-body font-semibold text-white">{step}</span>
           <div className="min-w-0">
-            <h2 className="font-bold leading-tight">{title}</h2>
-            {desc && <p className="mt-0.5 text-[13px] text-ink-500">{desc}</p>}
+            <h2 className="font-semibold leading-tight">{title}</h2>
+            {desc && <p className="mt-0.5 text-body text-ink-500">{desc}</p>}
           </div>
         </div>
         {children}
@@ -37,7 +37,7 @@ export function Settings() {
     if (data) setForm(data)
   }, [data])
 
-  if (!form) return <p className="py-10 text-center text-sm text-ink-500">กำลังโหลด…</p>
+  if (!form) return <p className="py-10 text-center text-body text-ink-500">กำลังโหลด…</p>
   const readOnly = !isClientAdmin
   const set = (patch: Partial<TenantSettings>) => setForm({ ...form, ...patch })
 
@@ -116,7 +116,7 @@ export function Settings() {
           <Label>ประเภทการจ่าย</Label>
           <div className="flex flex-wrap gap-1.5">
             {form.paymentTypes.map((p) => (
-              <span key={p} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1.5 text-[13px] font-semibold text-ink-700">
+              <span key={p} className="inline-flex items-center gap-1 rounded-full bg-ink-100 px-3 py-1.5 text-body font-semibold text-ink-700">
                 {p}
                 {!readOnly && (
                   <button type="button" onClick={() => set({ paymentTypes: form.paymentTypes.filter((x) => x !== p) })} className="text-ink-400 hover:text-red-600">
@@ -153,7 +153,7 @@ export function Settings() {
                   className="w-24 text-right tabular-nums"
                 />
                 {!readOnly && (
-                  <button type="button" onClick={() => set({ whtRates: form.whtRates.filter((_, idx) => idx !== i) })} className="grid h-9 w-9 place-items-center rounded-lg text-ink-400 hover:bg-slate-100 hover:text-red-600">
+                  <button type="button" onClick={() => set({ whtRates: form.whtRates.filter((_, idx) => idx !== i) })} className="grid h-9 w-9 place-items-center rounded-control text-ink-400 hover:bg-ink-100 hover:text-red-600">
                     <Trash2 size={15} />
                   </button>
                 )}
@@ -191,7 +191,7 @@ export function Settings() {
               className="text-right tabular-nums"
             />
           </div>
-          <label className="flex items-center gap-3 self-end pb-2.5 text-sm">
+          <label className="flex items-center gap-3 self-end pb-2.5 text-body">
             <input type="checkbox" checked={form.showVerifyQr} onChange={(e) => set({ showVerifyQr: e.target.checked })} disabled={readOnly} className="h-4 w-4" />
             แสดง QR ตรวจสอบบนสำเนาภายใน
           </label>
@@ -212,7 +212,7 @@ export function Settings() {
         </div>
       </Section>
 
-      {msg && <p className={`text-sm font-medium ${msg.includes('✓') ? 'text-emerald-600' : 'text-red-600'}`}>{msg}</p>}
+      {msg && <p className={`text-body font-medium ${msg.includes('✓') ? 'text-emerald-600' : 'text-red-600'}`}>{msg}</p>}
       {!readOnly && (
         <div className="flex justify-end">
           <Button onClick={submit} disabled={save.isPending || !ready}>

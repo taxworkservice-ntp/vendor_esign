@@ -16,12 +16,12 @@ function Shell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-paper">
       <div className="mx-auto w-full max-w-xl px-4 py-6">
         <div className="mb-4 flex items-center gap-2.5">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-ink-900 text-white">
+          <span className="grid h-9 w-9 place-items-center rounded-control bg-ink-900 text-white">
             <ReceiptText size={18} />
           </span>
           <div className="leading-tight">
-            <p className="text-[15px] font-bold">ใบเสร็จรับเงิน — ยืนยันรับเงิน</p>
-            <p className="text-xs text-ink-500">Taxwork pilot · ไม่ต้องสมัครสมาชิก</p>
+            <p className="text-body font-semibold">ใบเสร็จรับเงิน — ยืนยันรับเงิน</p>
+            <p className="text-label text-ink-500">Taxwork pilot · ไม่ต้องสมัครสมาชิก</p>
           </div>
         </div>
         {children}
@@ -35,8 +35,8 @@ function StateCard({ title, body, extra }: { title: string; body: string; extra?
     <Shell>
       <Card>
         <CardBody className="py-10 text-center">
-          <p className="text-lg font-bold">{title}</p>
-          <p className="mx-auto mt-2 max-w-sm text-[15px] text-ink-500">{body}</p>
+          <p className="text-lg font-semibold">{title}</p>
+          <p className="mx-auto mt-2 max-w-sm text-body text-ink-500">{body}</p>
           {extra}
         </CardBody>
       </Card>
@@ -143,12 +143,12 @@ export function VendorSign() {
       <Shell>
         <Card>
           <CardBody className="space-y-4">
-            <p className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-ink-900 text-white">
+            <p className="mx-auto grid h-12 w-12 place-items-center rounded-card bg-ink-900 text-white">
               <Lock size={22} />
             </p>
             <div className="text-center">
-              <h2 className="text-lg font-bold">ยืนยันตัวตนก่อนเปิดเอกสาร</h2>
-              <p className="mx-auto mt-1 max-w-sm text-[15px] text-ink-500">
+              <h2 className="text-lg font-semibold">ยืนยันตัวตนก่อนเปิดเอกสาร</h2>
+              <p className="mx-auto mt-1 max-w-sm text-body text-ink-500">
                 ลิงก์นี้ส่งถึงผู้รับเงินโดยเฉพาะ — กรอกเลขบัตรประชาชน 13 หลัก
                 {t.taxIdLast4 ? ` (ลงท้าย ${t.taxIdLast4}) ` : ' '}
                 เพื่อเปิดแบบฟอร์ม
@@ -167,7 +167,7 @@ export function VendorSign() {
             <Button className="w-full py-3.5 text-base" disabled={gateId.length !== 13 || gateBusy || remaining <= 0} onClick={unlock}>
               {gateBusy ? 'กำลังตรวจสอบ…' : 'เปิดเอกสาร'}
             </Button>
-            <p className="text-center text-xs text-ink-400">พิมพ์ผิดได้ไม่เกิน {GATE_MAX_TRIES} ครั้ง · ระบบไม่แสดงข้อมูลใด ๆ จนกว่าจะยืนยันสำเร็จ</p>
+            <p className="text-center text-label text-ink-400">พิมพ์ผิดได้ไม่เกิน {GATE_MAX_TRIES} ครั้ง · ระบบไม่แสดงข้อมูลใด ๆ จนกว่าจะยืนยันสำเร็จ</p>
           </CardBody>
         </Card>
       </Shell>
@@ -194,23 +194,23 @@ export function VendorSign() {
     <Shell>
       <div className="space-y-4">
         {!t.taxIdHash ? (
-          <p className="flex gap-2 rounded-xl bg-amber-50 p-3 text-[13px] font-medium text-amber-800">
+          <p className="flex gap-2 rounded-control bg-amber-50 p-3 text-body font-medium text-amber-800">
             <ShieldAlert size={16} className="mt-0.5 shrink-0" />
             รายการก่อนหน้า: ลิงก์นี้ไม่ได้ตั้งการล็อกด้วยเลขบัตรประชาชน — โปรดตรวจสอบให้แน่ใจก่อนลงนาม
           </p>
         ) : (
-          <p className="flex gap-2 rounded-xl bg-emerald-50 p-3 text-[13px] font-medium text-emerald-800">
+          <p className="flex gap-2 rounded-control bg-emerald-50 p-3 text-body font-medium text-emerald-800">
             <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
             ยืนยันตัวตนแล้ว {t.taxIdLast4 ? `(${maskTaxId(t.taxIdLast4)})` : ''} — ลิงก์นี้เปิดได้เฉพาะท่าน
           </p>
         )}
         <Card className="border-emerald-200">
           <CardBody>
-            <p className="flex items-center gap-1.5 text-[13px] font-semibold text-ink-500">
+            <p className="flex items-center gap-1.5 text-body font-semibold text-ink-500">
               <Lock size={13} /> ข้อมูลจากผู้จ่าย — ล็อกไว้ แก้ไขไม่ได้
             </p>
-            {t.note && <p className="mt-2 text-[15px] font-semibold text-ink-500">{t.note}</p>}
-            <div className="mt-2 divide-y divide-slate-100">
+            {t.note && <p className="mt-2 text-body font-semibold text-ink-500">{t.note}</p>}
+            <div className="mt-2 divide-y divide-ink-100">
               {(t.lineItems?.some((it) => it.description || it.amount)
                 ? t.lineItems
                 : [{ description: t.description, amount: t.grossAmount }]
@@ -219,20 +219,20 @@ export function VendorSign() {
                 const unitPrice = it.unitPrice ?? it.amount
                 const detail = `${qty}${it.unit ? ` ${it.unit}` : ''} × ฿${fmtTHB(unitPrice)}${it.discount ? ` − ส่วนลด ฿${fmtTHB(it.discount)}` : ''}`
                 return (
-                  <div key={i} className="flex items-baseline gap-3 py-1.5 text-[15px]">
-                    <span className="w-5 shrink-0 text-right font-mono text-[12px] text-ink-400">{i + 1}</span>
+                  <div key={i} className="flex items-baseline gap-3 py-1.5 text-body">
+                    <span className="w-5 shrink-0 text-right font-mono text-label text-ink-400">{i + 1}</span>
                     <span className="flex-1">
                       {it.description}
-                      <span className="mt-0.5 block text-[12px] text-ink-400">{detail}</span>
+                      <span className="mt-0.5 block text-label text-ink-400">{detail}</span>
                     </span>
                     <span className="shrink-0 tabular-nums">฿{fmtTHB(it.amount)}</span>
                   </div>
                 )
               })}
             </div>
-            <div className="mt-3 space-y-1 border-t border-slate-100 pt-3 text-[15px]">
-              <p className="flex justify-between"><span className="text-ink-500">ยอดรับสุทธิ</span><span className="font-bold tabular-nums">฿{fmtTHB(t.netAmount)}</span></p>
-              <p className="text-[13px] text-ink-500">({amountToThaiWords(t.netAmount)})</p>
+            <div className="mt-3 space-y-1 border-t border-card-border pt-3 text-body">
+              <p className="flex justify-between"><span className="text-ink-500">ยอดรับสุทธิ</span><span className="font-semibold tabular-nums">฿{fmtTHB(t.netAmount)}</span></p>
+              <p className="text-body text-ink-500">({amountToThaiWords(t.netAmount)})</p>
               <p className="flex justify-between"><span className="text-ink-500">หัก WHT {t.whtRate}%</span><span className="tabular-nums">฿{fmtTHB(t.whtAmount)}</span></p>
               <p className="flex justify-between"><span className="text-ink-500">วันที่โอน</span><span>{fmtDateTH(t.transferDate)}</span></p>
             </div>
@@ -241,9 +241,9 @@ export function VendorSign() {
 
         <Card>
           <CardBody className="space-y-4">
-            <h2 className="font-bold">1 · {gatePassed ? 'ตรวจข้อมูลของท่าน' : 'ข้อมูลของท่าน'}</h2>
+            <h2 className="font-semibold">1 · {gatePassed ? 'ตรวจข้อมูลของท่าน' : 'ข้อมูลของท่าน'}</h2>
             {gatePassed && (
-              <p className="text-[13px] text-ink-500">กรอกจากประวัติที่ผู้จ่ายบันทึกไว้ — ตรวจว่าตรงกับบัตรของท่าน แก้ไขได้หากไม่ตรง</p>
+              <p className="text-body text-ink-500">กรอกจากประวัติที่ผู้จ่ายบันทึกไว้ — ตรวจว่าตรงกับบัตรของท่าน แก้ไขได้หากไม่ตรง</p>
             )}
             <div>
               <Label>ชื่อ–นามสกุล (ตามบัตรประชาชน)</Label>
@@ -256,16 +256,16 @@ export function VendorSign() {
               {tried && address.trim().length < 6 && <FieldError msg="กรุณากรอกที่อยู่ให้ครบ" />}
             </div>
             {gatePassed && t.taxIdLast4 ? (
-              <div className="rounded-xl bg-emerald-50 p-3.5 text-[15px]">
+              <div className="rounded-control bg-emerald-50 p-3.5 text-body">
                 <Label>เลขบัตรประชาชน</Label>
-                <p className="font-mono font-semibold">{maskTaxId(t.taxIdLast4)} <span className="font-sans text-[13px] font-medium text-emerald-700">✓ ยืนยันแล้ว ไม่ต้องกรอกซ้ำ</span></p>
+                <p className="font-mono font-semibold">{maskTaxId(t.taxIdLast4)} <span className="font-sans text-body font-medium text-emerald-700">✓ ยืนยันแล้ว ไม่ต้องกรอกซ้ำ</span></p>
               </div>
             ) : (
               <div>
                 <Label hint={`${tid.length}/13 หลัก — เก็บเฉพาะตัวเลข`}>เลขบัตรประชาชน</Label>
                 <Input value={tid} onChange={(e) => setTid(e.target.value.replace(/\D/g, '').slice(0, 13))} placeholder="x-xxxx-xxxxx-xx-x" inputMode="numeric" />
                 {tried && !idOk && <FieldError msg="กรุณากรอกให้ครบ 13 หลัก" />}
-                {idOk && <p className="mt-1.5 flex items-center gap-1 text-[13px] font-medium text-emerald-600"><CheckCircle2 size={14} /> ครบ 13 หลัก</p>}
+                {idOk && <p className="mt-1.5 flex items-center gap-1 text-body font-medium text-emerald-600"><CheckCircle2 size={14} /> ครบ 13 หลัก</p>}
               </div>
             )}
           </CardBody>
@@ -274,30 +274,30 @@ export function VendorSign() {
         <Card>
           <CardBody className="space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="font-bold">2 · เซ็นชื่อรับเงิน</h2>
+              <h2 className="font-semibold">2 · เซ็นชื่อรับเงิน</h2>
               <button
-                className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-3 py-2 text-[13px] font-semibold"
+                className="inline-flex items-center gap-1 rounded-control bg-ink-100 px-3 py-2 text-body font-semibold"
                 onClick={() => { padRef.current?.clear(); setDrew(false) }}
               >
                 <Eraser size={14} /> ล้าง
               </button>
             </div>
-            <div className="rounded-xl border-2 border-dashed border-slate-300 p-1">
+            <div className="rounded-control border-2 border-dashed border-ink-300 p-1">
               <SigPad ref={padRef} onDraw={() => setDrew(true)} />
             </div>
-            <p className="text-[13px] text-ink-500">ใช้นิ้วหรือเมาส์เซ็นในกรอบ — ลายเซ็นนี้ยืนยันว่าได้รับเงินและมอบอำนาจเฉพาะธุรกรรมนี้</p>
+            <p className="text-body text-ink-500">ใช้นิ้วหรือเมาส์เซ็นในกรอบ — ลายเซ็นนี้ยืนยันว่าได้รับเงินและมอบอำนาจเฉพาะธุรกรรมนี้</p>
             {tried && emptyPad && <FieldError msg="กรุณาเซ็นชื่อก่อนส่ง" />}
           </CardBody>
         </Card>
 
         <Card>
           <CardBody className="space-y-3">
-            <h2 className="font-bold">3 · ยืนยันและส่ง</h2>
-            <p className="flex gap-2 rounded-xl bg-amber-50 p-3 text-[13px] font-medium text-amber-800">
+            <h2 className="font-semibold">3 · ยืนยันและส่ง</h2>
+            <p className="flex gap-2 rounded-control bg-amber-50 p-3 text-body font-medium text-amber-800">
               <ShieldAlert size={16} className="mt-0.5 shrink-0" />
               การยืนยันตัวตนผ่าน LINE จะเปิดใช้งานภายหลัง — ขณะนี้ยืนยันด้วยการให้ความยินยอมและลายเซ็น
             </p>
-            <label className="flex gap-3 rounded-xl bg-slate-50 p-4 text-[15px] leading-relaxed active:bg-slate-100">
+            <label className="flex gap-3 rounded-control bg-ink-50 p-4 text-body leading-relaxed active:bg-ink-100">
               <input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-slate-900" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
               <span>
                 ข้าพเจ้าได้รับเงินจำนวนดังกล่าวแล้ว และมอบอำนาจให้ <b>{loadSettings(t.tenantId).clientCode}</b> ออกใบเสร็จรับเงิน
@@ -308,7 +308,7 @@ export function VendorSign() {
             <Button className="w-full py-3.5 text-base" onClick={submit}>
               เซ็นรับเงินและส่ง
             </Button>
-            <p className="text-xs leading-relaxed text-ink-400">
+            <p className="text-label leading-relaxed text-ink-400">
               ข้อมูลที่เก็บ: ชื่อ ที่อยู่ เลขบัตรประชาชน (เข้ารหัส) ลายเซ็น และเวลายืนยัน — ใช้เพื่อออกใบเสร็จสำหรับธุรกรรมนี้เท่านั้น
               ผู้ที่เข้าถึงข้อมูล: ลูกค้าผู้จ่ายและนักบัญชี · ระยะเวลาจัดเก็บ: ตามนโยบายของลูกค้าผู้จ่าย
             </p>

@@ -13,7 +13,7 @@ const FILTERS = [
   { v: 'suspended', th: 'ระงับ' },
 ]
 
-const thCls = 'px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-ink-500'
+const thCls = 'px-4 py-3 text-left text-label font-semibold uppercase tracking-wide text-ink-500'
 
 export function ClientsList() {
   const [q, setQ] = useState('')
@@ -46,8 +46,8 @@ export function ClientsList() {
               <button
                 key={f.v}
                 onClick={() => setStatus(f.v)}
-                className={`rounded-full px-3.5 py-2 text-[13px] font-semibold transition ${
-                  status === f.v ? 'bg-ink-900 text-white' : 'bg-slate-100 text-ink-700 hover:bg-slate-200'
+                className={`rounded-full px-3.5 py-2 text-body font-semibold transition ${
+                  status === f.v ? 'bg-ink-900 text-white' : 'bg-ink-100 text-ink-700 hover:bg-ink-100'
                 }`}
               >
                 {f.th}
@@ -59,9 +59,9 @@ export function ClientsList() {
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[880px] border-collapse text-[14px]">
+          <table className="w-full min-w-[880px] border-collapse text-body">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/80">
+              <tr className="border-b border-card-border bg-ink-50/80">
                 <th className={thCls}>ลูกค้า</th>
                 <th className={thCls}>Series</th>
                 <th className={`${thCls} text-right`}>ธุรกรรม</th>
@@ -76,20 +76,20 @@ export function ClientsList() {
                 <tr
                   key={t.id}
                   onClick={() => nav(`/admin/clients/${t.id}`)}
-                  className="cursor-pointer border-b border-slate-100 transition last:border-0 hover:bg-slate-50"
+                  className="cursor-pointer border-b border-card-border transition last:border-0 hover:bg-ink-50"
                 >
                   <td className="px-4 py-3.5">
-                    <p className="font-bold leading-snug">{t.displayName}</p>
-                    <p className="mt-0.5 font-mono text-[13px] text-ink-500">{t.clientCode}</p>
+                    <p className="font-semibold leading-snug">{t.displayName}</p>
+                    <p className="mt-0.5 font-mono text-body text-ink-500">{t.clientCode}</p>
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3.5 font-mono text-[13px]">
+                  <td className="whitespace-nowrap px-4 py-3.5 font-mono text-body">
                     {t.clientCode}-R-{t.beYear}-
                   </td>
                   <td className="whitespace-nowrap px-4 py-3.5 text-right tabular-nums">{t.txns}</td>
                   <td className="whitespace-nowrap px-4 py-3.5 text-right tabular-nums">{t.receipts}</td>
                   <td className="whitespace-nowrap px-4 py-3.5 text-right tabular-nums">{t.users}</td>
                   <td className="whitespace-nowrap px-4 py-3.5">
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-label font-semibold ${
                       t.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
                     }`}>
                       {t.status === 'active' ? 'ใช้งาน' : 'ระงับ'}
@@ -101,11 +101,11 @@ export function ClientsList() {
             </tbody>
           </table>
         </div>
-        {isLoading && <p className="px-4 py-6 text-sm text-ink-500">กำลังโหลด…</p>}
+        {isLoading && <p className="px-4 py-6 text-body text-ink-500">กำลังโหลด…</p>}
         {data?.length === 0 && !isLoading && (
           <div className="px-4 py-12 text-center">
             <p className="font-semibold">ยังไม่มีลูกค้าในช่วงนี้</p>
-            <p className="mt-1 text-sm text-ink-500">ลองเปลี่ยนตัวกรอง หรือเพิ่มลูกค้าใหม่</p>
+            <p className="mt-1 text-body text-ink-500">ลองเปลี่ยนตัวกรอง หรือเพิ่มลูกค้าใหม่</p>
           </div>
         )}
       </Card>

@@ -33,7 +33,7 @@ export function ClientDetail() {
     }
   }
 
-  if (!t) return <p className="py-10 text-center text-sm text-ink-500">กำลังโหลด…</p>
+  if (!t) return <p className="py-10 text-center text-body text-ink-500">กำลังโหลด…</p>
 
   return (
     <div className="space-y-5">
@@ -52,8 +52,8 @@ export function ClientDetail() {
           <button
             key={v}
             onClick={() => setTab(v)}
-            className={`rounded-full px-3.5 py-2 text-[13px] font-semibold transition ${
-              tab === v ? 'bg-ink-900 text-white' : 'bg-slate-100 text-ink-700 hover:bg-slate-200'
+            className={`rounded-full px-3.5 py-2 text-body font-semibold transition ${
+              tab === v ? 'bg-ink-900 text-white' : 'bg-ink-100 text-ink-700 hover:bg-ink-100'
             }`}
           >
             {th}
@@ -80,7 +80,7 @@ export function ClientDetail() {
               <Label>สร้างผู้ใช้ใหม่ (admin ตั้งรหัสผ่านชั่วคราวให้ — ผู้ใช้ต้องเปลี่ยนตอน login ครั้งแรก)</Label>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Input placeholder="email@client.co.th" value={email} onChange={(e) => setEmail(e.target.value)} className="flex-1" />
-                <select value={role} onChange={(e) => setRole(e.target.value as typeof role)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-[15px]">
+                <select value={role} onChange={(e) => setRole(e.target.value as typeof role)} className="h-11 rounded-control border border-card-border bg-white px-3 text-body">
                   <option value="owner">owner — เจ้าของบัญชี (จัดการได้ทุกอย่าง)</option>
                   <option value="manager">manager — ผู้จัดการ (ตามสิทธิ์ที่กำหนด)</option>
                   <option value="officer">officer — เจ้าหน้าที่ (ตามสิทธิ์ที่กำหนด)</option>
@@ -91,39 +91,39 @@ export function ClientDetail() {
               </div>
               <FieldError msg={err} />
               {tempPw && (
-                <div className="rounded-xl bg-amber-50 p-3 text-sm">
+                <div className="rounded-control bg-amber-50 p-3 text-body">
                   <p className="font-semibold text-amber-800">รหัสชั่วคราว (แสดงครั้งเดียว — ส่งให้ผู้ใช้นอกระบบ แล้วบังคับเปลี่ยน):</p>
-                  <p className="mt-1 font-mono text-lg font-bold tracking-wide">{tempPw}</p>
-                  <p className="mt-1 text-xs text-amber-700">หมดอายุใน 7 วัน · ไม่ถูกเก็บเป็น plaintext ใน DB (เก็บเฉพาะ scrypt hash)</p>
+                  <p className="mt-1 font-mono text-lg font-semibold tracking-wide">{tempPw}</p>
+                  <p className="mt-1 text-label text-amber-700">หมดอายุใน 7 วัน · ไม่ถูกเก็บเป็น plaintext ใน DB (เก็บเฉพาะ scrypt hash)</p>
                 </div>
               )}
             </CardBody>
           </Card>
 
           <Card className="overflow-hidden">
-            <table className="w-full min-w-[640px] border-collapse text-[14px]">
+            <table className="w-full min-w-[640px] border-collapse text-body">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50/80">
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-ink-500">อีเมล</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-ink-500">บทบาท</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-ink-500">สถานะ</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-ink-500">จัดการ</th>
+                <tr className="border-b border-card-border bg-ink-50/80">
+                  <th className="px-4 py-3 text-left text-label font-semibold uppercase tracking-wide text-ink-500">อีเมล</th>
+                  <th className="px-4 py-3 text-left text-label font-semibold uppercase tracking-wide text-ink-500">บทบาท</th>
+                  <th className="px-4 py-3 text-left text-label font-semibold uppercase tracking-wide text-ink-500">สถานะ</th>
+                  <th className="px-4 py-3 text-right text-label font-semibold uppercase tracking-wide text-ink-500">จัดการ</th>
                 </tr>
               </thead>
               <tbody>
                 {(users ?? []).map((u) => (
-                  <tr key={u.id} className="border-b border-slate-100 last:border-0">
+                  <tr key={u.id} className="border-b border-card-border last:border-0">
                     <td className="px-4 py-3">
                       <span className="font-semibold">{u.email}</span>
-                      {u.mustChangePw && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">รอเปลี่ยนรหัส</span>}
+                      {u.mustChangePw && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-label font-semibold text-amber-800">รอเปลี่ยนรหัส</span>}
                     </td>
-                    <td className="px-4 py-3 font-mono text-[13px]">{u.role}</td>
+                    <td className="px-4 py-3 font-mono text-body">{u.role}</td>
                     <td className="px-4 py-3">{u.status === 'active' ? 'ใช้งาน' : 'ปิดใช้งาน'}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="inline-flex gap-1.5">
                         <Button
                           variant="secondary"
-                          className="h-9 px-3 text-[13px]"
+                          className="h-9 px-3 text-body"
                           onClick={async () => {
                             const pw = await actions.reset(u.id)
                             setTempPw(pw)
@@ -132,7 +132,7 @@ export function ClientDetail() {
                           <KeyRound size={14} /> รีเซ็ต
                         </Button>
                         {u.status === 'active' && (
-                          <Button variant="secondary" className="h-9 px-3 text-[13px]" onClick={() => actions.disable(u.id)}>
+                          <Button variant="secondary" className="h-9 px-3 text-body" onClick={() => actions.disable(u.id)}>
                             ปิดใช้งาน
                           </Button>
                         )}
@@ -148,7 +148,7 @@ export function ClientDetail() {
 
       {tab === 'config' && (
         <Card>
-          <CardBody className="space-y-2 text-sm">
+          <CardBody className="space-y-2 text-body">
             <p>อัตราภาษีหัก ณ ที่จ่าย · เกณฑ์เตือนอากรแสตมป์ · อายุลิงก์ผู้ขาย · ข้อความยินยอม — แยกตามลูกค้าแต่ละราย</p>
             <p className="text-ink-500">ผู้ดูแลลูกค้าปรับค่าเหล่านี้ได้ที่เมนู “ตั้งค่า” ของลูกค้ารายนั้น ส่วนหน้านี้เป็นมุมมองผู้ดูแลระบบ</p>
           </CardBody>

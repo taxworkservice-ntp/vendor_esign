@@ -82,12 +82,12 @@ export function VendorPicker({
   if (selected && !searching) {
     if (compact) {
       return (
-        <div className="flex h-11 items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3.5">
-          <span className="truncate text-[15px]">{selected.name}</span>
+        <div className="flex h-11 items-center justify-between gap-2 rounded-control border border-card-border bg-white px-3.5">
+          <span className="truncate text-body">{selected.name}</span>
           <button
             type="button"
             onClick={startSearch}
-            className="shrink-0 rounded-lg px-2 py-1 text-[13px] font-semibold text-ink-700 hover:bg-slate-100"
+            className="shrink-0 rounded-control px-2 py-1 text-body font-semibold text-ink-700 hover:bg-ink-100"
           >
             เปลี่ยน
           </button>
@@ -95,25 +95,25 @@ export function VendorPicker({
       )
     }
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+      <div className="rounded-control border border-card-border bg-white p-3.5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="flex items-center gap-1.5 font-bold">
+            <p className="flex items-center gap-1.5 font-semibold">
               <Check size={15} className="text-emerald-600" /> {selected.name}
             </p>
-            <p className="mt-0.5 truncate text-[13px] text-ink-500">{selected.address}</p>
-            <p className="mt-0.5 font-mono text-[12px] text-ink-400">เลขบัตร {displayTaxId(selected)}</p>
+            <p className="mt-0.5 truncate text-body text-ink-500">{selected.address}</p>
+            <p className="mt-0.5 font-mono text-label text-ink-400">เลขบัตร {displayTaxId(selected)}</p>
           </div>
           <button
             type="button"
             onClick={startSearch}
-            className="shrink-0 rounded-lg px-2.5 py-1.5 text-[13px] font-semibold text-ink-700 hover:bg-slate-100"
+            className="shrink-0 rounded-control px-2.5 py-1.5 text-body font-semibold text-ink-700 hover:bg-ink-100"
           >
             เปลี่ยน
           </button>
         </div>
         {allowAdd && (
-          <Link to={addHref} className="mt-2 inline-block text-[13px] font-semibold text-ink-700 underline">
+          <Link to={addHref} className="mt-2 inline-block text-body font-semibold text-ink-700 underline">
             + เพิ่มผู้ขายใหม่
           </Link>
         )}
@@ -148,7 +148,7 @@ export function VendorPicker({
         <ul
           id="vendor-picker-list"
           role="listbox"
-          className="absolute z-20 mt-1.5 max-h-72 w-full overflow-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg"
+          className="absolute z-20 mt-1.5 max-h-72 w-full overflow-auto rounded-control border border-card-border bg-white p-1.5 shadow-lg"
         >
           {matches.map((v, i) => (
             <li
@@ -162,17 +162,17 @@ export function VendorPicker({
                 pick(v)
               }}
               className={cn(
-                'cursor-pointer rounded-lg px-3 py-2.5',
-                i === active ? 'bg-slate-100' : 'hover:bg-slate-50',
+                'cursor-pointer rounded-control px-3 py-2.5',
+                i === active ? 'bg-ink-100' : 'hover:bg-ink-50',
               )}
             >
               <p className="font-semibold leading-snug">{v.name}</p>
-              <p className="mt-0.5 truncate text-[13px] text-ink-500">{v.address}</p>
-              <p className="mt-0.5 font-mono text-[12px] text-ink-400">{displayTaxId(v)}</p>
+              <p className="mt-0.5 truncate text-body text-ink-500">{v.address}</p>
+              <p className="mt-0.5 font-mono text-label text-ink-400">{displayTaxId(v)}</p>
             </li>
           ))}
           {matches.length === 0 && (
-            <li className="px-3 py-3 text-sm text-ink-500">
+            <li className="px-3 py-3 text-body text-ink-500">
               ไม่พบผู้ขาย
               {allowAdd && (
                 <Link to={addHref} className="ml-2 inline-flex items-center gap-1 font-semibold text-ink-800 underline">

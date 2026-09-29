@@ -32,6 +32,7 @@ export const colors = {
 } as const
 
 export const fontSize = {
+  micro: ['10px', { lineHeight: '14px' }],
   label: ['12px', { lineHeight: '18px' }],
   body: ['14px', { lineHeight: '22px' }],
   title: ['17px', { lineHeight: '24px' }],

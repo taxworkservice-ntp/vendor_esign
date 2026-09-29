@@ -55,7 +55,7 @@ const PRESETS: { id: PresetId; th: string }[] = [
   { id: 'year', th: 'ปีนี้' },
 ]
 
-const thCls = 'px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-500'
+const thCls = 'px-3 py-2 text-left text-label font-semibold uppercase tracking-wide text-ink-500'
 const tdCls = 'whitespace-nowrap px-3 py-2'
 
 export function TransactionList() {
@@ -114,8 +114,8 @@ export function TransactionList() {
                 <button
                   key={f.v}
                   onClick={() => set({ status: f.v })}
-                  className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition ${
-                    filters.status === f.v ? 'bg-ink-900 text-white' : 'bg-slate-100 text-ink-700 hover:bg-slate-200'
+                  className={`rounded-full px-3 py-1.5 text-body font-semibold transition ${
+                    filters.status === f.v ? 'bg-ink-900 text-white' : 'bg-ink-100 text-ink-700 hover:bg-ink-100'
                   }`}
                 >
                   {f.th}
@@ -124,7 +124,7 @@ export function TransactionList() {
               <select
                 value={filters.status}
                 onChange={(e) => set({ status: e.target.value as StatusFilter })}
-                className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[13px] font-semibold text-ink-700"
+                className="h-8 rounded-control border border-card-border bg-white px-2 text-body font-semibold text-ink-700"
                 title="สถานะ (แบบละเอียด)"
               >
                 {STATUS_OPTIONS.map((o) => (
@@ -135,38 +135,38 @@ export function TransactionList() {
               </select>
               <button
                 onClick={() => setShowPanel((v) => !v)}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition ${
-                  showPanel || activeCount > 0 ? 'bg-teal-700 text-white' : 'bg-slate-100 text-ink-700 hover:bg-slate-200'
+                className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-body font-semibold transition ${
+                  showPanel || activeCount > 0 ? 'bg-teal-700 text-white' : 'bg-ink-100 text-ink-700 hover:bg-ink-100'
                 }`}
               >
                 <SlidersHorizontal size={14} /> ตัวกรอง
-                {activeCount > 0 && <span className="rounded-full bg-white/25 px-1.5 text-[11px]">{activeCount}</span>}
+                {activeCount > 0 && <span className="rounded-full bg-white/25 px-1.5 text-label">{activeCount}</span>}
               </button>
             </div>
           </div>
 
           {showPanel && (
-            <div className="grid gap-4 border-t border-slate-100 pt-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-4 border-t border-card-border pt-4 md:grid-cols-2 xl:grid-cols-4">
               <div className="xl:col-span-2">
-                <p className="mb-1.5 text-xs font-semibold text-ink-500">ช่วงวันที่โอน</p>
+                <p className="mb-1.5 text-label font-semibold text-ink-500">ช่วงวันที่โอน</p>
                 <div className="flex flex-wrap items-center gap-1.5">
                   {PRESETS.map((p) => (
                     <button
                       key={p.id}
                       onClick={() => applyPreset(p.id)}
-                      className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-[13px] font-semibold text-ink-700 hover:bg-slate-200"
+                      className="rounded-control bg-ink-100 px-2.5 py-1.5 text-body font-semibold text-ink-700 hover:bg-ink-100"
                     >
                       {p.th}
                     </button>
                   ))}
-                  <Input type="date" value={filters.from} onChange={(e) => set({ from: e.target.value, month: '' })} className="h-9 w-auto text-[13px]" />
+                  <Input type="date" value={filters.from} onChange={(e) => set({ from: e.target.value, month: '' })} className="h-9 w-auto text-body" />
                   <span className="text-ink-400">–</span>
-                  <Input type="date" value={filters.to} onChange={(e) => set({ to: e.target.value, month: '' })} className="h-9 w-auto text-[13px]" />
+                  <Input type="date" value={filters.to} onChange={(e) => set({ to: e.target.value, month: '' })} className="h-9 w-auto text-body" />
                 </div>
               </div>
 
               <div>
-                <p className="mb-1.5 text-xs font-semibold text-ink-500">เดือน</p>
+                <p className="mb-1.5 text-label font-semibold text-ink-500">เดือน</p>
                 <select
                   className={inputCls}
                   value={filters.month}
@@ -180,7 +180,7 @@ export function TransactionList() {
               </div>
 
               <div>
-                <p className="mb-1.5 text-xs font-semibold text-ink-500">ประเภทการจ่าย</p>
+                <p className="mb-1.5 text-label font-semibold text-ink-500">ประเภทการจ่าย</p>
                 <select className={inputCls} value={filters.paymentType} onChange={(e) => set({ paymentType: e.target.value })}>
                   <option value="">ทั้งหมด</option>
                   {cfg.paymentTypes.map((p) => (
@@ -190,14 +190,14 @@ export function TransactionList() {
               </div>
 
               <div>
-                <p className="mb-1.5 text-xs font-semibold text-ink-500">สลิป</p>
+                <p className="mb-1.5 text-label font-semibold text-ink-500">สลิป</p>
                 <div className="flex gap-1.5">
                   {([['all', 'ทั้งหมด'], ['with', 'มีสลิป'], ['without', 'ยังไม่แนบ']] as const).map(([v, th]) => (
                     <button
                       key={v}
                       onClick={() => set({ slip: v })}
-                      className={`flex-1 rounded-lg px-2 py-2 text-[13px] font-semibold transition ${
-                        filters.slip === v ? 'bg-ink-900 text-white' : 'bg-slate-100 text-ink-700 hover:bg-slate-200'
+                      className={`flex-1 rounded-control px-2 py-2 text-body font-semibold transition ${
+                        filters.slip === v ? 'bg-ink-900 text-white' : 'bg-ink-100 text-ink-700 hover:bg-ink-100'
                       }`}
                     >
                       {th}
@@ -207,7 +207,7 @@ export function TransactionList() {
               </div>
 
               <div>
-                <p className="mb-1.5 text-xs font-semibold text-ink-500">ยอดสุทธิ (฿)</p>
+                <p className="mb-1.5 text-label font-semibold text-ink-500">ยอดสุทธิ (฿)</p>
                 <div className="flex items-center gap-1.5">
                   <Input inputMode="decimal" placeholder="ต่ำสุด" value={filters.minNet} onChange={(e) => set({ minNet: e.target.value })} className="h-10 tabular-nums" />
                   <span className="text-ink-400">–</span>
@@ -216,7 +216,7 @@ export function TransactionList() {
               </div>
 
               <div className="xl:col-span-2">
-                <p className="mb-1.5 text-xs font-semibold text-ink-500">ผู้ขาย</p>
+                <p className="mb-1.5 text-label font-semibold text-ink-500">ผู้ขาย</p>
                 <div className="flex items-center gap-2">
                   <div className="flex-1">
                     <VendorPicker
@@ -228,7 +228,7 @@ export function TransactionList() {
                     />
                   </div>
                   {filters.vendorId && (
-                    <button onClick={() => set({ vendorId: '' })} className="rounded-lg px-2.5 py-2 text-[13px] font-semibold text-ink-600 hover:bg-slate-100">
+                    <button onClick={() => set({ vendorId: '' })} className="rounded-control px-2.5 py-2 text-body font-semibold text-ink-600 hover:bg-ink-100">
                       ล้าง
                     </button>
                   )}
@@ -236,7 +236,7 @@ export function TransactionList() {
               </div>
 
               <div>
-                <p className="mb-1.5 text-xs font-semibold text-ink-500">เรียงลำดับ</p>
+                <p className="mb-1.5 text-label font-semibold text-ink-500">เรียงลำดับ</p>
                 <select className={inputCls} value={filters.sort} onChange={(e) => set({ sort: e.target.value as TransactionFilters['sort'] })}>
                   <option value="date-desc">วันที่ล่าสุด</option>
                   <option value="date-asc">วันที่เก่าสุด</option>
@@ -248,7 +248,7 @@ export function TransactionList() {
               <div className="flex items-end xl:col-span-2">
                 <button
                   onClick={() => setFilters(emptyFilters())}
-                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold text-ink-600 hover:bg-slate-100"
+                  className="inline-flex items-center gap-1.5 rounded-control px-3 py-2 text-body font-semibold text-ink-600 hover:bg-ink-100"
                 >
                   <X size={14} /> ล้างตัวกรองทั้งหมด
                 </button>
@@ -260,9 +260,9 @@ export function TransactionList() {
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[880px] border-collapse text-[13px]">
+          <table className="w-full min-w-[880px] border-collapse text-body">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/80">
+              <tr className="border-b border-card-border bg-ink-50/80">
                 <th className={thCls}>รายการ</th>
                 <th className={thCls}>วันที่โอน</th>
                 <th className={thCls}>สลิป</th>
@@ -278,21 +278,21 @@ export function TransactionList() {
                 <tr
                   key={t.id}
                   onClick={() => nav(`/transactions/${t.id}`)}
-                  className="cursor-pointer border-b border-slate-100 transition last:border-0 hover:bg-slate-50"
+                  className="cursor-pointer border-b border-card-border transition last:border-0 hover:bg-ink-50"
                 >
                   <td className="max-w-[360px] px-3 py-2">
                     <p className="truncate font-semibold leading-snug">{t.description}</p>
-                    <p className="truncate text-[12px] text-ink-500">
+                    <p className="truncate text-label text-ink-500">
                       <span className="font-mono">{t.id}</span> · {t.vendor.name}
                     </p>
                   </td>
                   <td className={tdCls}>{fmtDateTH(t.transferDate)}</td>
-                  <td className={`${tdCls} font-mono text-[12px]`}>{t.slipReference || <span className="font-sans text-ink-400">—</span>}</td>
+                  <td className={`${tdCls} font-mono text-label`}>{t.slipReference || <span className="font-sans text-ink-400">—</span>}</td>
                   <td className={`${tdCls} text-right tabular-nums`}>฿{fmtTHB(t.grossAmount)}</td>
                   <td className={`${tdCls} text-right tabular-nums text-ink-500`}>
                     {t.whtRate}% · ฿{fmtTHB(t.whtAmount)}
                   </td>
-                  <td className={`${tdCls} text-right font-bold tabular-nums`}>฿{fmtTHB(t.netAmount)}</td>
+                  <td className={`${tdCls} text-right font-semibold tabular-nums`}>฿{fmtTHB(t.netAmount)}</td>
                   <td className={tdCls}><StatusBadge status={t.status} /></td>
                   <td className="px-2 py-2 text-ink-400"><ChevronLeft size={15} className="rotate-180" /></td>
                 </tr>
@@ -300,7 +300,7 @@ export function TransactionList() {
             </tbody>
             {(data?.length ?? 0) > 0 && (
               <tfoot>
-                <tr className="bg-slate-50/80 font-bold">
+                <tr className="bg-ink-50/80 font-semibold">
                   <td className="px-3 py-2" colSpan={3}>รวม {data?.length} รายการ</td>
                   <td className="px-3 py-2 text-right tabular-nums">฿{fmtTHB(sumGross)}</td>
                   <td className="px-3 py-2" />
@@ -311,11 +311,11 @@ export function TransactionList() {
             )}
           </table>
         </div>
-        {isLoading && <p className="px-4 py-6 text-sm text-ink-500">กำลังโหลด…</p>}
+        {isLoading && <p className="px-4 py-6 text-body text-ink-500">กำลังโหลด…</p>}
         {data?.length === 0 && !isLoading && (
           <div className="px-4 py-12 text-center">
             <p className="font-semibold">ไม่พบรายการตามเงื่อนไข</p>
-            <p className="mt-1 text-sm text-ink-500">ลองล้างตัวกรอง หรือสร้างรายการใหม่</p>
+            <p className="mt-1 text-body text-ink-500">ลองล้างตัวกรอง หรือสร้างรายการใหม่</p>
           </div>
         )}
       </Card>

@@ -8,7 +8,7 @@ import { PageHeader } from '../components/ui/page-header'
 import { Input } from '../components/ui/input'
 import { Button } from '../components/ui/button'
 
-const thCls = 'px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-ink-500'
+const thCls = 'px-4 py-3 text-left text-label font-semibold uppercase tracking-wide text-ink-500'
 
 export function VendorsList() {
   const [q, setQ] = useState('')
@@ -40,9 +40,9 @@ export function VendorsList() {
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[680px] border-collapse text-[14px]">
+          <table className="w-full min-w-[680px] border-collapse text-body">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/80">
+              <tr className="border-b border-card-border bg-ink-50/80">
                 <th className={thCls}>ผู้ขาย</th>
                 <th className={thCls}>เลขบัตรประชาชน</th>
                 <th className={thCls}>LINE</th>
@@ -54,25 +54,25 @@ export function VendorsList() {
                 <tr
                   key={v.id}
                   onClick={() => nav(`/vendors/${v.id}`)}
-                  className="cursor-pointer border-b border-slate-100 transition last:border-0 hover:bg-slate-50"
+                  className="cursor-pointer border-b border-card-border transition last:border-0 hover:bg-ink-50"
                 >
                   <td className="px-4 py-3.5">
-                    <p className="font-bold leading-snug">{v.name}</p>
-                    <p className="mt-0.5 line-clamp-1 text-[13px] text-ink-500">{v.address}</p>
+                    <p className="font-semibold leading-snug">{v.name}</p>
+                    <p className="mt-0.5 line-clamp-1 text-body text-ink-500">{v.address}</p>
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3.5 font-mono text-[13px]">{displayTaxId(v)}</td>
-                  <td className="whitespace-nowrap px-4 py-3.5 font-mono text-[13px]">{v.lineUserId || '—'}</td>
+                  <td className="whitespace-nowrap px-4 py-3.5 font-mono text-body">{displayTaxId(v)}</td>
+                  <td className="whitespace-nowrap px-4 py-3.5 font-mono text-body">{v.lineUserId || '—'}</td>
                   <td className="px-2 py-3.5 text-ink-400"><ChevronLeft size={16} className="rotate-180" /></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        {isLoading && <p className="px-4 py-6 text-sm text-ink-500">กำลังโหลด…</p>}
+        {isLoading && <p className="px-4 py-6 text-body text-ink-500">กำลังโหลด…</p>}
         {data?.length === 0 && !isLoading && (
           <div className="px-4 py-12 text-center">
             <p className="font-semibold">ยังไม่มีผู้ขาย</p>
-            <p className="mt-1 text-sm text-ink-500">เพิ่มผู้ขายรายใหม่ได้เลย</p>
+            <p className="mt-1 text-body text-ink-500">เพิ่มผู้ขายรายใหม่ได้เลย</p>
           </div>
         )}
       </Card>
