@@ -1,0 +1,134 @@
+import { Hono } from 'hono'
+import { sql, withTenant } from '../../src/server/db'
+import {
+  SESSION_COOKIE,
+  clearSessionCookie,
+  createSession,
+  hashPassword,
+  sessionCookie,
+  sessionUser,
+  sha256hex,
+  verifyPassword,
+  type SessionUser,
+} from './auth'
+import { PILOT_TENANT, audit, one, rateLimited } from './shared'
+
+// Client portal auth (admin-provisioned passwords, no self-signup).
+// Mounted at /api/auth on the client/vendor operation. Cookie: tw_session (7d).
+//
+// Lockout is in-memory (5 fails → 15 min), same caveat as the rate limiter:
+// move to Postgres behind multiple replicas. No PII is logged.
+
+const MAX_FAILS = 5
+const LOCK_MS = 15 * 60 * 1000
+const fails = new Map<string, { n: number; until: number }>()
+
+function lockedUntil(email: string): number {
+  const f = fails.get(email)
+  if (!f) return 0
+  if (Date.now() > f.until) {
+    fails.delete(email)
+    return 0
+  }
+  return f.n >= MAX_FAILS ? f.until : 0
+}
+
+function noteFailure(email: string) {
+  const f = fails.get(email)
+  const n = (f?.n ?? 0) + 1
+  fails.set(email, { n, until: Date.now() + LOCK_MS })
+}
+
+// Constant-work verify when the email is unknown — avoids user enumeration.
+let dummy: string | null = null
+async function dummyHash(): Promise<string> {
+  if (!dummy) dummy = await hashPassword('taxwork-dummy-password')
+  return dummy
+}
+
+function isClient(u: SessionUser): boolean {
+  return u.memberships.some((m) => m.role === 'client_user' || m.role === 'client_admin')
+}
+
+export async function requireClient(c: { req: { header: (n: string) => string | undefined } }): Promise<SessionUser | null> {
+  const u = await sessionUser(c.req.header('cookie'))
+  return u && isClient(u) ? u : null
+}
+
+export const authRoutes = new Hono()
+
+authRoutes.post('/login', async (c) => {
+  const ip = c.req.header('x-forwarded-for') ?? 'local'
+  if (rateLimited(`client-login:${ip}`, 10)) return c.json({ error: 'too-many-requests' }, 429)
+  const body = (await c.req.json().catch(() => null)) as { email?: string; password?: string } | null
+  const email = (body?.email ?? '').trim().toLowerCase()
+  if (!email || !body?.password) return c.json({ error: 'invalid-body' }, 400)
+  if (lockedUntil(email)) return c.json({ error: 'locked' }, 429)
+
+  const db = sql()
+  const rows = (await db`select id, email, password_hash, must_change_pw, status, temp_expires_at
+    from app_users where lower(email) = ${email}`) as unknown as
+    { id: string; email: string; password_hash: string; must_change_pw: boolean; status: string; temp_expires_at: string | null }[]
+  const u = one<(typeof rows)[number]>(rows)
+
+  // Verify even when the user is missing (constant work), then reject generically.
+  const ok = u ? await verifyPassword(body.password, String(u.password_hash)) : await verifyPassword(body.password, await dummyHash())
+  if (!u || u.status !== 'active' || !ok) {
+    noteFailure(email)
+    return c.json({ error: 'invalid-credentials' }, 401)
+  }
+  if (u.temp_expires_at && new Date(String(u.temp_expires_at)) < new Date() && u.must_change_pw)
+    return c.json({ error: 'temp-expired' }, 403)
+
+  const mems = (await db`select tenant_id, role from user_tenants where user_id = ${String(u.id)}`) as unknown as
+    { tenant_id: string; role: string }[]
+  const memberships = mems.map((m) => ({ tenantId: String(m.tenant_id), role: String(m.role) }))
+  if (!memberships.some((m) => m.role === 'client_user' || m.role === 'client_admin'))
+    return c.json({ error: 'not-a-client-user' }, 403)
+
+  fails.delete(email)
+  const { token, expiresAt } = await createSession(String(u.id), ip, c.req.header('user-agent') ?? '')
+  const tenantId = memberships[0]?.tenantId ?? PILOT_TENANT
+  await withTenant(tenantId, 'client_user', async () =>
+    audit(tenantId, 'app_users', String(u.id), 'user.login', 'user', { channel: 'client' }, ip))
+  return new Response(
+    JSON.stringify({ ok: true, email: u.email, mustChangePw: Boolean(u.must_change_pw), memberships }),
+    { headers: { 'Content-Type': 'application/json', 'Set-Cookie': sessionCookie(token, expiresAt, SESSION_COOKIE) } },
+  )
+})
+
+authRoutes.post('/logout', async (c) => {
+  const raw = c.req.header('cookie') ?? ''
+  const token = raw.match(new RegExp(`${SESSION_COOKIE}=([^;]+)`))?.[1]
+  if (token) {
+    const db = sql()
+    await db`delete from sessions where token_hash = ${sha256hex(decodeURIComponent(token))}`
+  }
+  return new Response(JSON.stringify({ ok: true }), {
+    headers: { 'Content-Type': 'application/json', 'Set-Cookie': clearSessionCookie(SESSION_COOKIE) },
+  })
+})
+
+authRoutes.get('/me', async (c) => {
+  const u = await requireClient(c)
+  if (!u) return c.json({ error: 'unauthorized' }, 401)
+  return c.json({ email: u.email, mustChangePw: u.mustChangePw, memberships: u.memberships })
+})
+
+authRoutes.post('/change-password', async (c) => {
+  const u = await requireClient(c)
+  if (!u) return c.json({ error: 'unauthorized' }, 401)
+  const body = (await c.req.json().catch(() => null)) as { oldPassword?: string; newPassword?: string } | null
+  if (!body?.oldPassword || !body?.newPassword || body.newPassword.length < 8)
+    return c.json({ error: 'invalid-body' }, 400)
+  const db = sql()
+  const rows = (await db`select password_hash from app_users where id = ${u.userId}`) as unknown as { password_hash: string }[]
+  if (!(await verifyPassword(body.oldPassword, String(rows[0]?.password_hash ?? ''))))
+    return c.json({ error: 'invalid-credentials' }, 401)
+  await db`update app_users set password_hash = ${await hashPassword(body.newPassword)},
+    must_change_pw = false, temp_expires_at = null, updated_at = now() where id = ${u.userId}`
+  const tenantId = u.memberships[0]?.tenantId ?? PILOT_TENANT
+  await withTenant(tenantId, 'client_user', async () =>
+    audit(tenantId, 'app_users', u.userId, 'user.password-changed', 'user', {}, 'local'))
+  return c.json({ ok: true })
+})

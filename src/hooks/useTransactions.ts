@@ -1,8 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { CreateTxnInput, PaymentTransaction } from '../lib/types'
 import { calcWht, isDuplicateSlipRef } from '../lib/config'
-import { taxIdHash, taxIdLast4 } from '../lib/taxid'
-import { loadTxns, saveTxns, VENDORS } from '../lib/mock'
+import { itemsSummary, itemsTotal } from '../lib/line-items'
+import { normalizeTaxId, taxIdHash, taxIdLast4 } from '../lib/taxid'
+import { emptyFilters, filterTransactions, sortTransactions, type TransactionFilters } from '../lib/txn-filters'
+import { loadTxns, saveTxns } from '../lib/mock'
+import { loadVendors } from '../lib/vendors-mock'
+import { rememberVendorId } from '../lib/vendor-id'
+import { useClientAuth } from '../lib/client-auth'
 
 const QK = ['transactions'] as const
 
@@ -13,23 +18,18 @@ function write(txns: PaymentTransaction[]) {
   saveTxns(txns)
 }
 
-export function useTransactions(search = '', status = 'all') {
+export function useTransactions(filters: TransactionFilters = emptyFilters()) {
+  const { activeTenant } = useClientAuth()
   return useQuery({
-    queryKey: [...QK, search, status],
+    queryKey: [...QK, activeTenant, filters],
     queryFn: async () => {
-      const all = read()
-      return all.filter(
-        (t) =>
-          (status === 'all' || t.status === status) &&
-          (!search ||
-            t.vendor.name.includes(search) ||
-            t.description.includes(search) ||
-            t.id.toLowerCase().includes(search.toLowerCase())),
-      )
+      const all = read().filter((t) => t.tenantId === activeTenant)
+      return sortTransactions(filterTransactions(all, filters), filters.sort)
     },
   })
 }
 
+// Lookup by unique id across tenants (receipt/vendor views are id-based).
 export function useTransaction(id?: string) {
   return useQuery({
     queryKey: [...QK, 'detail', id],
@@ -39,33 +39,54 @@ export function useTransaction(id?: string) {
 }
 
 export function useAllSlipRefs() {
-  return read().map((t) => t.slipReference)
+  const { activeTenant } = useClientAuth()
+  return read()
+    .filter((t) => t.tenantId === activeTenant)
+    .map((t) => t.slipReference)
 }
 
 export function useCreateTransaction() {
   const qc = useQueryClient()
+  const { activeTenant } = useClientAuth()
   return useMutation({
     mutationFn: async (input: CreateTxnInput) => {
       const all = read()
       const slipRef = input.slipReference.trim()
-      if (slipRef && isDuplicateSlipRef(slipRef, all.map((t) => t.slipReference))) {
+      const inTenant = all.filter((t) => t.tenantId === activeTenant)
+      if (slipRef && isDuplicateSlipRef(slipRef, inTenant.map((t) => t.slipReference))) {
         throw new Error('เลขที่อ้างอิงสลิปนี้ถูกใช้แล้ว — ตรวจสอบสลิปซ้ำ')
       }
-      const { wht, net } = calcWht(input.grossAmount, input.whtRate)
-      const vendor = VENDORS.find((v) => v.id === input.vendorId)!
+      const lineItems = input.lineItems
+        .map((it) => ({ description: it.description.trim(), amount: Number(it.amount) || 0 }))
+        .filter((it) => it.description && it.amount > 0)
+      if (lineItems.length === 0) throw new Error('กรุณาเพิ่มรายการอย่างน้อย 1 บรรทัด')
+      const { gross, wht, net } = calcWht(itemsTotal(lineItems), input.whtRate, input.whtMode)
+      const found = loadVendors(activeTenant).find((v) => v.id === input.vendorId)
+      if (!found) throw new Error('กรุณาเลือกผู้ขาย')
+      // Verify the gate ID against the vendor registry (when known).
+      if (found.taxId && normalizeTaxId(found.taxId) !== normalizeTaxId(input.vendorTaxId)) {
+        throw new Error('เลขบัตรไม่ตรงกับทะเบียนผู้ขาย — ตรวจสอบอีกครั้ง')
+      }
+      const vendor = { id: found.id, name: found.name, address: found.address, maskedId: found.maskedId, taxId: found.taxId }
+      // Ids are globally unique (sequenced across all tenants).
       const id = `TX-${1043 + all.length}`
       const now = new Date().toISOString()
+      const note = input.note.trim()
       const txn: PaymentTransaction = {
         id,
+        tenantId: activeTenant,
         vendor,
         paymentType: input.paymentType,
-        description: input.description,
-        grossAmount: input.grossAmount,
+        description: itemsSummary(lineItems, note),
+        note,
+        lineItems,
+        grossAmount: gross,
         whtRate: input.whtRate,
+        whtMode: input.whtMode,
         whtAmount: wht,
         netAmount: net,
         transferDate: input.transferDate,
-        slipReference: input.slipReference.trim(),
+        slipReference: slipRef,
         slipName: input.slipName,
         status: 'draft',
         createdAt: now,
@@ -77,13 +98,19 @@ export function useCreateTransaction() {
         checks: [
           { key: 'slip', label: slipRef ? 'สลิปตรงยอดสุทธิ' : 'ยังไม่มีสลิป — รอแนบภายหลัง', state: slipRef ? 'pass' : 'warn' },
           { key: 'name', label: 'ชื่อผู้รับตรงกับผู้ขาย', state: 'pass' },
-          { key: 'wht', label: 'WHT ตรงตาม config', state: 'pass' },
+          { key: 'wht', label: 'WHT ตรงตามค่าที่ตั้งไว้', state: 'pass' },
         ],
       }
       write([txn, ...all])
+      // Remember the vendor's tax ID encrypted-at-rest for future recall.
+      await rememberVendorId(input.vendorId, input.vendorTaxId)
       return txn
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: QK }),
+    onSuccess: (_txn, input) => {
+      qc.invalidateQueries({ queryKey: QK })
+      qc.invalidateQueries({ queryKey: ['vendor-memory'] })
+      qc.invalidateQueries({ queryKey: ['vendor-id', input.vendorId] })
+    },
   })
 }
 
@@ -92,6 +119,7 @@ export function useTransactionActions() {
   const apply = (fn: (all: PaymentTransaction[]) => PaymentTransaction[]) => {
     write(fn(read()))
     qc.invalidateQueries({ queryKey: QK })
+    qc.invalidateQueries({ queryKey: ['vendor-memory'] })
   }
   return {
     send: (id: string) =>

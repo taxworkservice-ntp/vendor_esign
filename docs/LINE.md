@@ -1,5 +1,11 @@
 # LINE connection — final step (guided setup)
 
+> **Status: DEFERRED.** For now there is no LINE integration. The client
+> **copies the invite message/link** from the transaction page and **pastes it
+> manually** into the LINE chat with the vendor. The transaction page has
+> “คัดลอกข้อความ” (message + link) and “คัดลอกลิงก์”. Everything below is the
+> later upgrade path.
+
 Target end state: vendor verifies through **LINE Login (LIFF)**; the server
 stores the LINE user id + timestamp; `verification_method` becomes
 `'line-liff'` instead of `'stub-deferred'`. Nothing else changes.

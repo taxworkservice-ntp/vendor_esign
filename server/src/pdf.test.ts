@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { PDFDocument } from 'pdf-lib'
 import { buildReceiptPdf } from './pdf'
 
 const base = {
@@ -12,6 +13,10 @@ const base = {
   client: { code: 'ABC', display: 'ABC (pilot test)' },
   vendor: { name: 'สมชาย ใจดี', address: '12 ม.4 ขอนแก่น 40000', maskedId: 'x-xxxx-xxxxx-12-4' },
   description: 'ค่าจ้างทำความสะอาดสำนักงาน ก.ย.',
+  lineItems: [
+    { description: 'ค่าจ้างทำความสะอาดสำนักงาน ก.ย.', amount: 2000 },
+    { description: 'ค่าอะไหล่และวัสดุสิ้นเปลือง', amount: 1000 },
+  ],
   grossAmount: 3000,
   whtRate: 3,
   whtAmount: 90,
@@ -32,5 +37,22 @@ describe('server receipt PDF', () => {
   it('works without a signature image', async () => {
     const { bytes } = await buildReceiptPdf({ ...base, whtRate: 0, whtAmount: 0 })
     expect(Buffer.from(bytes.slice(0, 5)).toString('ascii')).toBe('%PDF-')
+  })
+  it('paginates when there are many line items', async () => {
+    const many = Array.from({ length: 40 }, (_, i) => ({
+      description: `รายการที่ ${i + 1} — ค่าบริการพร้อมรายละเอียดยาวพอที่จะตัดบรรทัดได้`,
+      amount: 250,
+    }))
+    const gross = 40 * 250
+    const { bytes } = await buildReceiptPdf({
+      ...base,
+      lineItems: many,
+      grossAmount: gross,
+      whtRate: 3,
+      whtAmount: gross * 0.03,
+      netAmount: gross * 0.97,
+    })
+    const doc = await PDFDocument.load(bytes)
+    expect(doc.getPageCount()).toBeGreaterThan(1)
   })
 })

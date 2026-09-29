@@ -13,7 +13,9 @@
     "api:start": "tsx server/src/index.ts",
     "db:migrate": "node scripts/migrate.mjs",
     "db:verify": "node scripts/verify.mjs",
-    "db:seed": "node scripts/seed.mjs"
+    "db:seed": "node scripts/seed.mjs",
+    "db:seed-admin": "node scripts/seed-admin.mjs",
+    "pdf:preview": "tsx scripts/preview-receipt.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",
@@ -24,6 +26,8 @@
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.3",
     "hono": "^4.13.9",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
     "lucide-react": "^0.454.0",
     "pdf-lib": "^1.17.1",
     "qrcode": "^1.5.4",

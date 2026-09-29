@@ -2,6 +2,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { PaymentTransaction } from '../lib/types'
 import { loadTxns, saveTxns } from '../lib/mock'
 import { normalizeTaxId, taxIdHash } from '../lib/taxid'
+import { loadSettings } from '../lib/settings'
+import { nextReceiptNumber } from '../lib/receipt-number'
 
 export interface VendorCorrection {
   field: 'name' | 'address'
@@ -116,9 +118,9 @@ export async function tryGateUnlock(
 
 export { normalizeTaxId }
 
-function touch(id: string, fn: (t: PaymentTransaction) => PaymentTransaction) {
+function touch(id: string, fn: (t: PaymentTransaction, all: PaymentTransaction[]) => PaymentTransaction) {
   const all = loadTxns()
-  saveTxns(all.map((t) => (t.id === id ? fn(t) : t)))
+  saveTxns(all.map((t) => (t.id === id ? fn(t, all) : t)))
 }
 
 export function useVendorActions() {
@@ -136,7 +138,12 @@ export function useVendorActions() {
     submit(id: string, auth: VendorAuth) {
       signatures.set(id, auth.signaturePng)
       writeAuth({ ...readAuth(), [id]: withoutPng(auth) })
-      touch(id, (t) => {
+      touch(id, (t, all) => {
+        // Assign the receipt number once, at issuance, from the per-tenant/year counter.
+        const cfg = loadSettings(t.tenantId)
+        const receiptNumber =
+          t.receiptNumber ??
+          nextReceiptNumber(cfg.clientCode, cfg.beYear, all.filter((x) => x.tenantId === t.tenantId).map((x) => x.receiptNumber))
         // Diff against client records — reported back on the detail page.
         const corrections: VendorCorrection[] = []
         if (auth.vendorName !== t.vendor.name)
@@ -148,6 +155,7 @@ export function useVendorActions() {
         return {
           ...t,
           status: 'signed',
+          receiptNumber,
           inviteToken: undefined, // single-use: consumed on signing
           timeline: [
             ...t.timeline,

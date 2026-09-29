@@ -1,39 +1,34 @@
 import { Hono } from 'hono'
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
+import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { sql, withTenant } from '../../src/server/db'
 import { amountToThaiWords } from '../../src/lib/thai-words'
 import { saveBytes } from './storage'
 import { buildReceiptPdf } from './pdf'
+import { sha256hex, sessionUser } from './auth'
+import { getVendorMemory } from './vendor-memory'
+import { authRoutes, requireClient } from './client-auth'
+import { corsMw } from './cors'
+import { getTenantSettings, saveTenantSettings } from './settings'
+import {
+  CLIENT_DISPLAY,
+  PILOT_BE_YEAR,
+  PILOT_TENANT,
+  PUBLIC_BASE,
+  audit,
+  one,
+  rateLimited,
+  tenantProfile,
+} from './shared'
 
-// Portable pilot API (Hono + Neon). No host SDKs, no paid services.
+// ── Public client/vendor operation ─────────────────────────────────────
+// Vendor links, signing, finalize, QR verify. No login, no admin routes.
+// Admin lives in the isolated operation (server/src/admin.ts, ADMIN_PORT).
 // Secrets only via env. Never log tokens, ID numbers, or personal data.
 
-const TENANT = process.env.PILOT_TENANT ?? 'ABC'
-const BE_YEAR = Number(process.env.PILOT_BE_YEAR ?? 2569)
-const PUBLIC_BASE = process.env.PUBLIC_BASE_URL ?? 'http://localhost:5173'
-const CLIENT_DISPLAY = process.env.CLIENT_DISPLAY ?? 'ABC (ชื่อ/ที่อยู่/เลขภาษีฉบับจริง — รอคอนเฟิร์ม [VERIFY])'
-
-const sha256hex = (s: string) => createHash('sha256').update(s).digest('hex')
-
-// neon() template queries return a union row type — normalize [0] access.
-function one<T>(rows: unknown): T | undefined {
-  return (rows as T[] | undefined)?.[0]
-}
-
-// Minimal in-memory rate limit for token endpoints (per-IP, 60s window).
-const hits = new Map<string, { n: number; reset: number }>()
-function rateLimited(ip: string, max = 30): boolean {
-  const now = Date.now()
-  const h = hits.get(ip)
-  if (!h || now > h.reset) {
-    hits.set(ip, { n: 1, reset: now + 60000 })
-    return false
-  }
-  h.n += 1
-  return h.n > max
-}
+const TENANT = PILOT_TENANT
+const BE_YEAR = PILOT_BE_YEAR
 
 // Gate attempts: 5 wrong IDs per token per 10 min (single process;
 // move to Postgres behind multiple replicas — same caveat as rate limits).
@@ -55,24 +50,25 @@ function gateFail(tokenHash: string): number {
   return Math.max(0, GATE_MAX - f.n)
 }
 
-async function audit(entityType: string, entityId: string, eventType: string, actor: string | null, metadata: unknown, ip: string) {
-  const db = sql()
-  await db`insert into audit_events (tenant_id, entity_type, entity_id, event_type, actor, metadata, ip)
-    values (${TENANT}, ${entityType}, ${entityId}, ${eventType}, ${actor}, ${JSON.stringify(metadata ?? {})}, ${ip})`
-}
-
 export const app = new Hono()
 
-app.get('/api/health', (c) => c.json({ ok: true, tenant: TENANT }))
+app.use('*', corsMw())
+
+// Client portal auth (login/logout/me/change-password).
+app.route('/api/auth', authRoutes)
+
+app.get('/api/health', (c) => c.json({ ok: true, operation: 'public', tenant: TENANT }))
 
 // Vendor: load own transaction (masked). First open stamps opened_at.
+// Multi-tenant: token_hash is globally unique — tenant is derived from the row,
+// never from a hardcoded constant, so one deploy serves all clients.
 app.get('/api/vendor/:token', async (c) => {
   const ip = c.req.header('x-forwarded-for') ?? 'local'
   if (rateLimited(`get:${ip}`)) return c.json({ error: 'too-many-requests' }, 429)
   const token = c.req.param('token')
   const db = sql()
   const rows = await db`
-    select vr.id as req_id, vr.expires_at, vr.used_at, vr.revoked_at, vr.unlocked_at,
+    select vr.id as req_id, vr.tenant_id, vr.expires_at, vr.used_at, vr.revoked_at, vr.unlocked_at,
       t.id, t.ref, t.description, t.payment_type, t.gross_amount, t.wht_rate,
       t.wht_amount, t.net_amount, t.transfer_date, t.slip_reference, t.status,
       t.tax_id_hash, t.tax_id_last4,
@@ -80,16 +76,17 @@ app.get('/api/vendor/:token', async (c) => {
     from vendor_requests vr
     join payment_transactions t on t.id = vr.transaction_id
     join vendors v on v.id = t.vendor_id
-    where vr.token_hash = ${sha256hex(token)} and vr.tenant_id = ${TENANT}`
+    where vr.token_hash = ${sha256hex(token)}`
   const r = one<Record<string, unknown>>(rows)
   if (!r) return c.json({ error: 'invalid-or-expired' }, 404)
   if (r.used_at || r.revoked_at || new Date(String(r.expires_at)) < new Date())
     return c.json({ error: 'invalid-or-expired' }, 410)
+  const rowTenant = String(r.tenant_id)
   if (r.status === 'sent') {
     await db`update vendor_requests set opened_at = coalesce(opened_at, now()) where id = ${String(r.req_id)}`;
     await db`update payment_transactions set status = 'opened' where id = ${String(r.id)} and status = 'sent'`;
-    await withTenant(TENANT, 'client', async () =>
-      audit('payment_transactions', String(r.id), 'vendor.opened', 'vendor', {}, ip))
+    await withTenant(rowTenant, 'client', async () =>
+      audit(rowTenant, 'payment_transactions', String(r.id), 'vendor.opened', 'vendor', {}, ip))
   }
   return c.json({
     ref: r.ref, description: r.description, paymentType: r.payment_type,
@@ -118,16 +115,17 @@ app.post('/api/vendor/:token/unlock', async (c) => {
 
   const db = sql()
   const rows = await db`
-    select vr.id as req_id, vr.expires_at, vr.used_at, vr.revoked_at, vr.unlocked_at,
+    select vr.id as req_id, vr.tenant_id, vr.expires_at, vr.used_at, vr.revoked_at, vr.unlocked_at,
       t.id, t.status, t.tax_id_hash, t.tax_id_last4,
       v.name as vendor_name, v.address as vendor_address
     from vendor_requests vr
     join payment_transactions t on t.id = vr.transaction_id
     join vendors v on v.id = t.vendor_id
-    where vr.token_hash = ${th} and vr.tenant_id = ${TENANT}`
+    where vr.token_hash = ${th}`
   const r = one<Record<string, unknown>>(rows)
   if (!r || r.used_at || r.revoked_at || new Date(String(r.expires_at)) < new Date())
     return c.json({ error: 'invalid-or-expired' }, 410)
+  const rowTenant = String(r.tenant_id)
   if (!r.tax_id_hash) {
     // Legacy row: no gate — mark unlocked so sign can proceed.
     await db`update vendor_requests set unlocked_at = coalesce(unlocked_at, now()) where id = ${String(r.req_id)}`
@@ -137,8 +135,8 @@ app.post('/api/vendor/:token/unlock', async (c) => {
   const b = Buffer.from(String(r.tax_id_hash), 'hex')
   if (a.length !== b.length || !timingSafeEqual(a, b)) {
     const remaining = gateFail(th)
-    await withTenant(TENANT, 'client', async () =>
-      audit('vendor_requests', String(r.req_id), 'vendor.gate-failed', 'vendor', { remaining }, ip))
+    await withTenant(rowTenant, 'client', async () =>
+      audit(rowTenant, 'vendor_requests', String(r.req_id), 'vendor.gate-failed', 'vendor', { remaining }, ip))
     return c.json(
       remaining <= 0 ? { error: 'gate-locked', remaining: 0 } : { error: 'wrong-id', remaining },
       remaining <= 0 ? 429 : 401,
@@ -146,8 +144,8 @@ app.post('/api/vendor/:token/unlock', async (c) => {
   }
   gateFails.delete(th)
   await db`update vendor_requests set unlocked_at = now() where id = ${String(r.req_id)}`
-  await withTenant(TENANT, 'client', async () =>
-    audit('vendor_requests', String(r.req_id), 'vendor.unlocked', 'vendor', {}, ip))
+  await withTenant(rowTenant, 'client', async () =>
+    audit(rowTenant, 'vendor_requests', String(r.req_id), 'vendor.unlocked', 'vendor', {}, ip))
   // Prefill for confirm-and-sign: vendor confirms instead of retyping.
   return c.json({ ok: true, vendorName: r.vendor_name, vendorAddress: r.vendor_address, idLast4: r.tax_id_last4 })
 })
@@ -176,13 +174,13 @@ app.post('/api/vendor/:token/sign', async (c) => {
     return c.json({ error: 'invalid-signature' }, 400)
 
   const rows = await db`
-    select vr.id as req_id, vr.expires_at, vr.used_at, vr.revoked_at, vr.unlocked_at,
+    select vr.id as req_id, vr.tenant_id, vr.expires_at, vr.used_at, vr.revoked_at, vr.unlocked_at,
       t.id, t.status, t.net_amount, t.tax_id_hash,
       v.name as record_name, v.address as record_address
     from vendor_requests vr
     join payment_transactions t on t.id = vr.transaction_id
     join vendors v on v.id = t.vendor_id
-    where vr.token_hash = ${sha256hex(token)} and vr.tenant_id = ${TENANT}`
+    where vr.token_hash = ${sha256hex(token)}`
   const r = one<Record<string, unknown>>(rows)
   if (!r || r.used_at || r.revoked_at || new Date(String(r.expires_at)) < new Date())
     return c.json({ error: 'invalid-or-expired' }, 410)
@@ -192,6 +190,7 @@ app.post('/api/vendor/:token/sign', async (c) => {
     return c.json({ error: 'already-signed' }, 409)
 
   const txnId = String(r.id)
+  const rowTenant = String(r.tenant_id)
   // Corrections: diff submitted info against client records server-side,
   // stored on the authorization and reported back to the client.
   const corrections: { field: string; from: string; to: string }[] = []
@@ -201,20 +200,20 @@ app.post('/api/vendor/:token/sign', async (c) => {
     corrections.push({ field: 'name', from: String(r.record_name), to: subName })
   if (subAddr !== String(r.record_address))
     corrections.push({ field: 'address', from: String(r.record_address), to: subAddr })
-  const sigPath = saveBytes('signatures', `${txnId}.png`, png)
+  const sigPath = saveBytes('signatures', `${txnId}.png`, png, rowTenant)
   await db`insert into authorizations
     (tenant_id, transaction_id, vendor_name, vendor_address, vendor_masked_id,
      signature_image_path, verification_method, line_user_id, ip, user_agent,
      consent_text_version, corrections)
-    values (${TENANT}, ${txnId}, ${subName}, ${subAddr},
+    values (${rowTenant}, ${txnId}, ${subName}, ${subAddr},
       ${`x-xxxx-xxxxx-${last4.slice(0, 2)}-${last4.slice(2)}`},
       ${sigPath}, 'stub-deferred', ${body.lineUserId ?? null}, ${ip},
       ${(c.req.header('user-agent') ?? '').slice(0, 500)}, 'v1',
       ${JSON.stringify(corrections)})`
   await db`update vendor_requests set used_at = now() where id = ${String(r.req_id)}`
   await db`update payment_transactions set status = 'signed' where id = ${txnId}`
-  await withTenant(TENANT, 'client', async () =>
-    audit('payment_transactions', txnId, 'vendor.signed', 'vendor',
+  await withTenant(rowTenant, 'client', async () =>
+    audit(rowTenant, 'payment_transactions', txnId, 'vendor.signed', 'vendor',
       { verificationMethod: 'stub-deferred', consentVersion: 'v1', corrections }, ip))
   return c.json({ ok: true, transactionId: txnId, corrections })
 })
@@ -223,14 +222,20 @@ app.post('/api/vendor/:token/sign', async (c) => {
 // Number is issued inside the same DB txn as the receipt insert
 // (next_receipt_number locks the counter row). PDF failure after numbering
 // retries with the SAME number — never gaps, never MAX()+1.
+// Multi-tenant: tenant + prefix + be_year come from the tenants row.
 app.post('/api/transactions/:id/finalize', async (c) => {
   const ip = c.req.header('x-forwarded-for') ?? 'local'
   const txnId = c.req.param('id')
   const db = sql()
 
+  const txnRows = (await db`select tenant_id from payment_transactions where id = ${txnId}`) as unknown as
+    { tenant_id: string }[]
+  const rowTenant = txnRows[0] ? String(txnRows[0].tenant_id) : TENANT
+  const prof = (await tenantProfile(rowTenant)) ?? { code: rowTenant, beYear: BE_YEAR, display: CLIENT_DISPLAY }
+
   const existing = await db`
     select r.number, r.verification_code, r.pdf_path from receipts r
-    where r.transaction_id = ${txnId} and r.tenant_id = ${TENANT}`
+    where r.transaction_id = ${txnId} and r.tenant_id = ${rowTenant}`
   const ex = one<Record<string, unknown>>(existing)
   if (ex?.pdf_path) return c.json({ error: 'already-issued' }, 409)
 
@@ -241,34 +246,40 @@ app.post('/api/transactions/:id/finalize', async (c) => {
     code = String(ex.verification_code)
   } else {
     const auth = await db`select vendor_name, vendor_address from authorizations
-      where transaction_id = ${txnId} and tenant_id = ${TENANT}`
+      where transaction_id = ${txnId} and tenant_id = ${rowTenant}`
     if (!one(auth)) return c.json({ error: 'not-signed' }, 422)
     code = randomBytes(6).toString('hex')
-    const n = await db`select next_receipt_number(${TENANT}, ${BE_YEAR}, ${`${TENANT}-R-${BE_YEAR}-`}) as number`
+    const prefix = `${prof.code}-R-${prof.beYear}-`
+    const n = await db`select next_receipt_number(${rowTenant}, ${prof.beYear}, ${prefix}) as number`
     number = String(one<Record<string, unknown>>(n)?.number)
     await db`insert into receipts (tenant_id, transaction_id, number, issue_date, verification_code, status)
-      values (${TENANT}, ${txnId}, ${number}, CURRENT_DATE, ${code}, 'issued')`
+      values (${rowTenant}, ${txnId}, ${number}, CURRENT_DATE, ${code}, 'issued')`
     await db`update payment_transactions set status = 'issued' where id = ${txnId}`
-    await withTenant(TENANT, 'client', async () =>
-      audit('receipts', txnId, 'receipt.issued', 'system', { number }, ip))
+    await withTenant(rowTenant, 'client', async () =>
+      audit(rowTenant, 'receipts', txnId, 'receipt.issued', 'system', { number }, ip))
   }
 
   const rows = await db`
-    select t.description, t.gross_amount, t.wht_rate, t.wht_amount, t.net_amount,
+    select t.description, t.note, t.line_items, t.gross_amount, t.wht_rate, t.wht_amount, t.net_amount,
       t.transfer_date, t.slip_reference,
       a.vendor_name, a.vendor_address, a.vendor_masked_id, a.signature_image_path,
       a.signed_at, a.verification_method, a.consent_text_version
     from payment_transactions t
     join authorizations a on a.transaction_id = t.id
-    where t.id = ${txnId} and t.tenant_id = ${TENANT}`
+    where t.id = ${txnId} and t.tenant_id = ${rowTenant}`
   const d = one<{
-    description: string; gross_amount: string; wht_rate: string; wht_amount: string;
+    description: string; note: string; line_items: unknown;
+    gross_amount: string; wht_rate: string; wht_amount: string;
     net_amount: string; transfer_date: string; slip_reference: string;
     vendor_name: string; vendor_address: string; vendor_masked_id: string;
     signature_image_path: string; signed_at: string;
     verification_method: string; consent_text_version: string;
   }>(rows)
   if (!d) return c.json({ error: 'not-signed' }, 422)
+  const rawItems = Array.isArray(d.line_items) ? (d.line_items as { description?: unknown; amount?: unknown }[]) : []
+  const lineItems = rawItems
+    .map((it) => ({ description: String(it.description ?? ''), amount: Number(it.amount) || 0 }))
+    .filter((it) => it.description.trim() || it.amount > 0)
   let sig: Uint8Array | undefined
   try {
     sig = readFileSync(join(process.env.STORAGE_DIR ?? join(process.cwd(), 'storage'), d.signature_image_path))
@@ -284,8 +295,10 @@ app.post('/api/transactions/:id/finalize', async (c) => {
     verificationMethod: d.verification_method,
     consentVersion: d.consent_text_version,
     signedAt: d.signed_at,
-    client: { code: TENANT, display: CLIENT_DISPLAY },
+    client: { code: prof.code, display: prof.display },
     vendor: { name: d.vendor_name, address: d.vendor_address, maskedId: d.vendor_masked_id },
+    lineItems,
+    note: d.note,
     description: d.description,
     grossAmount: Number(d.gross_amount),
     whtRate: Number(d.wht_rate),
@@ -296,13 +309,62 @@ app.post('/api/transactions/:id/finalize', async (c) => {
     slipReference: d.slip_reference,
     signaturePng: sig,
   })
-  const pdfPath = saveBytes('pdfs', `${number}.pdf`, bytes)
+  const pdfPath = saveBytes('pdfs', `${number}.pdf`, bytes, rowTenant)
   await db`update receipts set pdf_path = ${pdfPath}, pdf_sha256 = ${sha256}
-    where transaction_id = ${txnId} and tenant_id = ${TENANT}`
+    where transaction_id = ${txnId} and tenant_id = ${rowTenant}`
   return c.json({ ok: true, number, verificationCode: code.toUpperCase(), pdfSha256: sha256, pdfPath })
 })
 
+// Vendor memory: remembered defaults from the vendor's tenant history.
+// PREPARED, 401-guarded — requires an authenticated client session scoped to the
+// vendor's tenant. Client API auth is not implemented yet (admin sessions live on
+// ADMIN_PORT with a different cookie), so this never exposes tenant data: it
+// returns 401 until the client-auth slice lands. Client recall runs on the mock
+// source meanwhile (see src/lib/vendor-memory-source.ts).
+app.get('/api/vendors/:id/memory', async (c) => {
+  const u = await sessionUser(c.req.header('cookie'))
+  const tenantId =
+    u?.memberships.find((m) => m.role === 'client_user' || m.role === 'client_admin')?.tenantId ?? null
+  if (!tenantId) return c.json({ error: 'unauthorized' }, 401)
+  try {
+    return c.json(await getVendorMemory(tenantId, c.req.param('id')))
+  } catch {
+    return c.json({ error: 'unavailable' }, 503)
+  }
+})
+
+// Tenant settings (per-tenant). PREPARED, session-guarded: requires a client
+// session (401 until client API auth ships). client_admin may write; others read.
+app.get('/api/settings', async (c) => {
+  const u = await requireClient(c)
+  const tenantId = u?.memberships[0]?.tenantId
+  if (!tenantId) return c.json({ error: 'unauthorized' }, 401)
+  try {
+    return c.json(await getTenantSettings(tenantId))
+  } catch {
+    return c.json({ error: 'unavailable' }, 503)
+  }
+})
+
+app.put('/api/settings', async (c) => {
+  const u = await requireClient(c)
+  const tenantId = u?.memberships[0]?.tenantId
+  if (!tenantId) return c.json({ error: 'unauthorized' }, 401)
+  const role = u?.memberships.find((m) => m.tenantId === tenantId)?.role
+  if (role !== 'client_admin') return c.json({ error: 'forbidden' }, 403)
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  if (!body) return c.json({ error: 'invalid-body' }, 400)
+  try {
+    await saveTenantSettings(tenantId, body as never)
+    return c.json({ ok: true })
+  } catch {
+    return c.json({ error: 'invalid-body' }, 400)
+  }
+})
+
 // Public QR verification — status + issue date + masked details only.
+// Tenant-agnostic: verification_code is globally unique (004), no tenant filter
+// so any client's QR verifies on one endpoint without leaking other fields.
 app.get('/api/verify/:code', async (c) => {
   const code = c.req.param('code').toLowerCase()
   const db = sql()
@@ -311,7 +373,7 @@ app.get('/api/verify/:code', async (c) => {
       left(a.vendor_name, 6) || '••' as vendor_masked
     from receipts r
     join authorizations a on a.transaction_id = r.transaction_id
-    where lower(r.verification_code) = ${code} and r.tenant_id = ${TENANT}`
+    where lower(r.verification_code) = ${code}`
   const r = one<Record<string, unknown>>(rows)
   if (!r) return c.json({ error: 'not-found' }, 404)
   return c.json({ number: r.number, status: r.status, issueDate: r.issue_date, vendorMasked: r.vendor_masked })

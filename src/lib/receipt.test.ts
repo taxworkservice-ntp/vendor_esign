@@ -4,11 +4,14 @@ import type { PaymentTransaction } from './types'
 
 const base: PaymentTransaction = {
   id: 'TX-T',
+  tenantId: 'ABC',
   vendor: { id: 'v', name: 'สมชาย ใจดี', address: 'a', maskedId: 'm' },
   paymentType: 'ค่าบริการ',
   description: 'd',
+  lineItems: [{ description: 'd', amount: 100 }],
   grossAmount: 100,
   whtRate: 3,
+  whtMode: 'deduct',
   whtAmount: 3,
   netAmount: 97,
   transferDate: '2026-09-20',

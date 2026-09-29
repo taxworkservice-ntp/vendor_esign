@@ -5,13 +5,27 @@ import { createHash } from 'node:crypto'
 import { readFileSync as readFs } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { normalizeLineItem } from '../../src/lib/line-items'
 
 // Server-side A4 receipt PDF. Embedded Sarabun (SIL OFL) + QR verification.
+//
+// Layout: header → parties → optional note → item table → totals → signature
+// pinned to the bottom of the last page. The item table paginates automatically;
+// on overflow the header row repeats and the page chrome stays consistent.
 //
 // [VERIFY] Thai shaping caveat: pdf-lib embeds glyphs without full OpenType
 // mark positioning, so stacked vowels/tone marks can sit slightly off compared
 // to browser rendering. The accountant must eyeball the first real PDF; the
 // browser print path (ReceiptView + print CSS) remains the trusted fallback.
+
+export interface ReceiptLine {
+  description: string
+  unit?: string
+  quantity?: number
+  unitPrice?: number
+  discount?: number
+  amount: number
+}
 
 export interface ReceiptPdfInput {
   number: string
@@ -23,7 +37,10 @@ export interface ReceiptPdfInput {
   signedAt: string // ISO datetime
   client: { code: string; display: string } // display = name/addr/taxid line [VERIFY]
   vendor: { name: string; address: string; maskedId: string }
-  description: string
+  // Line items are the source; a legacy single line is expressed as one item.
+  lineItems: ReceiptLine[]
+  note?: string
+  description?: string // legacy fallback when lineItems is empty
   grossAmount: number
   whtRate: number
   whtAmount: number
@@ -32,24 +49,42 @@ export interface ReceiptPdfInput {
   transferDate: string
   slipReference: string
   signaturePng?: Uint8Array // vendor signature; representative signs on paper
+  // Vendor-facing receipts omit the verification block. Set true only for the
+  // internal/audit copy (kept for officers, not printed for the vendor).
+  showVerification?: boolean
 }
 
-const INK = rgb(0.1, 0.14, 0.2)
-const MUTED = rgb(0.39, 0.45, 0.55)
+interface Fonts {
+  regular: PDFFont
+  bold: PDFFont
+}
+
+const INK = rgb(0.102, 0.137, 0.196)
+const MUTED = rgb(0.392, 0.451, 0.549)
+const FAINT = rgb(0.62, 0.671, 0.741)
+const ACCENT = rgb(0.059, 0.463, 0.431)
+const PANEL = rgb(0.965, 0.973, 0.98)
+const RULE = rgb(0.886, 0.91, 0.941)
+const ZEBRA = rgb(0.98, 0.984, 0.99)
+
 const A4 = { w: 595.28, h: 841.89 }
 const M = 48
+const GUTTER = 14
+const ITEMS_LIMIT = M + 40 // item rows may run lower (only page number sits below)
+const BOTTOM_LIMIT = M + 92 // keep room here for totals + bottom signature
+const SIG_Y = M + 48
 
 function fontsDir(): string {
   return join(dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'fonts')
 }
 
-async function loadDoc(): Promise<{ doc: PDFDocument; regular: PDFFont; bold: PDFFont }> {
+async function loadDoc(): Promise<{ doc: PDFDocument; fonts: Fonts }> {
   const doc = await PDFDocument.create()
   doc.registerFontkit(fontkit)
   const dir = fontsDir()
   const regular = await doc.embedFont(readFs(join(dir, 'Sarabun-Regular.ttf')))
   const bold = await doc.embedFont(readFs(join(dir, 'Sarabun-Bold.ttf')))
-  return { doc, regular, bold }
+  return { doc, fonts: { regular, bold } }
 }
 
 // Thai has no spaces between words — wrap by characters.
@@ -71,90 +106,188 @@ function wrap(text: string, font: PDFFont, size: number, maxW: number): string[]
 
 const thb = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+function normalizeItems(input: ReceiptPdfInput): ReceiptLine[] {
+  const items = (input.lineItems ?? [])
+    .map((it) => normalizeLineItem(it))
+    .filter((it) => it.description || it.amount > 0)
+  if (items.length > 0) return items
+  return [normalizeLineItem({ description: input.description ?? 'รายการ', amount: Number(input.grossAmount) || 0 })]
+}
+
 export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: Uint8Array; sha256: string }> {
-  const { doc, regular, bold } = await loadDoc()
-  const page: PDFPage = doc.addPage([A4.w, A4.h])
+  const { doc, fonts } = await loadDoc()
+  const { regular, bold } = fonts
   const maxW = A4.w - M * 2
-  let y = A4.h - 56
+  const right = M + maxW
+
+  const pages: PDFPage[] = []
+  let page!: PDFPage
 
   const text = (t: string, x: number, yy: number, size: number, font: PDFFont = regular, color = INK) =>
     page.drawText(t, { x, y: yy, size, font, color })
+  const rightText = (t: string, xEnd: number, yy: number, size: number, font: PDFFont = regular, color = INK) =>
+    text(t, xEnd - font.widthOfTextAtSize(t, size), yy, size, font, color)
+  const rule = (yy: number, color = RULE, thickness = 1) =>
+    page.drawLine({ start: { x: M, y: yy }, end: { x: right, y: yy }, thickness, color })
+  const label = (t: string, x: number, yy: number) => text(t, x, yy, 8.5, bold, FAINT)
+  const accent = () => page.drawRectangle({ x: 0, y: A4.h - 5, width: A4.w, height: 5, color: ACCENT })
 
-  // Title block
-  page.drawText('ใบเสร็จรับเงิน', { x: M, y, size: 24, font: bold, color: INK })
-  y -= 20
-  text(`เลขที่ ${input.number}  ·  วันที่ ${input.issueDate}`, M, y, 11, regular, MUTED)
-  y -= 30
-
-  // Seller / buyer blocks
-  const boxH = 86
-  page.drawRectangle({ x: M, y: y - boxH, width: (maxW - 12) / 2, height: boxH, borderColor: MUTED, borderWidth: 1 })
-  page.drawRectangle({ x: M + (maxW + 12) / 2, y: y - boxH, width: (maxW - 12) / 2, height: boxH, borderColor: MUTED, borderWidth: 1 })
-  const colW = (maxW - 12) / 2 - 16
-  text('ผู้ขาย (ผู้รับเงิน)', M + 8, y - 18, 11, bold)
-  for (const [i, line] of wrap(`${input.vendor.name}  ${input.vendor.address}  เลขบัตร: ${input.vendor.maskedId}`, regular, 10, colW).slice(0, 3).entries())
-    text(line, M + 8, y - 34 - i * 14, 10)
-  const bx = M + (maxW + 12) / 2
-  text('ผู้ซื้อ (ลูกค้า)', bx + 8, y - 18, 11, bold)
-  for (const [i, line] of wrap(input.client.display, regular, 10, colW).slice(0, 3).entries())
-    text(line, bx + 8, y - 34 - i * 14, 10)
-  y -= boxH + 24
-
-  // Amount table
-  const row = (label: string, value: string, isBold = false, sub?: string) => {
-    text(label, M, y, 11, isBold ? bold : regular)
-    const f = isBold ? bold : regular
-    const w = f.widthOfTextAtSize(value, 11)
-    text(value, M + maxW - w, y, 11, f)
-    y -= sub ? 15 : 20
-    if (sub) {
-      text(sub, M, y, 10, regular, MUTED)
-      y -= 20
+  let y = 0
+  const newPage = (continuation: boolean) => {
+    page = doc.addPage([A4.w, A4.h])
+    pages.push(page)
+    accent()
+    y = A4.h - 62
+    if (continuation) {
+      text('ใบเสร็จรับเงิน', M, y, 13, bold, INK)
+      rightText(`เลขที่ ${input.number}`, right, y, 10, regular, MUTED)
+      y -= 14
+      rule(y, RULE, 1)
+      y -= 26
     }
   }
-  for (const line of wrap(input.description, regular, 11, maxW - 150)) {
-    text(line, M, y, 11)
+
+  // ── Header: vendor (left) · document type (right) ──
+  newPage(false)
+  const halfW = maxW / 2 - 16
+  text(input.vendor.name, M, y, 14, bold, INK)
+  const vAddr = wrap(`ที่อยู่: ${input.vendor.address}`, regular, 10, halfW)
+  vAddr.slice(0, 2).forEach((ln, i) => text(ln, M, y - 16 - i * 13, 10, regular, MUTED))
+  text(`เลขบัตรประชาชน: ${input.vendor.maskedId}`, M, y - 16 - Math.min(vAddr.length, 2) * 13, 9.5, regular, MUTED)
+  rightText('ใบเสร็จรับเงิน', right, y, 24, bold, INK)
+  rightText('RECEIPT', right, y - 18, 9, regular, FAINT)
+  // Labels and values left-aligned to shared edges (labels start at the same x).
+  const infoLabelX = right - 180
+  const infoValueX = right - 128
+  text('เลขที่:', infoLabelX, y - 36, 10.5, bold, INK)
+  text(input.number, infoValueX, y - 36, 10.5, bold, INK)
+  text('วันที่:', infoLabelX, y - 52, 10, regular, MUTED)
+  text(input.issueDate, infoValueX, y - 52, 10, regular, MUTED)
+  y -= 66
+  rule(y, INK, 1.5)
+  y -= 30
+
+  // ── Client box (full width) ──
+  const boxH = 90
+  page.drawRectangle({ x: M, y: y - boxH, width: maxW, height: boxH, color: PANEL })
+  const lx = M + 12
+  label('ผู้ซื้อ · ลูกค้า', lx, y - 20)
+  const cName = wrap(input.client.display, regular, 11, maxW - 24)
+  cName.slice(0, 2).forEach((ln, i) => text(ln, lx, y - 38 - i * 14, 11, bold, INK))
+  y -= boxH + 26
+
+  // ── Optional note ──
+  const note = (input.note ?? '').trim()
+  if (note) {
+    for (const line of wrap(note, regular, 10.5, maxW)) {
+      text(line, M, y, 10.5, regular, MUTED)
+      y -= 15
+    }
+    y -= 8
+  }
+
+  // ── Items table ──
+  const numW = 20
+  const descX = M + numW + 8
+  // Right-anchored columns: amount | discount | price | qty(+unit) | description
+  const amtW = 82
+  const discW = 74
+  const priceW = 84
+  const qtyW = 62
+  const amtRight = right
+  const discRight = right - amtW - 6
+  const priceRight = discRight - discW - 6
+  const qtyRight = priceRight - priceW - 8
+  const descW = qtyRight - qtyW - 10 - descX
+
+  const itemsHeader = () => {
+    label('#', M, y)
+    label('รายละเอียด', descX, y)
+    rightText('จำนวน', qtyRight, y, 8.5, bold, FAINT)
+    rightText('ราคา', priceRight, y, 8.5, bold, FAINT)
+    rightText('ส่วนลด', discRight, y, 8.5, bold, FAINT)
+    rightText('จำนวนเงิน', amtRight, y, 8.5, bold, FAINT)
+    y -= 8
+    rule(y, INK, 1)
     y -= 18
   }
-  text(`โอน ${input.transferDate} · อ้างอิง ${input.slipReference}`, M, y, 10, regular, MUTED)
-  y -= 26
-  row('ยอด gross', `฿${thb(input.grossAmount)}`)
-  if (input.whtRate > 0) row(`หักภาษี ณ ที่จ่าย ${input.whtRate}%`, `฿${thb(input.whtAmount)}`)
-  row('ยอดรับสุทธิ', `฿${thb(input.netAmount)}`, true, `(${input.amountWords})`)
-  y -= 6
+  itemsHeader()
 
-  // Legal statements — vendor is presented as the sole issuer (owner decision,
-  // overriding the representative-statement rule in the original spec).
-  for (const line of wrap('ผู้ขายมิได้จดทะเบียนภาษีมูลค่าเพิ่ม — เอกสารนี้เป็นใบเสร็จรับเงินเท่านั้น ไม่ใช่ใบกำกับภาษี', regular, 10, maxW)) {
-    text(line, M, y, 10, regular, MUTED)
-    y -= 15
-  }
+  const items = normalizeItems(input)
+  items.forEach((it, i) => {
+    const lines = wrap(it.description || '—', regular, 10.5, descW)
+    const rowH = Math.max(20, lines.length * 14 + 6)
+    if (y - rowH < ITEMS_LIMIT) {
+      newPage(true)
+      itemsHeader()
+    }
+    if (i % 2 === 1) page.drawRectangle({ x: M - 6, y: y - rowH + 4, width: maxW + 12, height: rowH - 4, color: ZEBRA })
+    text(String(i + 1), M + numW - regular.widthOfTextAtSize(String(i + 1), 10.5), y - 10, 10.5, regular, MUTED)
+    lines.forEach((ln, li) => text(ln, descX, y - 10 - li * 14, 10.5, regular, INK))
+    rightText(`${it.quantity ?? 1} ${it.unit || 'รายการ'}`, qtyRight, y - 10, 10.5, regular, INK)
+    rightText(`฿${thb(it.unitPrice ?? it.amount)}`, priceRight, y - 10, 10.5, regular, INK)
+    rightText(it.discount ? `฿${thb(it.discount)}` : '—', discRight, y - 10, 10.5, regular, MUTED)
+    rightText(`฿${thb(it.amount)}`, amtRight, y - 10, 10.5, bold, INK)
+    y -= rowH
+    page.drawLine({ start: { x: M, y: y + 4 }, end: { x: right, y: y + 4 }, thickness: 0.5, color: RULE })
+  })
   y -= 14
 
-  // Signatures
-  const sigY = y - 64
+  // ── Totals (keep together with signature space) ──
+  const totalsH = 118
+  if (y - totalsH < BOTTOM_LIMIT) newPage(true)
+
+  const totalRow = (labelText: string, value: string, opts?: { strong?: boolean }) => {
+    text(labelText, M, y, opts?.strong ? 11.5 : 11, opts?.strong ? bold : regular, opts?.strong ? INK : MUTED)
+    rightText(value, right, y, opts?.strong ? 11.5 : 11, opts?.strong ? bold : regular, opts?.strong ? INK : MUTED)
+    y -= 22
+  }
+  totalRow('รวมเป็นเงิน', `฿${thb(input.grossAmount)}`)
+  if (input.whtRate > 0) totalRow(`หักภาษี ณ ที่จ่าย ${input.whtRate}%`, `- ฿${thb(input.whtAmount)}`)
+  rule(y + 8, INK, 1.5)
+  y -= 8
+  text('ยอดรับสุทธิ', M, y, 12, bold, INK)
+  rightText(`฿${thb(input.netAmount)}`, right, y - 3, 18, bold, INK)
+  y -= 22
+  text(`(${input.amountWords})`, M, y, 9.5, regular, MUTED)
+
+  // ── Signature, centered above the bottom margin ──
+  const sigY = input.showVerification ? SIG_Y + 60 : SIG_Y
+  const sigW = 220
+  const sigX = (A4.w - sigW) / 2
+  const centerText = (t: string, yy: number, size: number, font: PDFFont, color: typeof INK) =>
+    text(t, A4.w / 2 - font.widthOfTextAtSize(t, size) / 2, yy, size, font, color)
   if (input.signaturePng) {
     try {
       const img = await doc.embedPng(input.signaturePng)
-      const scale = Math.min(150 / img.width, 52 / img.height)
-      page.drawImage(img, { x: M, y: sigY, width: img.width * scale, height: img.height * scale })
+      const scale = Math.min(150 / img.width, 54 / img.height)
+      const w = img.width * scale
+      page.drawImage(img, { x: A4.w / 2 - w / 2, y: sigY + 6, width: w, height: img.height * scale })
     } catch {
       /* corrupt upload must not break issuance — reviewer checks the file */
     }
   }
-  text('ลายเซ็นผู้ขาย', M, sigY - 14, 10)
-  text(input.vendor.name, M, sigY - 28, 10, regular, MUTED)
-  y = sigY - 52
+  page.drawLine({ start: { x: sigX, y: sigY }, end: { x: sigX + sigW, y: sigY }, thickness: 1, color: FAINT })
+  centerText('ผู้มีอำนาจลงนาม', sigY - 14, 9.5, bold, INK)
+  centerText(input.vendor.name, sigY - 28, 9, regular, MUTED)
 
-  // Verification footer + QR
-  page.drawLine({ start: { x: M, y }, end: { x: M + maxW, y }, thickness: 1, color: MUTED })
-  y -= 18
-  const qrPng = await QRCode.toBuffer(input.verifyUrl, { width: 160, margin: 1 })
-  const qr = await doc.embedPng(qrPng)
-  page.drawImage(qr, { x: M + maxW - 84, y: y - 84, width: 84, height: 84 })
-  text(`ยืนยัน: ${input.signedAt} · วิธี: ${input.verificationMethod} · consent ${input.consentVersion}`, M, y, 9, regular, MUTED)
-  text(`รหัสตรวจสอบ: ${input.verificationCode}`, M, y - 15, 10, bold)
-  text(input.verifyUrl, M, y - 30, 9, regular, MUTED)
+  // ── Verification footer (audit copy only) ──
+  if (input.showVerification) {
+    const qrPng = await QRCode.toBuffer(input.verifyUrl, { width: 200, margin: 0, color: { dark: '#1a2332', light: '#ffffff' } })
+    const qr = await doc.embedPng(qrPng)
+    const qrSize = 64
+    page.drawImage(qr, { x: right - qrSize, y: M - 6, width: qrSize, height: qrSize })
+    text(`รหัสตรวจสอบ  ${input.verificationCode}`, M, M + 30, 9.5, bold, INK)
+    text(input.verifyUrl, M, M + 14, 8.5, regular, MUTED)
+  }
+
+  // ── Page numbers ──
+  if (pages.length > 1) {
+    pages.forEach((p, i) => {
+      const t = `หน้า ${i + 1} / ${pages.length}`
+      p.drawText(t, { x: A4.w / 2 - regular.widthOfTextAtSize(t, 8.5) / 2, y: M - 30, size: 8.5, font: regular, color: FAINT })
+    })
+  }
 
   const bytes = await doc.save()
   const sha256 = createHash('sha256').update(bytes).digest('hex')

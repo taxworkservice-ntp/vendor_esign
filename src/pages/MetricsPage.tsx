@@ -4,20 +4,20 @@ import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
 
 export function MetricsPage() {
-  const { data } = useTransactions('', 'all')
+  const { data } = useTransactions()
   const m = computeMetrics(data ?? [])
   const cards: [string, string][] = [
     ['สร้างรายการ', String(m.created)],
-    ['เปิดลิงก์', String(m.linksOpened)],
-    ['เซ็นแล้ว', String(m.signed)],
+    ['ผู้ขายเปิดลิงก์', String(m.linksOpened)],
+    ['ลงนามแล้ว', String(m.signed)],
     ['หมดอายุ', String(m.expired)],
-    ['มัธยฐาน ชม. ส่งลิงก์→เซ็น', m.medianHoursToSign === null ? '—' : m.medianHoursToSign.toFixed(1)],
+    ['มัธยฐานเวลาส่งลิงก์→ลงนาม (ชม.)', m.medianHoursToSign === null ? '—' : m.medianHoursToSign.toFixed(1)],
   ]
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Pilot metrics"
-        sub="สำหรับเจ้าของ — คำนวณจากข้อมูล mock ในเครื่อง (backend จริงจะ aggregate จาก audit_events)"
+        title="ภาพรวม"
+        sub="สรุปสำหรับผู้ประกอบการ — จำนวนและระยะเวลาของรายการในระบบ"
       />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {cards.map(([label, v]) => (

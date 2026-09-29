@@ -25,8 +25,10 @@ export function sql() {
 }
 
 // Per-request tenant isolation for RLS: call at the start of every server txn.
-export async function withTenant<T>(tenantId: string, role: 'client' | 'bookkeeper', fn: () => Promise<T>): Promise<T> {
+export type AppRole = 'client' | 'client_user' | 'client_admin' | 'bookkeeper' | 'super_admin'
+export async function withTenant<T>(tenantId: string, role: AppRole, fn: () => Promise<T>, userId?: string): Promise<T> {
   const db = sql()
   await db`select set_config('app.tenant_id', ${tenantId}, true), set_config('app.role', ${role}, true)`
+  if (userId) await db`select set_config('app.user_id', ${userId}, true)`
   return fn()
 }

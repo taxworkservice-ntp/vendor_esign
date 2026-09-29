@@ -30,7 +30,7 @@ const DECISION_TH: Record<Decision, string> = {
 }
 
 export function ReviewList() {
-  const { data } = useTransactions('', 'all')
+  const { data } = useTransactions()
   const [reviews, setReviews] = useState(readReviews)
   const [notes, setNotes] = useState<Record<string, string>>({})
 
@@ -52,7 +52,7 @@ export function ReviewList() {
     <div className="space-y-5">
       <PageHeader
         title="ตรวจสอบโดยนักบัญชี"
-        sub={`สลิปอยู่ข้างทุกรายการ · เช็กด้วยตา · เหลือรอตรวจ ${pending} รายการ (mock — บันทึกในเครื่อง)`}
+        sub={`แนบสลิปในทุกรายการ · ตรวจสอบความถูกต้องด้วยสายตา · คงเหลือรอตรวจ ${pending} รายการ`}
       />
 
       <div className="grid gap-3">
@@ -63,7 +63,7 @@ export function ReviewList() {
               <CardBody className="grid gap-4 lg:grid-cols-[1fr_300px]">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-[13px] text-ink-500">{mockReceiptNumber(t.id)}</span>
+                    <span className="font-mono text-[13px] text-ink-500">{t.receiptNumber ?? mockReceiptNumber(t.id, t.tenantId)}</span>
                     <StatusBadge status={t.status} />
                     {(getAuth(t.id)?.corrections?.length ?? 0) > 0 && (
                       <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">

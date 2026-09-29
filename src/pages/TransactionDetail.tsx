@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, Copy, Download, Link2, ShieldAlert } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Copy, ExternalLink, Link2, ShieldAlert } from 'lucide-react'
 import { useTransaction, useTransactionActions } from '../hooks/useTransactions'
 import { getAuth } from '../hooks/useVendor'
 import { Card, CardBody } from '../components/ui/card'
@@ -16,7 +16,7 @@ export function TransactionDetail() {
   const acts = useTransactionActions()
   const [voidReason, setVoidReason] = useState('')
   const [showVoid, setShowVoid] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [copiedKind, setCopiedKind] = useState<'' | 'link' | 'message'>('')
 
   if (!t) {
     return (
@@ -29,15 +29,25 @@ export function TransactionDetail() {
 
   const link = t.inviteToken ? `${location.origin}/v/${t.inviteToken}` : ''
   const corrections = getAuth(t.id)?.corrections ?? []
-  const copy = async () => {
+  const inviteMessage = `สวัสดีครับ/ค่ะ คุณ${t.vendor.name}
+
+แจ้งยอดโอนสำหรับรายการ ${t.id} (${fmtDateTH(t.transferDate)})
+ยอดรับสุทธิ ฿${fmtTHB(t.netAmount)}
+
+กรุณาเปิดลิงก์เพื่อเซ็นรับเงินและมอบอำนาจออกใบเสร็จ (ลิงก์ใช้ได้ครั้งเดียว):
+${link}`
+
+  const copyText = async (text: string, kind: 'link' | 'message') => {
     try {
-      await navigator.clipboard.writeText(link)
+      await navigator.clipboard.writeText(text)
     } catch {
       /* clipboard unavailable in some browsers */
     }
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1600)
+    setCopiedKind(kind)
+    setTimeout(() => setCopiedKind(''), 1600)
   }
+
+  const canIssue = t.status === 'signed' || t.status === 'issued'
 
   return (
     <div className="space-y-5">
@@ -55,7 +65,7 @@ export function TransactionDetail() {
               <p className="font-mono text-[13px] text-ink-500">{t.id}</p>
               <h1 className="mt-1 text-xl font-bold">{t.description}</h1>
               <p className="mt-1 text-sm text-ink-500">
-                {t.vendor.name} · {t.vendor.address} · ID {t.vendor.maskedId}
+                {t.vendor.name} · {t.vendor.address} · ID {t.vendor.taxId ?? t.vendor.maskedId}
               </p>
               {corrections.length > 0 && (
                 <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm">
@@ -68,9 +78,9 @@ export function TransactionDetail() {
                 </div>
               )}
               <dl className="mt-5 grid grid-cols-2 gap-3 text-[15px] sm:grid-cols-4">
-                <div className="rounded-xl bg-slate-50 p-3"><dt className="text-xs text-ink-500">gross</dt><dd className="font-bold tabular-nums">฿{fmtTHB(t.grossAmount)}</dd></div>
-                <div className="rounded-xl bg-slate-50 p-3"><dt className="text-xs text-ink-500">WHT {t.whtRate}%</dt><dd className="font-bold tabular-nums">฿{fmtTHB(t.whtAmount)}</dd></div>
-                <div className="rounded-xl bg-ink-900 p-3 text-white"><dt className="text-xs text-white/70">สุทธิ</dt><dd className="font-bold tabular-nums">฿{fmtTHB(t.netAmount)}</dd></div>
+                <div className="rounded-xl bg-slate-50 p-3"><dt className="text-xs text-ink-500">ยอดรวม (ฐานภาษี)</dt><dd className="font-bold tabular-nums">฿{fmtTHB(t.grossAmount)}</dd></div>
+                <div className="rounded-xl bg-slate-50 p-3"><dt className="text-xs text-ink-500">หักภาษี ณ ที่จ่าย {t.whtRate}%</dt><dd className="font-bold tabular-nums">฿{fmtTHB(t.whtAmount)}</dd></div>
+                <div className="rounded-xl bg-ink-900 p-3 text-white"><dt className="text-xs text-white/70">ยอดรับสุทธิ</dt><dd className="font-bold tabular-nums">฿{fmtTHB(t.netAmount)}</dd></div>
                 <div className="rounded-xl bg-slate-50 p-3"><dt className="text-xs text-ink-500">วันที่โอน</dt><dd className="font-bold">{fmtDateTH(t.transferDate)}</dd></div>
               </dl>
               <div className="mt-4 flex flex-wrap gap-2 text-[13px]">
@@ -106,24 +116,34 @@ export function TransactionDetail() {
         <div className="space-y-4">
           <Card>
             <CardBody className="space-y-3">
-              <h2 className="flex items-center gap-2 font-bold"><Link2 size={16} /> ลิงก์ผู้ขาย (LINE)</h2>
+              <h2 className="flex items-center gap-2 font-bold"><Link2 size={16} /> ส่งลิงก์ให้ผู้ขาย</h2>
               {link ? (
                 <>
                   <p className="truncate rounded-xl bg-slate-50 p-3 font-mono text-[13px]">{link}</p>
                   <div className="grid grid-cols-2 gap-2">
-                    <Button variant="secondary" onClick={copy}><Copy size={15} /> {copied ? 'คัดลอกแล้ว ✓' : 'คัดลอกลิงก์'}</Button>
-                    <Button variant="ghost" onClick={() => { acts.revoke(t.id); }}>เพิกถอน</Button>
+                    <Button onClick={() => copyText(inviteMessage, 'message')} title="คัดลอกข้อความพร้อมลิงก์ ไปวางในแชท">
+                      <Copy size={15} /> {copiedKind === 'message' ? 'คัดลอกข้อความแล้ว ✓' : 'คัดลอกข้อความ'}
+                    </Button>
+                    <Button variant="secondary" onClick={() => copyText(link, 'link')}>
+                      <Copy size={15} /> {copiedKind === 'link' ? 'คัดลอกลิงก์แล้ว ✓' : 'คัดลอกลิงก์'}
+                    </Button>
                   </div>
-                  <p className="text-xs text-ink-500">ส่งลิงก์นี้ในแชท LINE ของคุณเอง — ระบบไม่ส่งข้อความ · ลิงก์ใช้ครั้งเดียว มีวันหมดอายุ เพิกถอนได้</p>
-                  <p className={`text-xs font-semibold ${t.taxIdLast4 ? 'text-emerald-700' : 'text-amber-700'}`}>
-                    {t.taxIdLast4 ? `🔒 ล็อกด้วย Tax ID (ลงท้าย ${t.taxIdLast4}) — คนผิดเปิดไม่ได้` : '⚠ รายการเก่า — ไม่มี Tax ID gate'}
+                  <p className="rounded-xl bg-slate-50 p-3 text-xs text-ink-500">
+                    ระบบ<b>ไม่ส่งข้อความเอง</b> — คัดลอกข้อความด้านบนแล้ว<b>วางในแชท (LINE)</b> ของคุณเอง ·
+                    ลิงก์ใช้ได้ครั้งเดียว มีวันหมดอายุ และเพิกถอนได้
                   </p>
+                  <p className={`text-xs font-semibold ${t.taxIdLast4 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                    {t.taxIdLast4 ? `🔒 ล็อกด้วยเลขบัตรประชาชน (ลงท้าย ${t.taxIdLast4}) — ผู้ที่ไม่มีเลขบัตรเปิดไม่ได้` : '⚠ รายการก่อนหน้า — ไม่ได้ตั้งการล็อกด้วยเลขบัตรประชาชน'}
+                  </p>
+                  <Button variant="ghost" className="w-full" onClick={() => { acts.revoke(t.id) }}>
+                    เพิกถอนลิงก์
+                  </Button>
                 </>
               ) : (
-                <p className="text-sm text-ink-500">ลิงก์ถูกเพิกถอน / ใช้แล้ว — กด “ส่งลิงก์” เพื่อออกใหม่อีกครั้ง (backend จริงใน Phase 1)</p>
+                <p className="text-sm text-ink-500">ยังไม่มีลิงก์ — เลือก “สร้างลิงก์ให้ผู้ขาย” แล้วคัดลอกข้อความไปวางในแชท</p>
               )}
               {t.status === 'draft' && (
-                <Button onClick={() => { acts.send(t.id); }}>ส่งลิงก์ให้ผู้ขาย</Button>
+                <Button className="w-full" onClick={() => { acts.send(t.id) }}>สร้างลิงก์ให้ผู้ขาย</Button>
               )}
             </CardBody>
           </Card>
@@ -132,10 +152,16 @@ export function TransactionDetail() {
             <CardBody className="space-y-3">
               <h2 className="font-bold">เอกสาร</h2>
               <p className="text-sm text-ink-500">สลิป {t.slipReference || '— ยังไม่แนบ'} · {t.slipName || '—'}</p>
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant="secondary" disabled title="PDF ออกเมื่อผู้ขายเซ็น (Phase 3)"><Download size={15} /> PDF (Phase 3)</Button>
-                <Button variant="secondary" onClick={() => window.print()}><Download size={15} /> พิมพ์</Button>
-              </div>
+              <Link to={canIssue ? `/receipts/${t.id}` : '#'} className="block">
+                <Button className="w-full" disabled={!canIssue} title={canIssue ? 'ดูตัวอย่าง / ดาวน์โหลด PDF' : 'PDF ออกเมื่อผู้ขายเซ็นแล้ว'}>
+                  <ExternalLink size={15} /> {canIssue ? 'เปิดใบเสร็จ · ดาวน์โหลด PDF' : 'PDF ออกหลังผู้ขายเซ็น'}
+                </Button>
+              </Link>
+              {!canIssue && (
+                <p className="text-xs text-ink-400">
+                  ใบเสร็จจะออกเลข + ดาวน์โหลดได้หลังผู้ขายเซ็น
+                </p>
+              )}
               {!showVoid ? (
                 <Button variant="ghost" onClick={() => setShowVoid(true)}>void เอกสาร…</Button>
               ) : (

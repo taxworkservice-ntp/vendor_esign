@@ -19,21 +19,67 @@ body {
   border-radius: 6px;
 }
 
+/* Export normalization for "Download PDF": html2canvas snapshots the sheet, so
+   strip the screen chrome (border/shadow/radius) and fix it to a clean A4 page
+   with the same 18mm inset. Applied only during capture. */
+.receipt-sheet.pdf-export {
+  width: 210mm !important;
+  min-height: 297mm !important;
+  padding: 18mm !important;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+/* A4 receipt printing.
+   Margins come from the @page box; the sheet fills the printable area and pins
+   the signature to the bottom via flex + mt-auto. We never size the sheet to a
+   full 297mm and never set break-inside:avoid on it — either pushes the receipt
+   onto a second page. Normal receipts print on one page; long item lists
+   continue to a second page without clipping. */
+@page {
+  size: A4;
+  margin: 12mm;
+}
+
 @media print {
   header,
   footer,
   .no-print {
     display: none !important;
   }
+  html,
   body {
+    margin: 0 !important;
+    padding: 0 !important;
     background: #fff;
   }
   main {
     max-width: none !important;
     padding: 0 !important;
   }
+  /* Neutralize the on-screen container spacing (space-y-4 adds a margin to
+     .print-area because the hidden toolbar is display:none, not [hidden]). */
+  .receipt-doc {
+    margin: 0 !important;
+    max-width: none !important;
+  }
   .print-area {
+    margin: 0 !important;
     box-shadow: none !important;
     border: none !important;
+  }
+  .receipt-sheet {
+    width: 100% !important;
+    min-height: 271mm !important; /* printable height (297 - 2*12mm) minus tolerance */
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    overflow: visible;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }

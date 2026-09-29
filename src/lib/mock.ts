@@ -1,19 +1,40 @@
-import type { PaymentTransaction, Vendor } from './types'
+import type { LineItem, PaymentTransaction, Vendor } from './types'
 import { calcWht } from './config'
+import { itemsSummary, itemsTotal, normalizeLineItem } from './line-items'
 
+// ── Tenant ABC (pilot) ──
 export const VENDORS: Vendor[] = [
-  { id: 'v-somchai', name: 'สมชาย ใจดี', address: '12 ม.4 ต.ในเมือง อ.เมือง จ.ขอนแก่น 40000', maskedId: 'x-xxxx-xxxxx-12-4' },
-  { id: 'v-malee', name: 'มาลี มีสุข', address: '88/9 ถ.มิตรภาพ ต.ในเมือง อ.เมือง จ.ขอนแก่น 40000', maskedId: 'x-xxxx-xxxxx-87-1' },
-  { id: 'v-somsak', name: 'สมศักดิ์ ขยัน', address: '45 ซ.ร่วมใจ ต.บ้านเป็ด อ.เมือง จ.ขอนแก่น 40002', maskedId: 'x-xxxx-xxxxx-33-9' },
+  { id: 'v-somchai', name: 'สมชาย การช่าง', address: '12 ม.4 ต.ในเมือง อ.เมือง จ.ขอนแก่น 40000', maskedId: 'x-xxxx-xxxxx-12-3', taxId: '1234567890123' },
+  { id: 'v-malee', name: 'มาลี ค้าส่ง', address: '88/9 ถ.มิตรภาพ ต.ในเมือง อ.เมือง จ.ขอนแก่น 40000', maskedId: 'x-xxxx-xxxxx-23-4', taxId: '2345678901234' },
+  { id: 'v-somsak', name: 'สมศักดิ์ ขนส่ง', address: '45 ซ.ร่วมใจ ต.บ้านเป็ด อ.เมือง จ.ขอนแก่น 40002', maskedId: 'x-xxxx-xxxxx-34-5', taxId: '3456789012345' },
 ]
 
+// ── Tenant DEMO (test client) ──
+export const DEMO_VENDORS: Vendor[] = [
+  { id: 'v-demo-1', name: 'บริษัท ซัพพลาย พลัส จำกัด', address: '99/1 ถ.สุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพฯ 10110', maskedId: 'x-xxxx-xxxxx-45-8', taxId: '0105566000011' },
+  { id: 'v-demo-2', name: 'ร้าน วัสดุก่อสร้าง รุ่งเรือง', address: '22 ม.2 ต.บางพลี อ.บางพลี จ.สมุทรปราการ 10540', maskedId: 'x-xxxx-xxxxx-77-2', taxId: '0105566000022' },
+  { id: 'v-demo-3', name: 'สมหญิง บริการสะอาด', address: '7/8 ซ.ลาดพร้าว 71 เขตบางกะปิ กรุงเทพฯ 10240', maskedId: 'x-xxxx-xxxxx-19-5', taxId: '0105566000033' },
+]
+
+export function vendorsForTenant(tenantId: string): Vendor[] {
+  return tenantId === 'DEMO' ? DEMO_VENDORS : VENDORS
+}
+
+const item = (description: string, amount: number, extra?: Partial<LineItem>): LineItem =>
+  normalizeLineItem({ description, amount, ...extra })
+
 function txn(
-  t: Partial<PaymentTransaction> & Pick<PaymentTransaction, 'id' | 'vendor' | 'description' | 'grossAmount' | 'whtRate' | 'transferDate' | 'slipReference' | 'status'>,
+  t: Partial<PaymentTransaction> &
+    Pick<PaymentTransaction, 'id' | 'tenantId' | 'vendor' | 'lineItems' | 'whtRate' | 'transferDate' | 'slipReference' | 'status'>,
 ): PaymentTransaction {
-  const { wht, net } = calcWht(t.grossAmount, t.whtRate)
-  const createdAt = '2026-09-20T09:00:00+07:00'
+  const whtMode = t.whtMode ?? 'deduct'
+  const entered = itemsTotal(t.lineItems)
+  const { gross, wht, net } = calcWht(entered, t.whtRate, whtMode)
+  const createdAt = t.createdAt ?? '2026-09-20T09:00:00+07:00'
   return {
     paymentType: 'ค่าบริการ',
+    description: itemsSummary(t.lineItems, t.note),
+    note: '',
     slipName: 'slip.png',
     createdAt,
     timeline: [
@@ -25,21 +46,59 @@ function txn(
     checks: [
       { key: 'slip', label: 'สลิปตรงยอดสุทธิ', state: 'pass' },
       { key: 'name', label: 'ชื่อผู้รับตรงกับผู้ขาย', state: 'pass' },
-      { key: 'wht', label: 'WHT ตรงตาม config', state: t.whtRate === 3 ? 'pass' : 'warn' },
+      { key: 'wht', label: 'WHT ตรงตามค่าที่ตั้งไว้', state: t.whtRate === 3 ? 'pass' : 'warn' },
     ],
     ...t,
+    whtMode,
+    grossAmount: gross,
     whtAmount: wht,
     netAmount: net,
   }
 }
 
 export const SEED_TXNS: PaymentTransaction[] = [
-  txn({ id: 'TX-1042', vendor: VENDORS[0], description: 'ค่าจ้างทำความสะอาดสำนักงาน ก.ย.', grossAmount: 3000, whtRate: 3, transferDate: '2026-09-22', slipReference: 'TRF-881201', status: 'sent', inviteToken: 'tok_sent_demo' }),
-  txn({ id: 'TX-1041', vendor: VENDORS[1], description: 'ค่าซ่อมแอร์ 2 เครื่อง', grossAmount: 8500, whtRate: 3, transferDate: '2026-09-18', slipReference: 'TRF-877310', status: 'issued' }),
-  txn({ id: 'TX-1040', vendor: VENDORS[2], description: 'ค่าเช่าที่จอดรถรายเดือน', grossAmount: 5000, whtRate: 5, transferDate: '2026-09-10', slipReference: 'TRF-870022', status: 'void', voidReason: 'ยอด gross ผิด — ออกเลขใหม่แทน' }),
+  // ── ABC ──
+  txn({
+    id: 'TX-1042', tenantId: 'ABC', vendor: VENDORS[0], status: 'sent', inviteToken: 'tok_sent_demo',
+    whtRate: 3, transferDate: '2026-09-22', slipReference: 'TRF-881201',
+    lineItems: [item('ค่าจ้างทำความสะอาดสำนักงาน ก.ย.', 3000, { unit: 'งาน', quantity: 1, unitPrice: 3000 })],
+  }),
+  txn({
+    id: 'TX-1041', tenantId: 'ABC', vendor: VENDORS[1], status: 'issued', receiptNumber: 'ABC-R-2569-001',
+    note: 'งานซ่อมบำรุงเครื่องปรับอากาศ', whtRate: 3, transferDate: '2026-09-18', slipReference: 'TRF-877310',
+    lineItems: [
+      item('ค่าซ่อมแอร์ (ค่าบริการ)', 5000, { unit: 'เครื่อง', quantity: 2, unitPrice: 2500 }),
+      item('ค่าอะไหล่ R32', 3500, { unit: 'ชุด', quantity: 1, unitPrice: 3500 }),
+    ],
+  }),
+  txn({
+    id: 'TX-1040', tenantId: 'ABC', vendor: VENDORS[2], status: 'void', receiptNumber: 'ABC-R-2569-002',
+    voidReason: 'ยอด gross ผิด — ออกเลขใหม่แทน', whtRate: 5, transferDate: '2026-09-10', slipReference: 'TRF-870022',
+    lineItems: [item('ค่าเช่าที่จอดรถรายเดือน', 5000, { unit: 'เดือน', quantity: 1, unitPrice: 5000 })],
+  }),
+
+  // ── DEMO (test client) ──
+  txn({
+    id: 'DM-2003', tenantId: 'DEMO', vendor: DEMO_VENDORS[0], status: 'sent', inviteToken: 'tok_demo_sent',
+    paymentType: 'ค่าขนส่ง', note: 'จัดส่งวัสดุสำนักงาน', whtRate: 1, transferDate: '2026-09-24', slipReference: 'TRF-DM-1001',
+    lineItems: [item('ค่าจัดส่งวัสดุสำนักงาน', 1200, { unit: 'เที่ยว', quantity: 1, unitPrice: 1500, discount: 300 })],
+  }),
+  txn({
+    id: 'DM-2002', tenantId: 'DEMO', vendor: DEMO_VENDORS[1], status: 'issued', receiptNumber: 'DEMO-R-2569-001',
+    paymentType: 'ค่าบริการ', note: 'งานปรับปรุงสำนักงาน', whtRate: 3, transferDate: '2026-09-19', slipReference: 'TRF-DM-1000',
+    lineItems: [
+      item('ค่าซ่อมแซมผนังและทาสี', 18000, { unit: 'งาน', quantity: 1, unitPrice: 18000 }),
+      item('ค่าอะไหล่และวัสดุ', 4200, { unit: 'ชุด', quantity: 1, unitPrice: 4200 }),
+    ],
+  }),
+  txn({
+    id: 'DM-2001', tenantId: 'DEMO', vendor: DEMO_VENDORS[2], status: 'void', receiptNumber: 'DEMO-R-2569-002',
+    voidReason: 'บันทึกผิดบริษัท', paymentType: 'ค่าบริการ', whtRate: 3, transferDate: '2026-09-05', slipReference: 'TRF-DM-0999',
+    lineItems: [item('ค่าทำความสะอาดออฟฟิศ', 4000, { unit: 'งาน', quantity: 1, unitPrice: 4000 })],
+  }),
 ]
 
-const KEY = 'taxwork-pilot-txns-v1'
+const KEY = 'taxwork-pilot-txns-v5'
 
 export function loadTxns(): PaymentTransaction[] {
   try {

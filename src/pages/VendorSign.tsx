@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { CheckCircle2, Eraser, Lock, ReceiptText, ShieldAlert } from 'lucide-react'
 import { GATE_MAX_TRIES, gateRemaining, isGateUnlocked, tryGateUnlock, useVendorActions, useVendorTxn } from '../hooks/useVendor'
 import { maskTaxId } from '../lib/taxid'
-import { PILOT_CONFIG } from '../lib/config'
+import { loadSettings } from '../lib/settings'
 import { fmtTHB, fmtDateTH } from '../lib/format'
 import { amountToThaiWords } from '../lib/thai-words'
 import { Card, CardBody } from '../components/ui/card'
@@ -84,7 +84,7 @@ export function VendorSign() {
     return (
       <StateCard
         title="ลิงก์ไม่ถูกต้องหรือหมดอายุ"
-        body={`ลิงก์นี้อาจหมดอายุ (เกิน ${PILOT_CONFIG.linkExpiryDays} วัน) ถูกเพิกถอน หรือถูกใช้ไปแล้ว กรุณาติดต่อผู้จ่ายเงินเพื่อขอลิงก์ใหม่`}
+        body={`ลิงก์นี้อาจหมดอายุ (เกิน ${loadSettings().linkExpiryDays} วัน) ถูกเพิกถอน หรือถูกใช้ไปแล้ว กรุณาติดต่อผู้จ่ายเงินเพื่อขอลิงก์ใหม่`}
       />
     )
   if (t.status === 'cancelled')
@@ -196,7 +196,7 @@ export function VendorSign() {
         {!t.taxIdHash ? (
           <p className="flex gap-2 rounded-xl bg-amber-50 p-3 text-[13px] font-medium text-amber-800">
             <ShieldAlert size={16} className="mt-0.5 shrink-0" />
-            รายการเก่า: ลิงก์นี้ไม่มีการล็อกด้วยเลขบัตร — โปรดตรวจสอบว่าเป็นท่านก่อนเซ็น
+            รายการก่อนหน้า: ลิงก์นี้ไม่ได้ตั้งการล็อกด้วยเลขบัตรประชาชน — โปรดตรวจสอบให้แน่ใจก่อนลงนาม
           </p>
         ) : (
           <p className="flex gap-2 rounded-xl bg-emerald-50 p-3 text-[13px] font-medium text-emerald-800">
@@ -209,8 +209,28 @@ export function VendorSign() {
             <p className="flex items-center gap-1.5 text-[13px] font-semibold text-ink-500">
               <Lock size={13} /> ข้อมูลจากผู้จ่าย — ล็อกไว้ แก้ไขไม่ได้
             </p>
-            <p className="mt-2 text-[17px] font-bold">{t.description}</p>
-            <div className="mt-3 space-y-1 text-[15px]">
+            {t.note && <p className="mt-2 text-[15px] font-semibold text-ink-500">{t.note}</p>}
+            <div className="mt-2 divide-y divide-slate-100">
+              {(t.lineItems?.some((it) => it.description || it.amount)
+                ? t.lineItems
+                : [{ description: t.description, amount: t.grossAmount }]
+              ).map((it, i) => {
+                const qty = it.quantity ?? 1
+                const unitPrice = it.unitPrice ?? it.amount
+                const detail = `${qty}${it.unit ? ` ${it.unit}` : ''} × ฿${fmtTHB(unitPrice)}${it.discount ? ` − ส่วนลด ฿${fmtTHB(it.discount)}` : ''}`
+                return (
+                  <div key={i} className="flex items-baseline gap-3 py-1.5 text-[15px]">
+                    <span className="w-5 shrink-0 text-right font-mono text-[12px] text-ink-400">{i + 1}</span>
+                    <span className="flex-1">
+                      {it.description}
+                      <span className="mt-0.5 block text-[12px] text-ink-400">{detail}</span>
+                    </span>
+                    <span className="shrink-0 tabular-nums">฿{fmtTHB(it.amount)}</span>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="mt-3 space-y-1 border-t border-slate-100 pt-3 text-[15px]">
               <p className="flex justify-between"><span className="text-ink-500">ยอดรับสุทธิ</span><span className="font-bold tabular-nums">฿{fmtTHB(t.netAmount)}</span></p>
               <p className="text-[13px] text-ink-500">({amountToThaiWords(t.netAmount)})</p>
               <p className="flex justify-between"><span className="text-ink-500">หัก WHT {t.whtRate}%</span><span className="tabular-nums">฿{fmtTHB(t.whtAmount)}</span></p>
@@ -275,22 +295,22 @@ export function VendorSign() {
             <h2 className="font-bold">3 · ยืนยันและส่ง</h2>
             <p className="flex gap-2 rounded-xl bg-amber-50 p-3 text-[13px] font-medium text-amber-800">
               <ShieldAlert size={16} className="mt-0.5 shrink-0" />
-              โหมดทดสอบ: การยืนยันผ่าน LINE Login จะเปิดใช้งานภายหลัง ขณะนี้บันทึกแบบยืนยันพื้นฐาน
+              การยืนยันตัวตนผ่าน LINE จะเปิดใช้งานภายหลัง — ขณะนี้ยืนยันด้วยการให้ความยินยอมและลายเซ็น
             </p>
             <label className="flex gap-3 rounded-xl bg-slate-50 p-4 text-[15px] leading-relaxed active:bg-slate-100">
               <input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-slate-900" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
               <span>
-                ข้าพเจ้าได้รับเงินจำนวนดังกล่าวแล้ว และมอบอำนาจให้ <b>{PILOT_CONFIG.clientCode}</b> ออกใบเสร็จรับเงิน
-               ในนามของข้าพเจ้า <b>เฉพาะธุรกรรมนี้เท่านั้น</b> (consent v1)
+                ข้าพเจ้าได้รับเงินจำนวนดังกล่าวแล้ว และมอบอำนาจให้ <b>{loadSettings(t.tenantId).clientCode}</b> ออกใบเสร็จรับเงิน
+               ในนามของข้าพเจ้า <b>เฉพาะธุรกรรมนี้เท่านั้น</b>
               </span>
             </label>
-            {tried && !consent && <FieldError msg="กรุณาติ๊กยืนยันก่อนส่ง" />}
+            {tried && !consent && <FieldError msg="กรุณายืนยันความยินยอมก่อนส่ง" />}
             <Button className="w-full py-3.5 text-base" onClick={submit}>
               เซ็นรับเงินและส่ง
             </Button>
             <p className="text-xs leading-relaxed text-ink-400">
-              ข้อมูลที่เก็บ: ชื่อ ที่อยู่ เลขบัตร (เข้ารหัส) ลายเซ็น และเวลายืนยัน — ใช้เพื่อออกใบเสร็จธุรกรรมนี้เท่านั้น
-              ผู้เห็นข้อมูล: ลูกค้าผู้จ่ายและนักบัญชี ระยะเวลาเก็บ: รอที่ปรึกษายืนยัน [VERIFY]
+              ข้อมูลที่เก็บ: ชื่อ ที่อยู่ เลขบัตรประชาชน (เข้ารหัส) ลายเซ็น และเวลายืนยัน — ใช้เพื่อออกใบเสร็จสำหรับธุรกรรมนี้เท่านั้น
+              ผู้ที่เข้าถึงข้อมูล: ลูกค้าผู้จ่ายและนักบัญชี · ระยะเวลาจัดเก็บ: ตามนโยบายของลูกค้าผู้จ่าย
             </p>
           </CardBody>
         </Card>

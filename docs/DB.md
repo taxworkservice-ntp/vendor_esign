@@ -15,7 +15,7 @@ Then: `cp .env.example .env.local` and paste the string as `DATABASE_URL=...`
 (`NETLIFY_DATABASE_URL=` also works). Never commit `.env.local`.
 
 ## Run
-- `npm run db:migrate` — applies `001`, `002` in order (`$$`-aware splitter).
+- `npm run db:migrate` — applies `001`…`006` in order (`$$`-aware splitter).
 - `npm run db:seed` — fake demo rows only (`SEED-*`, `enc:FAKE-*`).
 - `npm run db:verify` — read-only: tables, RLS, `next_receipt_number()`, config.
 
@@ -28,6 +28,15 @@ Then: `cp .env.example .env.local` and paste the string as `DATABASE_URL=...`
   `receipts` insert (`FOR UPDATE` lock — never `MAX()+1`). Unique
   `(tenant_id, number)` is the backstop; rollback returns the number.
 - Audit is append-only via trigger; `UPDATE/DELETE` raises.
+- Vendor recall (`006`): partial index `idx_pt_vendor_recent` on
+  `(tenant_id, vendor_id, created_at DESC) WHERE status NOT IN
+  ('draft','void','cancelled')` backs the derived vendor-memory query. Memory is
+  computed at read time — no extra stored copy of item text.
+- Vendor tax IDs (`vendors.id_number_encrypted`) are AES-256-GCM encrypted with
+  `ID_ENCRYPTION_KEY` (`server/src/crypto.ts`), format `enc:v1:<iv>:<tag>:<ct>`.
+  Never store plaintext, never log it. The client portal's mock equivalent
+  (`src/lib/id-crypto.ts`) keeps the key in localStorage — dev-only, not a
+  production key store.
 - Weekly backup: `pg_dump "$NETLIFY_DATABASE_URL" > backup-$(date +%F).sql`
   plus storage files; restore with `psql`. (Full export script = pilot-ops slice.)
 

@@ -1,0 +1,51 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { deleteItem, loadItems, saveItem, type CatalogItem } from '../lib/items-mock'
+import { useClientAuth } from '../lib/client-auth'
+
+const QK = ['items'] as const
+
+export function useItems(search = '') {
+  const { activeTenant } = useClientAuth()
+  return useQuery({
+    queryKey: [...QK, activeTenant, search],
+    queryFn: async (): Promise<CatalogItem[]> =>
+      loadItems(activeTenant).filter((i) => !search || i.name.includes(search)),
+  })
+}
+
+export function useAllItems(): CatalogItem[] {
+  const { activeTenant } = useClientAuth()
+  return loadItems(activeTenant)
+}
+
+export function useSaveItem() {
+  const qc = useQueryClient()
+  const { activeTenant } = useClientAuth()
+  return useMutation({
+    mutationFn: async (input: { id?: string; name: string; unit: string; unitPrice: number }) => {
+      const name = input.name.trim()
+      if (name.length < 2) throw new Error('กรุณากรอกชื่อรายการ')
+      const row: CatalogItem = {
+        id: input.id ?? `it-${Date.now().toString(36)}`,
+        tenantId: activeTenant,
+        name,
+        unit: input.unit.trim(),
+        unitPrice: Math.max(0, Number(input.unitPrice) || 0),
+        createdAt: new Date().toISOString(),
+      }
+      saveItem(row)
+      return row
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: QK }),
+  })
+}
+
+export function useDeleteItem() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      deleteItem(id)
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: QK }),
+  })
+}

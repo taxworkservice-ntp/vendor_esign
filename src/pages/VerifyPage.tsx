@@ -31,7 +31,7 @@ export function VerifyPage() {
       ) : (
         <Card><CardBody className="space-y-3 text-[15px]">
           <div className="flex items-center justify-between">
-            <span className="font-mono text-sm">{mockReceiptNumber(t.id)}</span>
+            <span className="font-mono text-sm">{t.receiptNumber ?? mockReceiptNumber(t.id, t.tenantId)}</span>
             <StatusBadge status={t.status} />
           </div>
           <p className="flex justify-between border-t border-slate-100 pt-3"><span className="text-ink-500">วันที่ออก</span><span className="font-semibold">{fmtDateTH(t.transferDate)}</span></p>

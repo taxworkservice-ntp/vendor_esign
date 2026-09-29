@@ -1,12 +1,14 @@
-import { PILOT_CONFIG } from './config'
+import { clientFor } from './mock-clients'
 import type { PaymentTransaction } from './types'
 
 // Mock-only derivation. Real backend: series number from next_receipt_number()
 // inside the finalization txn + random verification_code per receipt.
-export function mockReceiptNumber(txnId: string): string {
+// Tenant-aware so each client gets its own {CLIENTCODE}-R-{BE_YEAR}-NNNN series.
+export function mockReceiptNumber(txnId: string, tenantId = 'ABC'): string {
+  const c = clientFor(tenantId)
   let h = 0
-  for (const c of txnId) h = (h * 31 + c.charCodeAt(0)) >>> 0
-  return `${PILOT_CONFIG.clientCode}-R-${PILOT_CONFIG.beYear}-${String((h % 9000) + 1000)}`
+  for (const ch of txnId) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  return `${c.clientCode}-R-${c.beYear}-${String((h % 9000) + 1000)}`
 }
 
 export function mockVerificationCode(txnId: string): string {
