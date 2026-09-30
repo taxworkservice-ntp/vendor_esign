@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { FileText, Printer } from 'lucide-react'
+import { Download } from 'lucide-react'
 import { useWht } from '../hooks/useWht'
 import { fmtWhtDate, fmtWhtNum } from '../lib/wht'
 import { Card, CardBody } from '../components/ui/card'
@@ -17,7 +17,7 @@ export function WhtList() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="ภาษีหัก ณ ที่จ่าย (WHT)" sub="ใบรับรองการหักภาษี ณ ที่จ่าย — เทมเพลตเดียวกับระบบบัญชี · แบบฟอร์มราชการ (PND) และแบบ A4" />
+      <PageHeader title="ภาษีหัก ณ ที่จ่าย (WHT)" sub="ใบรับรองการหักภาษี ณ ที่จ่าย — แบบฟอร์มราชการ (PND)" />
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
@@ -30,7 +30,7 @@ export function WhtList() {
                 <th className={thCls}>วันที่จ่าย</th>
                 <th className={`${thCls} text-right`}>จำนวนเงิน</th>
                 <th className={`${thCls} text-right`}>ภาษีหัก</th>
-                <th className={`${thCls} w-56 text-right`}>พิมพ์</th>
+                <th className={`${thCls} w-40 text-right`}>ดาวน์โหลด</th>
               </tr>
             </thead>
             <tbody>
@@ -43,12 +43,9 @@ export function WhtList() {
                   <td className="px-3 py-2.5 text-right tabular-nums">฿{fmtWhtNum(r.amount)}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">฿{fmtWhtNum(r.whtAmount)}</td>
                   <td className="px-3 py-2.5">
-                    <div className="flex justify-end gap-1.5">
+                    <div className="flex justify-end">
                       <Link to={`/wht/print?ids=${r.id}&layout=pnd`} target="_blank">
-                        <Button variant="secondary" className="h-9 px-3 text-body"><FileText size={14} /> แบบราชการ</Button>
-                      </Link>
-                      <Link to={`/wht/print?ids=${r.id}&layout=clean`} target="_blank">
-                        <Button variant="secondary" className="h-9 px-3 text-body"><Printer size={14} /> A4</Button>
+                        <Button variant="secondary" className="h-9 px-3 text-body"><Download size={14} /> ดาวน์โหลด</Button>
                       </Link>
                     </div>
                   </td>
@@ -63,7 +60,7 @@ export function WhtList() {
         {records.length > 1 && (
           <CardBody className="flex justify-end gap-2 border-t border-card-border">
             <Link to={`/wht/print?ids=${ids(records.map((r) => r.id))}&layout=pnd`} target="_blank">
-              <Button variant="secondary"><FileText size={15} /> พิมพ์ทั้งหมด (แบบราชการ)</Button>
+              <Button variant="secondary"><Download size={15} /> ดาวน์โหลดทั้งหมด</Button>
             </Link>
           </CardBody>
         )}

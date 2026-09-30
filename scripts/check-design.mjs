@@ -2,13 +2,14 @@
 // Guides the incremental migration to the shared tokens (src/design/tokens.ts):
 // flag arbitrary px type sizes, retired neutrals, font-bold and raw hex colours.
 // Legacy code still builds — this reports a migration backlog, it does not gate.
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { execSync } from 'node:child_process'
 
 const strict = process.argv.includes('--strict')
 const files = execSync('git ls-files "src/**/*.tsx"', { encoding: 'utf8' })
   .split('\n')
   .filter(Boolean)
+  .filter((f) => existsSync(f)) // skip staged-but-deleted files
   .filter((f) => !f.includes('components/print/')) // print layer is exempt
   .filter((f) => !f.endsWith('pages/WhtPrint.tsx')) // exact external WHT template (pixel-locked)
 

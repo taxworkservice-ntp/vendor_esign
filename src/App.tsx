@@ -8,7 +8,6 @@ import { TransactionNew } from './pages/TransactionNew'
 import { TransactionDetail } from './pages/TransactionDetail'
 import { VendorSign } from './pages/VendorSign'
 import { ReceiptView } from './pages/ReceiptView'
-import { ReviewList } from './pages/ReviewList'
 import { MetricsPage } from './pages/MetricsPage'
 import { VerifyPage } from './pages/VerifyPage'
 import { VendorsList } from './pages/VendorsList'
@@ -85,7 +84,6 @@ export default function App() {
                   <Route path="/wht" element={<RequireClient><WhtList /></RequireClient>} />
                   <Route path="/wht/print" element={<RequireClient><WhtPrint /></RequireClient>} />
                   <Route path="/settings" element={<RequireClient><Settings /></RequireClient>} />
-                  <Route path="/review" element={<RequireClient><ReviewList /></RequireClient>} />
                   <Route path="/metrics" element={<RequireClient><MetricsPage /></RequireClient>} />
 
                   <Route path="/admin/clients" element={<RequireAdmin><ClientsList /></RequireAdmin>} />
