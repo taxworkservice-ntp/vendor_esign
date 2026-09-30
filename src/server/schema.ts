@@ -46,10 +46,14 @@ export const clientMembers = pgTable('client_members', {
 export const vendorPayees = pgTable('vendor_payees', {
   id: uuid('id').defaultRandom().primaryKey(),
   userId: text('user_id').notNull(),
+  vendorNo: integer('vendor_no').notNull().default(0),
+  prefix: text('prefix').notNull().default(''),
   name: text('name').notNull(),
   address: text('address').notNull(),
   idNumberEncrypted: text('id_number_encrypted').notNull(),
   lineUserId: text('line_user_id'),
+  phone: text('phone'),
+  email: text('email'),
   isVatRegistered: boolean('is_vat_registered').default(false),
 })
 
@@ -107,6 +111,7 @@ export const docNumberSequences = pgTable('doc_number_sequences', {
   userId: text('user_id').notNull(),
   docType: text('doc_type').notNull().default('vendor_receipt'),
   beYear: integer('be_year').notNull(),
+  vendorNo: integer('vendor_no'),
   prefix: text('prefix'),
   resetYearly: boolean('reset_yearly').notNull().default(true),
   lastNumber: integer('last_number').notNull().default(0),
@@ -139,6 +144,7 @@ export const whtRecords = pgTable('wht_records', {
   description: text('description'),
   note: text('note'),
   status: text('status').notNull().default('active'),
+  sourceTransactionId: uuid('source_transaction_id'),
 })
 
 export const items = pgTable('items', {

@@ -1,19 +1,27 @@
-// Receipt number: {CLIENTCODE}-R-{BE_YEAR}-{NNN} — 3-digit running number per
-// tenant per year, e.g. ABC-R-2569-001. Assigned once at issuance and stored on
-// the transaction (never recomputed). Server parity: receipt_counters + next_receipt_number().
+// Receipt number: RCT-{VENDORNO}-{BE_YEAR}-{SEQ} — the receipt is the vendor's
+// own document, so there is no client prefix. Each vendor has its own running
+// book, so SEQ restarts at 001 per vendor (per BE year), e.g. RCT-001-2569-001
+// (vendor 001, first receipt). The vendor segment keeps numbers unique across
+// vendors; the year keeps them unique across years.
 
-export function receiptPrefix(clientCode: string, beYear: number): string {
-  return `${clientCode}-R-${beYear}-`
+const pad = (n: number) => String(n).padStart(3, '0')
+
+export function vendorReceiptPrefix(vendorNo: number, beYear: number): string {
+  return `RCT-${pad(vendorNo)}-${beYear}-`
 }
 
-export function formatReceiptNumber(clientCode: string, beYear: number, n: number): string {
-  return `${receiptPrefix(clientCode, beYear)}${String(n).padStart(3, '0')}`
+export function formatReceiptNumber(vendorNo: number, beYear: number, seq: number): string {
+  return `${vendorReceiptPrefix(vendorNo, beYear)}${pad(seq)}`
 }
 
-// Mock sequencing: next number = max(existing in this tenant+year) + 1.
-// The server issues numbers atomically from the counter table instead.
-export function nextReceiptNumber(clientCode: string, beYear: number, existing: (string | undefined)[]): string {
-  const p = receiptPrefix(clientCode, beYear)
+// Mock sequencing: next = max(existing for this vendor+year) + 1. The server
+// issues numbers atomically from the counter table instead.
+export function nextReceiptNumber(
+  vendorNo: number,
+  beYear: number,
+  existing: (string | undefined)[],
+): string {
+  const p = vendorReceiptPrefix(vendorNo, beYear)
   let max = 0
   for (const v of existing) {
     if (v && v.startsWith(p)) {
@@ -21,5 +29,5 @@ export function nextReceiptNumber(clientCode: string, beYear: number, existing: 
       if (Number.isFinite(n) && n > max) max = n
     }
   }
-  return formatReceiptNumber(clientCode, beYear, max + 1)
+  return formatReceiptNumber(vendorNo, beYear, max + 1)
 }

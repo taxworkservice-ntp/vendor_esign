@@ -11,7 +11,7 @@ const base = {
   consentVersion: 'v1',
   signedAt: '2026-09-28T10:00:00+07:00',
   client: { code: 'ABC', display: 'ABC (pilot test)' },
-  vendor: { name: 'สมชาย ใจดี', address: '12 ม.4 ขอนแก่น 40000', maskedId: 'x-xxxx-xxxxx-12-4' },
+  vendor: { prefix: 'นาย', name: 'สมชาย ใจดี', address: '12 ม.4 ขอนแก่น 40000', maskedId: 'x-xxxx-xxxxx-12-4' },
   description: 'ค่าจ้างทำความสะอาดสำนักงาน ก.ย.',
   lineItems: [
     { description: 'ค่าจ้างทำความสะอาดสำนักงาน ก.ย.', amount: 2000 },

@@ -1,4 +1,7 @@
 import type { WhtRecord, WhtVendor } from './wht'
+import { formTypeForVendorType, nextWhtCertificateNo } from './wht'
+import type { PaymentTransaction } from './types'
+import { isEntityName, vendorDisplayName } from './vendor-name'
 
 // Per-tenant WHT store (mock). Server parity: wht_vendors + wht_records.
 
@@ -61,4 +64,57 @@ export function loadWhtByIds(ids: string[]): { records: (WhtRecord & { vendor?: 
 
 export function saveWht(bundle: WhtBundle) {
   write(bundle)
+}
+
+// Auto-generate the withholding certificate when a receipt is issued. Idempotent
+// per transaction, so re-issuing never duplicates. Returns the new record (or
+// null when there is no WHT to withhold or it already exists).
+export function generateWhtForTxn(txn: PaymentTransaction): WhtRecord | null {
+  if (!(txn.whtAmount > 0)) return null
+  const all = read()
+  if (all.records.some((r) => r.sourceTransactionId === txn.id)) return null
+
+  const vendorName = vendorDisplayName(txn.vendor.prefix, txn.vendor.name)
+  const vendors = [...all.vendors]
+  let vendor = vendors.find(
+    (v) =>
+      v.tenantId === txn.tenantId &&
+      ((txn.vendor.taxId && v.taxId && v.taxId === txn.vendor.taxId) || v.name === vendorName),
+  )
+  if (!vendor) {
+    vendor = {
+      id: `wv-${txn.vendor.id}`,
+      tenantId: txn.tenantId,
+      name: vendorName,
+      taxId: txn.vendor.taxId ?? '',
+      address: txn.vendor.address,
+      vendorType: isEntityName(txn.vendor.name) ? 'company' : 'individual',
+      isActive: true,
+      createdAt: new Date().toISOString(),
+    }
+    vendors.unshift(vendor)
+  }
+
+  const issueDate = txn.transferDate || new Date().toISOString().slice(0, 10)
+  const certificateNo = nextWhtCertificateNo(
+    all.records.filter((r) => r.tenantId === txn.tenantId).map((r) => r.certificateNo),
+    issueDate,
+  )
+  const record: WhtRecord = {
+    id: `wr-${txn.id}`,
+    tenantId: txn.tenantId,
+    vendorId: vendor.id,
+    formType: formTypeForVendorType(vendor.vendorType),
+    issueDate,
+    amount: txn.grossAmount,
+    whtRate: txn.whtRate,
+    whtAmount: txn.whtAmount,
+    certificateNo,
+    description: txn.note || txn.description,
+    status: 'active',
+    createdAt: new Date().toISOString(),
+    sourceTransactionId: txn.id,
+  }
+  write({ vendors, records: [record, ...all.records] })
+  return record
 }

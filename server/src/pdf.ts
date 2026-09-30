@@ -6,6 +6,7 @@ import { readFileSync as readFs } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { normalizeLineItem } from '../../src/lib/line-items'
+import { vendorDisplayName } from '../../src/lib/vendor-name'
 
 // Server-side A4 receipt PDF. Embedded Sarabun (SIL OFL) + QR verification.
 //
@@ -36,7 +37,7 @@ export interface ReceiptPdfInput {
   consentVersion: string
   signedAt: string // ISO datetime
   client: { code: string; display: string } // display = name/addr/taxid line [VERIFY]
-  vendor: { name: string; address: string; maskedId: string }
+  vendor: { prefix: string; name: string; address: string; maskedId: string }
   // Line items are the source; a legacy single line is expressed as one item.
   lineItems: ReceiptLine[]
   note?: string
@@ -150,20 +151,21 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
   // ── Header: vendor (left) · document type (right) ──
   newPage(false)
   const halfW = maxW / 2 - 16
-  text(input.vendor.name, M, y, 14, bold, INK)
+  text(vendorDisplayName(input.vendor.prefix, input.vendor.name), M, y, 14, bold, INK)
   const vAddr = wrap(`ที่อยู่: ${input.vendor.address}`, regular, 10, halfW)
   vAddr.slice(0, 2).forEach((ln, i) => text(ln, M, y - 16 - i * 13, 10, regular, MUTED))
   text(`เลขบัตรประชาชน: ${input.vendor.maskedId}`, M, y - 16 - Math.min(vAddr.length, 2) * 13, 9.5, regular, MUTED)
   rightText('ใบเสร็จรับเงิน', right, y, 24, bold, INK)
   rightText('RECEIPT', right, y - 18, 9, regular, FAINT)
+  rightText('ต้นฉบับ', right, y - 30, 9, bold, MUTED)
   // Labels and values left-aligned to shared edges (labels start at the same x).
   const infoLabelX = right - 180
   const infoValueX = right - 128
-  text('เลขที่:', infoLabelX, y - 36, 10.5, bold, INK)
-  text(input.number, infoValueX, y - 36, 10.5, bold, INK)
-  text('วันที่:', infoLabelX, y - 52, 10, regular, MUTED)
-  text(input.issueDate, infoValueX, y - 52, 10, regular, MUTED)
-  y -= 66
+  text('เลขที่:', infoLabelX, y - 48, 10.5, bold, INK)
+  text(input.number, infoValueX, y - 48, 10.5, bold, INK)
+  text('วันที่:', infoLabelX, y - 64, 10, regular, MUTED)
+  text(input.issueDate, infoValueX, y - 64, 10, regular, MUTED)
+  y -= 78
   rule(y, INK, 1.5)
   y -= 30
 
@@ -171,7 +173,7 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
   const boxH = 90
   page.drawRectangle({ x: M, y: y - boxH, width: maxW, height: boxH, color: PANEL })
   const lx = M + 12
-  label('ผู้ซื้อ · ลูกค้า', lx, y - 20)
+  label('ผู้ซื้อ (ลูกค้า)', lx, y - 20)
   const cName = wrap(input.client.display, regular, 11, maxW - 24)
   cName.slice(0, 2).forEach((ln, i) => text(ln, lx, y - 38 - i * 14, 11, bold, INK))
   y -= boxH + 26
@@ -189,22 +191,25 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
   // ── Items table ──
   const numW = 20
   const descX = M + numW + 8
-  // Right-anchored columns: amount | discount | price | qty(+unit) | description
+  // Right-anchored columns: amount | discount | unit price | unit | qty | description
   const amtW = 82
   const discW = 74
   const priceW = 84
-  const qtyW = 62
+  const unitW = 52
+  const qtyW = 34
   const amtRight = right
   const discRight = right - amtW - 6
   const priceRight = discRight - discW - 6
-  const qtyRight = priceRight - priceW - 8
+  const unitRight = priceRight - priceW - 8
+  const qtyRight = unitRight - unitW - 6
   const descW = qtyRight - qtyW - 10 - descX
 
   const itemsHeader = () => {
     label('#', M, y)
     label('รายละเอียด', descX, y)
     rightText('จำนวน', qtyRight, y, 8.5, bold, FAINT)
-    rightText('ราคา', priceRight, y, 8.5, bold, FAINT)
+    rightText('หน่วย', unitRight, y, 8.5, bold, FAINT)
+    rightText('ราคา/หน่วย', priceRight, y, 8.5, bold, FAINT)
     rightText('ส่วนลด', discRight, y, 8.5, bold, FAINT)
     rightText('จำนวนเงิน', amtRight, y, 8.5, bold, FAINT)
     y -= 8
@@ -224,10 +229,11 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
     if (i % 2 === 1) page.drawRectangle({ x: M - 6, y: y - rowH + 4, width: maxW + 12, height: rowH - 4, color: ZEBRA })
     text(String(i + 1), M + numW - regular.widthOfTextAtSize(String(i + 1), 10.5), y - 10, 10.5, regular, MUTED)
     lines.forEach((ln, li) => text(ln, descX, y - 10 - li * 14, 10.5, regular, INK))
-    rightText(`${it.quantity ?? 1} ${it.unit || 'รายการ'}`, qtyRight, y - 10, 10.5, regular, INK)
-    rightText(`฿${thb(it.unitPrice ?? it.amount)}`, priceRight, y - 10, 10.5, regular, INK)
-    rightText(it.discount ? `฿${thb(it.discount)}` : '—', discRight, y - 10, 10.5, regular, MUTED)
-    rightText(`฿${thb(it.amount)}`, amtRight, y - 10, 10.5, bold, INK)
+    rightText(`${it.quantity ?? 1}`, qtyRight, y - 10, 10.5, regular, INK)
+    rightText(`${it.unit || 'รายการ'}`, unitRight, y - 10, 10.5, regular, INK)
+    rightText(`${thb(it.unitPrice ?? it.amount)}`, priceRight, y - 10, 10.5, regular, INK)
+    rightText(it.discount ? `${thb(it.discount)}` : '—', discRight, y - 10, 10.5, regular, MUTED)
+    rightText(`${thb(it.amount)}`, amtRight, y - 10, 10.5, bold, INK)
     y -= rowH
     page.drawLine({ start: { x: M, y: y + 4 }, end: { x: right, y: y + 4 }, thickness: 0.5, color: RULE })
   })
@@ -242,12 +248,12 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
     rightText(value, right, y, opts?.strong ? 11.5 : 11, opts?.strong ? bold : regular, opts?.strong ? INK : MUTED)
     y -= 22
   }
-  totalRow('รวมเป็นเงิน', `฿${thb(input.grossAmount)}`)
-  if (input.whtRate > 0) totalRow(`หักภาษี ณ ที่จ่าย ${input.whtRate}%`, `- ฿${thb(input.whtAmount)}`)
+  totalRow('รวมเป็นเงิน', `${thb(input.grossAmount)}`)
+  if (input.whtRate > 0) totalRow(`หักภาษี ณ ที่จ่าย ${input.whtRate}%`, `- ${thb(input.whtAmount)}`)
   rule(y + 8, INK, 1.5)
   y -= 8
   text('ยอดรับสุทธิ', M, y, 12, bold, INK)
-  rightText(`฿${thb(input.netAmount)}`, right, y - 3, 18, bold, INK)
+  rightText(`${thb(input.netAmount)}`, right, y - 3, 18, bold, INK)
   y -= 22
   text(`(${input.amountWords})`, M, y, 9.5, regular, MUTED)
 
@@ -269,7 +275,7 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
   }
   page.drawLine({ start: { x: sigX, y: sigY }, end: { x: sigX + sigW, y: sigY }, thickness: 1, color: FAINT })
   centerText('ผู้มีอำนาจลงนาม', sigY - 14, 9.5, bold, INK)
-  centerText(input.vendor.name, sigY - 28, 9, regular, MUTED)
+  centerText(vendorDisplayName(input.vendor.prefix, input.vendor.name), sigY - 28, 9, regular, MUTED)
 
   // ── Verification footer (audit copy only) ──
   if (input.showVerification) {

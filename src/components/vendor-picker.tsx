@@ -89,7 +89,7 @@ export function VendorPicker({
             onClick={startSearch}
             className="shrink-0 rounded-control px-2 py-1 text-body font-semibold text-ink-700 hover:bg-ink-100"
           >
-            เปลี่ยน
+            เปลี่ยนผู้ขาย
           </button>
         </div>
       )
@@ -109,7 +109,7 @@ export function VendorPicker({
             onClick={startSearch}
             className="shrink-0 rounded-control px-2.5 py-1.5 text-body font-semibold text-ink-700 hover:bg-ink-100"
           >
-            เปลี่ยน
+            เปลี่ยนผู้ขาย
           </button>
         </div>
         {allowAdd && (

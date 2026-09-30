@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { currentMonth, defaultFilters, emptyFilters, filterTransactions, monthsOf, presetRange, sortTransactions, type TransactionFilters } from './txn-filters'
+import { currentMonth, defaultFilters, emptyFilters, filterTransactions, monthOffset, monthsOf, nextSort, presetRange, previousMonth, sortDir, sortField, sortTransactions, type TransactionFilters } from './txn-filters'
 import type { PaymentTransaction, TxnStatus } from './types'
 
 function txn(id: string, transferDate: string, net: number, o?: Partial<PaymentTransaction>): PaymentTransaction {
@@ -74,6 +74,12 @@ describe('defaults', () => {
     expect(defaultFilters(today).month).toBe('2026-09')
     expect(emptyFilters().month).toBe('')
   })
+
+  it('computes previous month + offsets across year boundaries', () => {
+    expect(previousMonth(new Date(2026, 8, 29))).toBe('2026-08')
+    expect(previousMonth(new Date(2026, 0, 15))).toBe('2025-12')
+    expect(monthOffset(1, new Date(2026, 11, 31))).toBe('2027-01')
+  })
 })
 
 describe('sortTransactions', () => {
@@ -82,6 +88,31 @@ describe('sortTransactions', () => {
     expect(sortTransactions(data, 'date-desc').map((t) => t.id)).toEqual(['A', 'B', 'C'])
     expect(sortTransactions(data, 'net-desc').map((t) => t.id)).toEqual(['B', 'A', 'C'])
     expect(sortTransactions(data, 'net-asc').map((t) => t.id)).toEqual(['C', 'A', 'B'])
+  })
+
+  it('sorts by gross and withholding', () => {
+    const rows = [
+      { ...txn('A', '2026-09-01', 100), grossAmount: 100, whtAmount: 30 },
+      { ...txn('B', '2026-09-01', 100), grossAmount: 500, whtAmount: 10 },
+      { ...txn('C', '2026-09-01', 100), grossAmount: 300, whtAmount: 20 },
+    ]
+    expect(sortTransactions(rows, 'gross-desc').map((t) => t.id)).toEqual(['B', 'C', 'A'])
+    expect(sortTransactions(rows, 'gross-asc').map((t) => t.id)).toEqual(['A', 'C', 'B'])
+    expect(sortTransactions(rows, 'wht-desc').map((t) => t.id)).toEqual(['A', 'C', 'B'])
+  })
+})
+
+describe('sort helpers', () => {
+  it('parses field + direction', () => {
+    expect(sortField('net-asc')).toBe('net')
+    expect(sortDir('net-asc')).toBe('asc')
+    expect(sortDir('date-desc')).toBe('desc')
+  })
+  it('toggles direction on the same column, defaults to desc on a new column', () => {
+    expect(nextSort('date-desc', 'date')).toBe('date-asc')
+    expect(nextSort('date-asc', 'date')).toBe('date-desc')
+    expect(nextSort('date-desc', 'net')).toBe('net-desc')
+    expect(nextSort('net-desc', 'gross')).toBe('gross-desc')
   })
 })
 

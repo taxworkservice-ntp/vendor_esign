@@ -79,7 +79,7 @@ const SigPad = forwardRef<SigPadHandle, { className?: string; onDraw?: () => voi
       <canvas
         ref={canvasRef}
         className={cn('h-[200px] w-full touch-none rounded-control bg-white', className)}
-        aria-label="ช่องเซ็นชื่อ"
+        aria-label="ช่องลงนาม"
       />
     )
   },

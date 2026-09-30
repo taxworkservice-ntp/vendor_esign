@@ -32,6 +32,7 @@ export async function recallVendorId(vendorId: string): Promise<string | null> {
 export function forgetVendorId(vendorId: string): void {
   const vendor: ClientVendor | undefined = loadVendors().find((v) => v.id === vendorId)
   if (!vendor) return
-  const { encryptedId: _drop, ...rest } = vendor
-  saveVendor(rest as ClientVendor)
+  // Drop the encrypted copy *and* the display remnants so nothing stale remains.
+  const { encryptedId: _enc, taxId: _plain, taxLast4: _last4, ...rest } = vendor
+  saveVendor({ ...rest, maskedId: 'x-xxxx-xxxxx-••-•' })
 }

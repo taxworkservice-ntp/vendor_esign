@@ -14,6 +14,8 @@ class LS {
 const vendor = (id: string): ClientVendor => ({
   id,
   tenantId: 'ABC',
+  vendorNo: 1,
+  prefix: 'นาย',
   name: 'ทดสอบ',
   address: 'ที่อยู่',
   maskedId: 'x-xxxx-xxxxx-••-•',

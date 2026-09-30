@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { Pencil, Plus, Search, Trash2, X } from 'lucide-react'
+import { Package, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
 import { useDeleteItem, useItems, useSaveItem } from '../hooks/useItems'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
-import { Input, Label } from '../components/ui/input'
+import { FieldError, Input, Label } from '../components/ui/input'
 import { Button } from '../components/ui/button'
-import { FieldError } from '../components/ui/input'
+import { ConfirmDialog } from '../components/ui/confirm-dialog'
+import { EmptyState } from '../components/ui/empty-state'
+import { TableSkeleton } from '../components/ui/table-skeleton'
 import { fmtTHB } from '../lib/format'
 
 const thCls = 'px-3 py-2 text-left text-label font-semibold uppercase tracking-wide text-ink-500'
@@ -19,6 +21,7 @@ export function ItemsList() {
   const del = useDeleteItem()
   const [form, setForm] = useState(empty)
   const [err, setErr] = useState('')
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null)
 
   const editing = !!form.id
 
@@ -39,7 +42,7 @@ export function ItemsList() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <PageHeader title="สินค้า / บริการ" sub="แคตตาล็อกรายการ สำหรับดึงไปใช้ตอนสร้างธุรกรรม (ชื่อ · จำนวน · ราคา)" />
+      <PageHeader title="สินค้า / บริการ" sub="รายการสินค้าและบริการ สำหรับเรียกใช้เมื่อสร้างธุรกรรม (ชื่อ · จำนวน · ราคา)" />
 
       <Card>
         <CardBody className="space-y-4">
@@ -59,7 +62,7 @@ export function ItemsList() {
               <Input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="รายการ" />
             </div>
             <div>
-              <Label>ราคา (฿)</Label>
+              <Label>ราคา (บาท)</Label>
               <Input
                 value={form.unitPrice}
                 onChange={(e) => setForm({ ...form, unitPrice: e.target.value })}
@@ -69,7 +72,7 @@ export function ItemsList() {
               />
             </div>
             <div className="flex items-end gap-2">
-              <Button onClick={submit} disabled={save.isPending || !form.name.trim()}>
+              <Button onClick={submit} loading={save.isPending} disabled={!form.name.trim()}>
                 {save.isPending ? 'กำลังบันทึก…' : editing ? 'บันทึก' : 'เพิ่ม'}
               </Button>
               {editing && (
@@ -104,11 +107,12 @@ export function ItemsList() {
               </tr>
             </thead>
             <tbody>
-              {data?.map((it) => (
+              {isLoading && <TableSkeleton rows={5} cols={4} />}
+              {!isLoading && data?.map((it) => (
                 <tr key={it.id} className="border-b border-card-border last:border-0 hover:bg-ink-50">
                   <td className="px-3 py-2.5 font-semibold">{it.name}</td>
                   <td className="px-3 py-2.5 text-ink-500">{it.unit || '—'}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">฿{fmtTHB(it.unitPrice)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{fmtTHB(it.unitPrice)}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex justify-end gap-1">
                       <button
@@ -119,7 +123,7 @@ export function ItemsList() {
                         <Pencil size={15} />
                       </button>
                       <button
-                        onClick={() => del.mutate(it.id)}
+                        onClick={() => setPendingDelete({ id: it.id, name: it.name })}
                         className="grid h-8 w-8 place-items-center rounded-control text-ink-400 hover:bg-ink-100 hover:text-red-600"
                         title="ลบ"
                       >
@@ -132,14 +136,23 @@ export function ItemsList() {
             </tbody>
           </table>
         </div>
-        {isLoading && <p className="px-4 py-6 text-body text-ink-500">กำลังโหลด…</p>}
         {data?.length === 0 && !isLoading && (
-          <div className="px-4 py-12 text-center">
-            <p className="font-semibold">ยังไม่มีรายการในแคตตาล็อก</p>
-            <p className="mt-1 text-body text-ink-500">เพิ่มรายการด้านบนเพื่อดึงไปใช้ตอนสร้างธุรกรรม</p>
-          </div>
+          <EmptyState
+            icon={Package}
+            title="ยังไม่มีรายการสินค้า/บริการ"
+            description="เพิ่มรายการด้านบนเพื่อเรียกใช้เมื่อสร้างธุรกรรม"
+          />
         )}
       </Card>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="ยืนยันการลบรายการ"
+        message={<>ต้องการลบ “<b>{pendingDelete?.name}</b>” ออกจากรายการสินค้า/บริการหรือไม่</>}
+        confirmLabel="ลบรายการ"
+        onConfirm={() => { if (pendingDelete) del.mutate(pendingDelete.id); setPendingDelete(null) }}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   )
 }

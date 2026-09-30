@@ -20,7 +20,7 @@ export function ClientNew() {
     setErr('')
     const code = form.id.trim().toUpperCase()
     if (!/^[A-Z0-9-]{2,12}$/.test(code)) {
-      setErr('รหัสลูกค้าใช้ A-Z 0-9 ยาว 2–12 ตัว (ใช้เป็น prefix เลขใบเสร็จ)')
+      setErr('รหัสลูกค้าใช้ A-Z 0-9 ยาว 2–12 ตัว (ใช้เป็นคำนำหน้าเลขที่ใบเสร็จ)')
       return
     }
     if (!form.displayName.trim()) {
@@ -45,7 +45,7 @@ export function ClientNew() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
-      <PageHeader title="เพิ่มลูกค้าใหม่" sub="รหัสใช้เป็น prefix เลขใบเสร็จ {CODE}-R-{ปีพ.ศ.}-NNNN แยก series ตามลูกค้า" />
+      <PageHeader title="เพิ่มลูกค้าใหม่" sub="รหัสใช้เป็นคำนำหน้าเลขที่ใบเสร็จ {CODE}-R-{ปีพ.ศ.}-NNNN แยกชุดเลขที่ตามลูกค้า" />
       <Card>
         <CardBody className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -59,7 +59,7 @@ export function ClientNew() {
             </div>
           </div>
           <div>
-            <Label>ที่อยู่ผู้ซื้อ (buyer block บน PDF)</Label>
+              <Label>ที่อยู่ผู้ซื้อ (ส่วนผู้ซื้อบนเอกสาร PDF)</Label>
             <Input placeholder="ที่อยู่ + เลขภาษีฉบับจริง" value={form.address} onChange={set('address')} />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -78,18 +78,18 @@ export function ClientNew() {
               <Input value={form.beYear} onChange={set('beYear')} className="font-mono" />
             </div>
             <div>
-              <Label hint="ต่อจากเล่มกระดาษเดิมได้">เลขเริ่มต้น</Label>
+              <Label hint="ใช้ต่อจากเลขเล่มเดิมได้">เลขเริ่มต้น</Label>
               <Input value={form.startNumber} onChange={set('startNumber')} className="font-mono" />
             </div>
           </div>
           <FieldError msg={err || (create.isError ? 'บันทึกไม่สำเร็จ' : undefined)} />
           <div className="flex gap-2">
-            <Button onClick={submit} disabled={create.isPending}>
-              {create.isPending ? 'กำลังบันทึก…' : 'สร้างลูกค้า + เตรียม series เลขใบเสร็จ'}
+            <Button onClick={submit} loading={create.isPending}>
+              {create.isPending ? 'กำลังบันทึก…' : 'สร้างลูกค้าและเตรียมชุดเลขที่ใบเสร็จ'}
             </Button>
             <Button variant="secondary" onClick={() => nav('/admin/clients')}>ยกเลิก</Button>
           </div>
-          <p className="text-label text-ink-400">เมื่อสร้างแล้ว ระบบจะตั้งค่าอัตราภาษีหัก ณ ที่จ่าย อายุลิงก์ผู้ขาย ข้อความยินยอม และลำดับเลขใบเสร็จเริ่มต้นให้อัตโนมัติ — แยกตามลูกค้าแต่ละราย</p>
+          <p className="text-label text-ink-400">เมื่อสร้างแล้ว ระบบจะตั้งค่าอัตราภาษีหัก ณ ที่จ่าย อายุลิงก์ผู้ขาย ข้อความให้ความยินยอม และลำดับเลขที่ใบเสร็จเริ่มต้นให้อัตโนมัติ — แยกตามลูกค้าแต่ละราย</p>
         </CardBody>
       </Card>
     </div>

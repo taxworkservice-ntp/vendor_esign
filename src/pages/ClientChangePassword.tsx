@@ -4,7 +4,8 @@ import { useClientAuth } from '../lib/client-auth'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
 import { Button } from '../components/ui/button'
-import { FieldError, Input, Label } from '../components/ui/input'
+import { FieldError, Label } from '../components/ui/input'
+import { PasswordInput } from '../components/ui/password-input'
 
 const API = (import.meta.env.VITE_API_BASE ?? '') as string
 
@@ -43,14 +44,14 @@ export function ClientChangePassword() {
   }
 
   return (
-    <div className="mx-auto max-w-md space-y-5 pt-10">
-      <PageHeader title="เปลี่ยนรหัสผ่าน" sub="รหัสชั่วคราวจากผู้ดูแลระบบใช้ได้ 7 วัน — ตั้งรหัสใหม่เพื่อใช้งานต่อ" />
+    <div className="space-y-5">
+      <PageHeader title="เปลี่ยนรหัสผ่าน" sub="รหัสผ่านชั่วคราวจากผู้ดูแลระบบใช้ได้ 7 วัน — โปรดตั้งรหัสผ่านใหม่เพื่อใช้งานต่อ" />
       <Card>
         <CardBody className="space-y-4">
-          <div><Label>รหัสเดิม (ชั่วคราว)</Label><Input type="password" value={oldPw} onChange={(e) => setOldPw(e.target.value)} /></div>
-          <div><Label hint="≥ 8 ตัวอักษร">รหัสผ่านใหม่</Label><Input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} /></div>
+          <div><Label>รหัสเดิม (ชั่วคราว)</Label><PasswordInput value={oldPw} onChange={(e) => setOldPw(e.target.value)} autoComplete="current-password" /></div>
+          <div><Label hint="≥ 8 ตัวอักษร">รหัสผ่านใหม่</Label><PasswordInput value={newPw} onChange={(e) => setNewPw(e.target.value)} autoComplete="new-password" invalid={!!err} /></div>
           <FieldError msg={err} />
-          <Button onClick={submit} disabled={busy || !oldPw || !newPw} className="w-full">
+          <Button onClick={submit} loading={busy} disabled={!oldPw || !newPw} className="w-full">
             {busy ? 'กำลังบันทึก…' : 'ตั้งรหัสใหม่'}
           </Button>
         </CardBody>

@@ -4,9 +4,25 @@ import type { PaymentTransaction, TxnStatus } from './types'
 // and the mock/server paths stay identical.
 
 export type SlipFilter = 'all' | 'with' | 'without'
-export type SortKey = 'date-desc' | 'date-asc' | 'net-desc' | 'net-asc'
+export type SortField = 'date' | 'gross' | 'wht' | 'net'
+export type SortKey = `${SortField}-${'asc' | 'desc'}`
 // Status filter: an exact status, or a convenience group.
 export type StatusFilter = 'all' | TxnStatus | 'active' | 'done' | 'voided'
+
+export function sortField(key: SortKey): SortField {
+  return key.split('-')[0] as SortField
+}
+
+export function sortDir(key: SortKey): 'asc' | 'desc' {
+  return key.endsWith('asc') ? 'asc' : 'desc'
+}
+
+// Clicking a header: same column toggles direction, a new column defaults to
+// descending (newest / largest first).
+export function nextSort(current: SortKey, field: SortField): SortKey {
+  const dir = sortField(current) === field && sortDir(current) === 'desc' ? 'asc' : 'desc'
+  return `${field}-${dir}` as SortKey
+}
 
 export const STATUS_GROUPS: Record<'active' | 'done' | 'voided', TxnStatus[]> = {
   active: ['draft', 'sent', 'opened', 'signed'],
@@ -48,6 +64,15 @@ const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
 
 export function currentMonth(today: Date = new Date()): string {
   return ym(today)
+}
+
+// Month string (YYYY-MM) shifted by `offset` months from `today`.
+export function monthOffset(offset: number, today: Date = new Date()): string {
+  return ym(new Date(today.getFullYear(), today.getMonth() + offset, 1))
+}
+
+export function previousMonth(today: Date = new Date()): string {
+  return monthOffset(-1, today)
 }
 
 // Default list view: current month.
@@ -107,22 +132,18 @@ export function filterTransactions(txns: PaymentTransaction[], f: TransactionFil
 }
 
 export function sortTransactions(txns: PaymentTransaction[], sort: SortKey): PaymentTransaction[] {
+  const field = sortField(sort)
+  const dir = sortDir(sort)
   const arr = [...txns]
-  const byDate = (a: PaymentTransaction, b: PaymentTransaction) =>
-    a.transferDate < b.transferDate ? -1 : a.transferDate > b.transferDate ? 1 : a.id.localeCompare(b.id)
-  switch (sort) {
-    case 'date-asc':
-      arr.sort(byDate)
-      break
-    case 'net-desc':
-      arr.sort((a, b) => b.netAmount - a.netAmount)
-      break
-    case 'net-asc':
-      arr.sort((a, b) => a.netAmount - b.netAmount)
-      break
-    default:
-      arr.sort((a, b) => byDate(b, a))
+  if (field === 'date') {
+    const byDate = (a: PaymentTransaction, b: PaymentTransaction) =>
+      a.transferDate < b.transferDate ? -1 : a.transferDate > b.transferDate ? 1 : a.id.localeCompare(b.id)
+    arr.sort((a, b) => (dir === 'asc' ? byDate(a, b) : byDate(b, a)))
+    return arr
   }
+  const pick = (t: PaymentTransaction) =>
+    field === 'gross' ? t.grossAmount : field === 'wht' ? t.whtAmount : t.netAmount
+  arr.sort((a, b) => (dir === 'asc' ? pick(a) - pick(b) : pick(b) - pick(a)))
   return arr
 }
 
@@ -130,18 +151,17 @@ export function monthsOf(txns: PaymentTransaction[]): string[] {
   return [...new Set(txns.map((t) => t.transferDate.slice(0, 7)))].sort().reverse()
 }
 
-// Number of panel filters active (search/status excluded — they live in the toolbar).
+// Count of advanced panel filters (status chips, month chips and sort live in
+// the toolbar/headers, so they are excluded to keep the badge honest).
 export function activeFilterCount(f: TransactionFilters): number {
   let n = 0
   if (f.from) n++
   if (f.to) n++
-  if (f.month) n++
   if (f.paymentType) n++
   if (f.slip !== 'all') n++
   if (f.minNet) n++
   if (f.maxNet) n++
   if (f.vendorId) n++
-  if (f.sort !== 'date-desc') n++
   return n
 }
 

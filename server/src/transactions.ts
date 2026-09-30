@@ -21,7 +21,7 @@ const SELECT = `
   select p.id, p.user_id, p.ref, p.vendor_id, p.payment_type, p.description, p.note, p.line_items,
     p.gross_amount, p.wht_rate, p.wht_mode, p.wht_amount, p.net_amount, p.transfer_date,
     p.slip_reference, p.slip_file_path, p.status, p.void_reason, p.tax_id_last4, p.created_at,
-    v.name as vendor_name, v.address as vendor_address,
+    v.name as vendor_name, v.address as vendor_address, v.prefix as vendor_prefix, v.vendor_no as vendor_no,
     (select r.number from vendor_receipts r where r.transaction_id = p.id
        order by r.issue_date desc limit 1) as receipt_number,
     (select vr.token from vendor_requests vr where vr.transaction_id = p.id
@@ -40,6 +40,8 @@ function toTxn(r: Record<string, unknown>): PaymentTransaction {
     tenantId: String(r.user_id),
     vendor: {
       id: String(r.vendor_id),
+      vendorNo: Number(r.vendor_no ?? 0),
+      prefix: String(r.vendor_prefix ?? ''),
       name: String(r.vendor_name ?? ''),
       address: String(r.vendor_address ?? ''),
       maskedId: maskFromLast4(last4),
@@ -122,13 +124,23 @@ txnRoutes.post('/transactions', async (c) => {
 txnRoutes.post('/transactions/:id/send', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
-  const token = randomBytes(32).toString('base64url')
   const id = c.req.param('id')
-  await withTenant(g.ws, 'owner', async () => {
+  const token = await withTenant(g.ws, 'owner', async () => {
     const db = sql()
-    await db`insert into vendor_requests (user_id, transaction_id, token_hash, token, expires_at)
-      values (${g.ws}, ${id}, ${sha256hex(token)}, ${token}, now() + interval '7 days')`
-    await db`update vendor_payables set status = 'sent' where id = ${id} and user_id = ${g.ws}`
+    // Reuse the active link so "resend" keeps the same URL until the vendor
+    // signs (used_at) or it expires; only mint a new one when none is active.
+    const existing = (await db`select token from vendor_requests
+      where transaction_id = ${id} and user_id = ${g.ws}
+        and used_at is null and revoked_at is null and expires_at > now()
+      order by created_at desc limit 1`) as unknown as { token: string }[]
+    let tok = existing[0]?.token
+    if (!tok) {
+      tok = randomBytes(32).toString('base64url')
+      await db`insert into vendor_requests (user_id, transaction_id, token_hash, token, expires_at)
+        values (${g.ws}, ${id}, ${sha256hex(tok)}, ${tok}, now() + interval '7 days')`
+    }
+    await db`update vendor_payables set status = 'sent' where id = ${id} and user_id = ${g.ws} and status = 'draft'`
+    return tok
   })
   return c.json({ ok: true, token })
 })
@@ -154,6 +166,23 @@ txnRoutes.post('/transactions/:id/void', async (c) => {
   await withTenant(g.ws, 'owner', async () => {
     const db = sql()
     await db`update vendor_payables set status = 'void', void_reason = ${(b?.reason ?? '').trim()}
+      where id = ${id} and user_id = ${g.ws}`
+  })
+  return c.json({ ok: true })
+})
+
+// Slip is optional at creation — attach/replace it later. Reference uniqueness
+// is enforced client-side (case/space-insensitive) to mirror the create rule.
+txnRoutes.post('/transactions/:id/slip', async (c) => {
+  const g = await guard(c)
+  if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  const b = (await c.req.json().catch(() => null)) as { slipReference?: string; slipName?: string } | null
+  const id = c.req.param('id')
+  const ref = (b?.slipReference ?? '').trim()
+  const name = (b?.slipName ?? '').trim()
+  await withTenant(g.ws, 'owner', async () => {
+    const db = sql()
+    await db`update vendor_payables set slip_reference = ${ref}, slip_file_path = ${name}
       where id = ${id} and user_id = ${g.ws}`
   })
   return c.json({ ok: true })

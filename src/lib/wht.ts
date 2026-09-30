@@ -33,6 +33,8 @@ export interface WhtRecord {
   note?: string
   status: 'active' | 'done'
   createdAt: string
+  // Set when the certificate was auto-generated from an issued receipt.
+  sourceTransactionId?: string
 }
 
 // company → pnd53, individual → pnd3 (host rule).

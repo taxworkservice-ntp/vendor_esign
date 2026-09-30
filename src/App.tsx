@@ -1,12 +1,17 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { ReceiptText } from 'lucide-react'
 import { Layout } from './components/layout'
+import { ErrorBoundary } from './components/error-boundary'
+import { Spinner } from './components/ui/spinner'
+import { NotFound } from './pages/NotFound'
 import { useAuth } from './lib/auth'
 import { useClientAuth } from './lib/client-auth'
 import { TransactionList } from './pages/TransactionList'
 import { TransactionNew } from './pages/TransactionNew'
 import { TransactionDetail } from './pages/TransactionDetail'
 import { VendorSign } from './pages/VendorSign'
+import { VendorReceipt } from './pages/VendorReceipt'
 import { ReceiptView } from './pages/ReceiptView'
 import { MetricsPage } from './pages/MetricsPage'
 import { VerifyPage } from './pages/VerifyPage'
@@ -27,12 +32,24 @@ import { ChangePassword } from './pages/admin/ChangePassword'
 
 const qc = new QueryClient()
 
-const Loading = () => <p className="py-10 text-center text-sm text-ink-500">กำลังโหลด…</p>
+const Loading = () => (
+  <div className="flex items-center justify-center gap-2 py-16 text-body text-ink-500">
+    <Spinner /> กำลังโหลด…
+  </div>
+)
 
 // Standalone shell for auth pages — no portal nav/chrome.
 const AuthShell = ({ children }: { children: React.ReactNode }) => (
   <div className="min-h-screen bg-paper">
-    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">{children}</div>
+    <div className="mx-auto flex min-h-screen max-w-md flex-col px-4 py-8 sm:py-12">
+      <Link to="/" className="mb-8 flex items-center justify-center gap-2.5">
+        <span className="grid h-9 w-9 place-items-center rounded-control bg-ink-900 text-white">
+          <ReceiptText size={17} />
+        </span>
+        <span className="text-title font-semibold tracking-tight">Taxwork</span>
+      </Link>
+      <div className="flex-1">{children}</div>
+    </div>
   </div>
 )
 
@@ -54,11 +71,13 @@ function RequireAdmin({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <QueryClientProvider client={qc}>
-      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <ErrorBoundary>
+      <QueryClientProvider client={qc}>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           {/* Vendor + public verify + receipt copy: no account, standalone */}
           <Route path="/v/:token" element={<VendorSign />} />
+          <Route path="/v/receipt/:id" element={<VendorReceipt />} />
           <Route path="/verify/:code" element={<AuthShell><VerifyPage /></AuthShell>} />
 
           {/* Auth pages: standalone, no portal chrome */}
@@ -72,7 +91,7 @@ export default function App() {
             element={
               <Layout>
                 <Routes>
-                  <Route path="/receipts/:id" element={<ReceiptView />} />
+                  <Route path="/receipts/:id" element={<RequireClient><ReceiptView /></RequireClient>} />
 
                   <Route path="/" element={<RequireClient><TransactionList /></RequireClient>} />
                   <Route path="/transactions/new" element={<RequireClient><TransactionNew /></RequireClient>} />
@@ -90,7 +109,7 @@ export default function App() {
                   <Route path="/admin/clients/new" element={<RequireAdmin><ClientNew /></RequireAdmin>} />
                   <Route path="/admin/clients/:id" element={<RequireAdmin><ClientDetail /></RequireAdmin>} />
 
-                  <Route path="*" element={<Navigate to="/" replace />} />
+                  <Route path="*" element={<NotFound />} />
                 </Routes>
               </Layout>
             }
@@ -98,5 +117,6 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>
+    </ErrorBoundary>
   )
 }

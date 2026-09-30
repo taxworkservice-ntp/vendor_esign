@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react'
 import { Plus, Save, Trash2 } from 'lucide-react'
 import { useSettings, useUpdateSettings } from '../hooks/useSettings'
 import { useClientAuth } from '../lib/client-auth'
-import type { TenantSettings } from '../lib/settings'
+import { currentBeYear, type TenantSettings } from '../lib/settings'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
 import { Button } from '../components/ui/button'
-import { FieldError, Input, Label, inputCls } from '../components/ui/input'
+import { FieldError, Input, Label, Textarea } from '../components/ui/input'
 
 function Section({ step, title, desc, children }: { step: string; title: string; desc?: string; children: React.ReactNode }) {
   return (
@@ -34,7 +34,8 @@ export function Settings() {
   const [msg, setMsg] = useState('')
 
   useEffect(() => {
-    if (data) setForm(data)
+    // Year is derived from today (never user-set) — keep the stored value current.
+    if (data) setForm({ ...data, beYear: currentBeYear() })
   }, [data])
 
   if (!form) return <p className="py-10 text-center text-body text-ink-500">กำลังโหลด…</p>
@@ -52,7 +53,7 @@ export function Settings() {
     setMsg('')
     try {
       await save.mutateAsync(form)
-      setMsg('บันทึกแล้ว ✓')
+      setMsg('บันทึกแล้ว')
     } catch (e) {
       setMsg(e instanceof Error ? e.message : 'บันทึกไม่สำเร็จ')
     }
@@ -62,13 +63,13 @@ export function Settings() {
     <div className="mx-auto max-w-4xl space-y-5">
       <PageHeader
         title="ตั้งค่า"
-        sub={readOnly ? 'ดูได้อย่างเดียว — เฉพาะผู้ดูแลลูกค้า (client_admin) แก้ไขได้' : 'ปรับแต่งข้อมูลบริษัท ภาษี และเอกสารของลูกค้ารายนี้'}
+        sub={readOnly ? 'ดูได้อย่างเดียว — เฉพาะผู้ดูแลระบบ (admin) แก้ไขได้' : 'ปรับแต่งข้อมูลบริษัท ภาษี และเอกสารสำหรับออกใบเสร็จรับเงินผู้ขาย'}
       />
 
-      <Section step="1" title="ข้อมูลบริษัท" desc="แสดงบนใบเสร็จ · รหัสลูกค้าใช้เป็น prefix เลขใบเสร็จ">
+      <Section step="1" title="ข้อมูลบริษัท" desc="แสดงบนใบเสร็จ · รหัสลูกค้าใช้เป็นคำนำหน้าเลขที่ใบเสร็จ">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <Label hint="A–Z 0–9 · 2–12">รหัสลูกค้า (prefix)</Label>
+            <Label hint="A–Z 0–9 · 2–12">รหัสลูกค้า (Client ID)</Label>
             <Input
               value={form.clientCode}
               onChange={(e) => set({ clientCode: e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 12) })}
@@ -78,14 +79,11 @@ export function Settings() {
             />
           </div>
           <div>
-            <Label>ปี พ.ศ. (ใช้ในเลขใบเสร็จ)</Label>
-            <Input
-              value={String(form.beYear)}
-              onChange={(e) => set({ beYear: Number(e.target.value.replace(/\D/g, '')) || 0 })}
-              disabled={readOnly}
-              inputMode="numeric"
-              className="font-mono"
-            />
+            <Label hint="ใช้ในเลขที่ใบเสร็จ">ปี พ.ศ.</Label>
+            <p className="py-2.5 font-mono">
+              {form.beYear}
+              <span className="ml-2 font-sans text-body text-ink-500">(ค.ศ. {form.beYear - 543}) · ใช้ปีปัจจุบันอัตโนมัติ</span>
+            </p>
           </div>
           <div className="sm:col-span-2">
             <Label>ชื่อบริษัท (ผู้ซื้อ)</Label>
@@ -179,7 +177,7 @@ export function Settings() {
         </div>
       </Section>
 
-      <Section step="3" title="เอกสาร" desc="ลิงก์ผู้ขาย · ข้อความยินยอม · บันทึกท้ายใบเสร็จ">
+      <Section step="3" title="เอกสาร" desc="ลิงก์ผู้ขาย · ข้อความเชิญผู้ขาย · บันทึกท้ายใบเสร็จ · ข้อความให้ความยินยอม">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <Label hint="วัน">อายุลิงก์ผู้ขาย</Label>
@@ -201,21 +199,30 @@ export function Settings() {
           <Input value={form.receiptNote} onChange={(e) => set({ receiptNote: e.target.value })} disabled={readOnly} placeholder="เช่น ขอบคุณที่ใช้บริการ" />
         </div>
         <div>
-          <Label>ข้อความยินยอม (consent v1)</Label>
-          <textarea
+          <Label hint={'ตัวแปร: {{vendor}} {{vendorPrefix}} {{date}} {{amount}} {{link}}'}>ข้อความเชิญผู้ขาย (เทมเพลต)</Label>
+          <Textarea
+            value={form.inviteMessageTemplate}
+            onChange={(e) => set({ inviteMessageTemplate: e.target.value })}
+            disabled={readOnly}
+            rows={6}
+          />
+          <p className="mt-1.5 text-label text-ink-500">ข้อความนี้จะถูกเติมค่าจริงก่อนคัดลอกส่งให้ผู้ขาย และแก้ไขรายครั้งได้ที่หน้ารายการ</p>
+        </div>
+        <div>
+          <Label>ข้อความให้ความยินยอม (ฉบับที่ 1)</Label>
+          <Textarea
             value={form.consentTextV1}
             onChange={(e) => set({ consentTextV1: e.target.value })}
             disabled={readOnly}
             rows={3}
-            className={`${inputCls} h-auto py-2.5 leading-relaxed`}
           />
         </div>
       </Section>
 
-      {msg && <p className={`text-body font-medium ${msg.includes('✓') ? 'text-emerald-600' : 'text-red-600'}`}>{msg}</p>}
+      {msg && <p className={`text-body font-medium ${msg === 'บันทึกแล้ว' ? 'text-emerald-600' : 'text-red-600'}`}>{msg}</p>}
       {!readOnly && (
         <div className="flex justify-end">
-          <Button onClick={submit} disabled={save.isPending || !ready}>
+          <Button onClick={submit} loading={save.isPending} disabled={!ready}>
             <Save size={16} /> {save.isPending ? 'กำลังบันทึก…' : 'บันทึกการตั้งค่า'}
           </Button>
         </div>

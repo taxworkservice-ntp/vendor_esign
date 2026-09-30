@@ -4,16 +4,16 @@ import { itemsSummary, itemsTotal, normalizeLineItem } from './line-items'
 
 // ── Tenant ABC (pilot) ──
 export const VENDORS: Vendor[] = [
-  { id: 'v-somchai', name: 'สมชาย การช่าง', address: '12 ม.4 ต.ในเมือง อ.เมือง จ.ขอนแก่น 40000', maskedId: 'x-xxxx-xxxxx-12-3', taxId: '1234567890123' },
-  { id: 'v-malee', name: 'มาลี ค้าส่ง', address: '88/9 ถ.มิตรภาพ ต.ในเมือง อ.เมือง จ.ขอนแก่น 40000', maskedId: 'x-xxxx-xxxxx-23-4', taxId: '2345678901234' },
-  { id: 'v-somsak', name: 'สมศักดิ์ ขนส่ง', address: '45 ซ.ร่วมใจ ต.บ้านเป็ด อ.เมือง จ.ขอนแก่น 40002', maskedId: 'x-xxxx-xxxxx-34-5', taxId: '3456789012345' },
+  { id: 'v-somchai', vendorNo: 1, prefix: 'นาย', name: 'สมชาย การช่าง', address: '12 ม.4 ต.ในเมือง อ.เมือง จ.ขอนแก่น 40000', maskedId: 'x-xxxx-xxxxx-12-3', taxId: '1234567890123' },
+  { id: 'v-malee', vendorNo: 2, prefix: 'นาง', name: 'มาลี ค้าส่ง', address: '88/9 ถ.มิตรภาพ ต.ในเมือง อ.เมือง จ.ขอนแก่น 40000', maskedId: 'x-xxxx-xxxxx-23-4', taxId: '2345678901234' },
+  { id: 'v-somsak', vendorNo: 3, prefix: 'นาย', name: 'สมศักดิ์ ขนส่ง', address: '45 ซ.ร่วมใจ ต.บ้านเป็ด อ.เมือง จ.ขอนแก่น 40002', maskedId: 'x-xxxx-xxxxx-34-5', taxId: '3456789012345' },
 ]
 
 // ── Tenant DEMO (test client) ──
 export const DEMO_VENDORS: Vendor[] = [
-  { id: 'v-demo-1', name: 'บริษัท ซัพพลาย พลัส จำกัด', address: '99/1 ถ.สุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพฯ 10110', maskedId: 'x-xxxx-xxxxx-45-8', taxId: '0105566000011' },
-  { id: 'v-demo-2', name: 'ร้าน วัสดุก่อสร้าง รุ่งเรือง', address: '22 ม.2 ต.บางพลี อ.บางพลี จ.สมุทรปราการ 10540', maskedId: 'x-xxxx-xxxxx-77-2', taxId: '0105566000022' },
-  { id: 'v-demo-3', name: 'สมหญิง บริการสะอาด', address: '7/8 ซ.ลาดพร้าว 71 เขตบางกะปิ กรุงเทพฯ 10240', maskedId: 'x-xxxx-xxxxx-19-5', taxId: '0105566000033' },
+  { id: 'v-demo-1', vendorNo: 1, prefix: '', name: 'บริษัท ซัพพลาย พลัส จำกัด', address: '99/1 ถ.สุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพฯ 10110', maskedId: 'x-xxxx-xxxxx-45-8', taxId: '0105566000011' },
+  { id: 'v-demo-2', vendorNo: 2, prefix: '', name: 'ร้าน วัสดุก่อสร้าง รุ่งเรือง', address: '22 ม.2 ต.บางพลี อ.บางพลี จ.สมุทรปราการ 10540', maskedId: 'x-xxxx-xxxxx-77-2', taxId: '0105566000022' },
+  { id: 'v-demo-3', vendorNo: 3, prefix: 'นาง', name: 'สมหญิง บริการสะอาด', address: '7/8 ซ.ลาดพร้าว 71 เขตบางกะปิ กรุงเทพฯ 10240', maskedId: 'x-xxxx-xxxxx-19-5', taxId: '0105566000033' },
 ]
 
 export function vendorsForTenant(tenantId: string): Vendor[] {
@@ -40,13 +40,13 @@ function txn(
     timeline: [
       { at: createdAt, label: 'สร้างรายการ', detail: 'ธุรกรรมฉบับร่าง' },
       ...(t.status !== 'draft'
-        ? [{ at: '2026-09-21T10:00:00+07:00', label: 'ส่งลิงก์ให้ผู้ขาย', detail: 'คัดลอกลิงก์ LINE' }]
+        ? [{ at: '2026-09-21T10:00:00+07:00', label: 'ส่งลิงก์ให้ผู้ขาย', detail: 'คัดลอกลิงก์ทาง LINE' }]
         : []),
     ],
     checks: [
       { key: 'slip', label: 'สลิปตรงยอดสุทธิ', state: 'pass' },
       { key: 'name', label: 'ชื่อผู้รับตรงกับผู้ขาย', state: 'pass' },
-      { key: 'wht', label: 'WHT ตรงตามค่าที่ตั้งไว้', state: t.whtRate === 3 ? 'pass' : 'warn' },
+      { key: 'wht', label: 'ภาษีหัก ณ ที่จ่ายตรงตามค่าที่ตั้งไว้', state: t.whtRate === 3 ? 'pass' : 'warn' },
     ],
     ...t,
     whtMode,
@@ -64,7 +64,7 @@ export const SEED_TXNS: PaymentTransaction[] = [
     lineItems: [item('ค่าจ้างทำความสะอาดสำนักงาน ก.ย.', 3000, { unit: 'งาน', quantity: 1, unitPrice: 3000 })],
   }),
   txn({
-    id: 'TX-1041', tenantId: 'ABC', vendor: VENDORS[1], status: 'issued', receiptNumber: 'ABC-R-2569-001',
+    id: 'TX-1041', tenantId: 'ABC', vendor: VENDORS[1], status: 'issued', receiptNumber: 'RCT-002-2569-001',
     note: 'งานซ่อมบำรุงเครื่องปรับอากาศ', whtRate: 3, transferDate: '2026-09-18', slipReference: 'TRF-877310',
     lineItems: [
       item('ค่าซ่อมแอร์ (ค่าบริการ)', 5000, { unit: 'เครื่อง', quantity: 2, unitPrice: 2500 }),
@@ -72,8 +72,8 @@ export const SEED_TXNS: PaymentTransaction[] = [
     ],
   }),
   txn({
-    id: 'TX-1040', tenantId: 'ABC', vendor: VENDORS[2], status: 'void', receiptNumber: 'ABC-R-2569-002',
-    voidReason: 'ยอด gross ผิด — ออกเลขใหม่แทน', whtRate: 5, transferDate: '2026-09-10', slipReference: 'TRF-870022',
+    id: 'TX-1040', tenantId: 'ABC', vendor: VENDORS[2], status: 'void', receiptNumber: 'RCT-003-2569-001',
+    voidReason: 'ยอดรวมก่อนหักภาษีไม่ถูกต้อง — ออกเลขที่ใหม่แทน', whtRate: 5, transferDate: '2026-09-10', slipReference: 'TRF-870022',
     lineItems: [item('ค่าเช่าที่จอดรถรายเดือน', 5000, { unit: 'เดือน', quantity: 1, unitPrice: 5000 })],
   }),
 
@@ -84,7 +84,7 @@ export const SEED_TXNS: PaymentTransaction[] = [
     lineItems: [item('ค่าจัดส่งวัสดุสำนักงาน', 1200, { unit: 'เที่ยว', quantity: 1, unitPrice: 1500, discount: 300 })],
   }),
   txn({
-    id: 'DM-2002', tenantId: 'DEMO', vendor: DEMO_VENDORS[1], status: 'issued', receiptNumber: 'DEMO-R-2569-001',
+    id: 'DM-2002', tenantId: 'DEMO', vendor: DEMO_VENDORS[1], status: 'issued', receiptNumber: 'RCT-002-2569-001',
     paymentType: 'ค่าบริการ', note: 'งานปรับปรุงสำนักงาน', whtRate: 3, transferDate: '2026-09-19', slipReference: 'TRF-DM-1000',
     lineItems: [
       item('ค่าซ่อมแซมผนังและทาสี', 18000, { unit: 'งาน', quantity: 1, unitPrice: 18000 }),
@@ -92,13 +92,13 @@ export const SEED_TXNS: PaymentTransaction[] = [
     ],
   }),
   txn({
-    id: 'DM-2001', tenantId: 'DEMO', vendor: DEMO_VENDORS[2], status: 'void', receiptNumber: 'DEMO-R-2569-002',
+    id: 'DM-2001', tenantId: 'DEMO', vendor: DEMO_VENDORS[2], status: 'void', receiptNumber: 'RCT-003-2569-001',
     voidReason: 'บันทึกผิดบริษัท', paymentType: 'ค่าบริการ', whtRate: 3, transferDate: '2026-09-05', slipReference: 'TRF-DM-0999',
     lineItems: [item('ค่าทำความสะอาดออฟฟิศ', 4000, { unit: 'งาน', quantity: 1, unitPrice: 4000 })],
   }),
 ]
 
-const KEY = 'taxwork-pilot-txns-v5'
+const KEY = 'taxwork-pilot-txns-v8'
 
 export function loadTxns(): PaymentTransaction[] {
   try {

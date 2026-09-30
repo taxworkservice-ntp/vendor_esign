@@ -3,6 +3,7 @@ import { sql, withTenant } from '../../src/server/db'
 import { requireClient } from './client-auth'
 import { decryptId, encryptId } from './crypto'
 import type { SessionUser } from './auth'
+import { isVendorPrefix, prefixRequired } from '../../src/lib/vendor-name'
 
 // ── Client data API (vendors + items) ─────────────────────────────────────
 // Session-guarded, workspace-scoped, RLS via withTenant. Mirrors the client
@@ -52,11 +53,15 @@ function toVendor(r: Record<string, unknown>) {
   return {
     id: String(r.id),
     tenantId: String(r.user_id),
+    vendorNo: Number(r.vendor_no ?? 0),
+    prefix: String(r.prefix ?? ''),
     name: String(r.name),
     address: String(r.address ?? ''),
     maskedId: maskTaxId(last4),
     taxLast4: last4 || undefined,
     lineUserId: (r.line_user_id as string | null) ?? undefined,
+    phone: (r.phone as string | null) ?? undefined,
+    email: (r.email as string | null) ?? undefined,
     isVatRegistered: Boolean(r.is_vat_registered),
     createdAt: new Date(String(r.created_at ?? Date.now())).toISOString(),
   }
@@ -67,7 +72,7 @@ dataRoutes.get('/vendors', async (c) => {
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
   const rows = await withTenant(g.ws, 'owner', async () => {
     const db = sql()
-    return (await db`select id, user_id, name, address, id_number_encrypted, line_user_id, is_vat_registered, created_at
+    return (await db`select id, user_id, vendor_no, prefix, name, address, id_number_encrypted, line_user_id, phone, email, is_vat_registered, created_at
       from vendor_payees where user_id = ${g.ws} order by created_at desc`) as unknown as Record<string, unknown>[]
   })
   return c.json({ vendors: rows.map(toVendor) })
@@ -77,16 +82,20 @@ dataRoutes.post('/vendors', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
   const b = (await c.req.json().catch(() => null)) as
-    | { name?: string; address?: string; taxId?: string; lineUserId?: string; isVatRegistered?: boolean }
+    | { prefix?: string; name?: string; address?: string; taxId?: string; lineUserId?: string; phone?: string; email?: string; isVatRegistered?: boolean }
     | null
+  const prefix = (b?.prefix ?? '').trim()
   const name = (b?.name ?? '').trim()
   if (name.length < 2) return c.json({ error: 'invalid-body' }, 400)
+  if (prefixRequired(name) && !isVendorPrefix(prefix)) return c.json({ error: 'invalid-prefix' }, 400)
   const row = await withTenant(g.ws, 'owner', async () => {
     const db = sql()
-    const ins = (await db`insert into vendor_payees (user_id, name, address, id_number_encrypted, line_user_id, is_vat_registered)
-      values (${g.ws}, ${name}, ${(b?.address ?? '').trim()}, ${safeEncrypt(b?.taxId ?? '')},
-        ${b?.lineUserId?.trim() ?? null}, ${Boolean(b?.isVatRegistered)})
-      returning id, user_id, name, address, id_number_encrypted, line_user_id, is_vat_registered, created_at`) as unknown as Record<string, unknown>[]
+    const ins = (await db`insert into vendor_payees (user_id, vendor_no, prefix, name, address, id_number_encrypted, line_user_id, phone, email, is_vat_registered)
+      values (${g.ws},
+        (select coalesce(max(vendor_no), 0) + 1 from vendor_payees where user_id = ${g.ws}),
+        ${isVendorPrefix(prefix) ? prefix : ''}, ${name}, ${(b?.address ?? '').trim()}, ${safeEncrypt(b?.taxId ?? '')},
+        ${b?.lineUserId?.trim() ?? null}, ${b?.phone?.trim() ?? null}, ${b?.email?.trim() ?? null}, ${Boolean(b?.isVatRegistered)})
+      returning id, user_id, vendor_no, prefix, name, address, id_number_encrypted, line_user_id, phone, email, is_vat_registered, created_at`) as unknown as Record<string, unknown>[]
     return ins[0]
   })
   return c.json({ ok: true, vendor: toVendor(row) })
@@ -116,17 +125,46 @@ dataRoutes.patch('/vendors/:id', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
   const b = (await c.req.json().catch(() => null)) as
-    | { name?: string; address?: string; lineUserId?: string; isVatRegistered?: boolean }
+    | { prefix?: string; name?: string; address?: string; lineUserId?: string; phone?: string; email?: string; isVatRegistered?: boolean; idNumber?: string }
     | null
+  const nextName = (b?.name ?? '').trim()
+  if (b?.name !== undefined && nextName.length < 2) return c.json({ error: 'invalid-body' }, 400)
+  if (nextName && prefixRequired(nextName) && b?.prefix !== undefined && !isVendorPrefix(b.prefix.trim()))
+    return c.json({ error: 'invalid-prefix' }, 400)
+  const nextId = b?.idNumber !== undefined ? b.idNumber.replace(/\D/g, '').slice(0, 13) : undefined
+  if (nextId !== undefined && nextId && nextId.length !== 13) return c.json({ error: 'invalid-body' }, 400)
   await withTenant(g.ws, 'owner', async () => {
     const db = sql()
     await db`update vendor_payees set
+      prefix = coalesce(${b?.prefix !== undefined ? (isVendorPrefix(b.prefix.trim()) ? b.prefix.trim() : '') : null}, prefix),
       name = coalesce(${b?.name ?? null}, name),
       address = coalesce(${b?.address ?? null}, address),
+      id_number_encrypted = coalesce(${nextId !== undefined ? safeEncrypt(nextId) : null}, id_number_encrypted),
       line_user_id = coalesce(${b?.lineUserId ?? null}, line_user_id),
+      phone = coalesce(${b?.phone ?? null}, phone),
+      email = coalesce(${b?.email ?? null}, email),
       is_vat_registered = coalesce(${b?.isVatRegistered ?? null}, is_vat_registered),
       updated_at = now()
       where id = ${c.req.param('id')} and user_id = ${g.ws}`
+  })
+  return c.json({ ok: true })
+})
+
+// Delete a vendor — blocked while any transaction references it, so issued
+// receipts and their vendor snapshots stay intact (accounting/audit integrity).
+dataRoutes.delete('/vendors/:id', async (c) => {
+  const g = await guard(c)
+  if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  const id = c.req.param('id')
+  const used = await withTenant(g.ws, 'owner', async () => {
+    const db = sql()
+    const rows = (await db`select 1 from vendor_payables where vendor_id = ${id} and user_id = ${g.ws} limit 1`) as unknown[]
+    return rows.length > 0
+  })
+  if (used) return c.json({ error: 'vendor-in-use' }, 409)
+  await withTenant(g.ws, 'owner', async () => {
+    const db = sql()
+    await db`delete from vendor_payees where id = ${id} and user_id = ${g.ws}`
   })
   return c.json({ ok: true })
 })

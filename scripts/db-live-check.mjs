@@ -94,11 +94,14 @@ try {
   await client.query(`insert into client_profiles (id, name, client_code, display_name, status, be_year)
     values ('ABC','ABC','ABC','บริษัท ทดสอบ จำกัด','active',2569) on conflict do nothing`)
 
-  const docNo = await client.query(`select generate_doc_number('ABC','vendor_receipt',2569,'ABC-R') n`)
-  docNo.rows[0].n === 'ABC-R-2569-001' ? ok(`generate_doc_number → ${docNo.rows[0].n}`) : fail(`doc number got ${docNo.rows[0].n}`)
+  const docNo = await client.query(`select generate_doc_number('ABC','vendor_receipt',2569,1) n`)
+  docNo.rows[0].n === 'RCT-001-2569-001' ? ok(`generate_doc_number → ${docNo.rows[0].n}`) : fail(`doc number got ${docNo.rows[0].n}`)
 
-  const docNo2 = await client.query(`select generate_doc_number('ABC','vendor_receipt',2569,'ABC-R') n`)
-  docNo2.rows[0].n === 'ABC-R-2569-002' ? ok(`doc number increments → ${docNo2.rows[0].n}`) : fail(`increment got ${docNo2.rows[0].n}`)
+  const docNo2 = await client.query(`select generate_doc_number('ABC','vendor_receipt',2569,1) n`)
+  docNo2.rows[0].n === 'RCT-001-2569-002' ? ok(`doc number increments → ${docNo2.rows[0].n}`) : fail(`increment got ${docNo2.rows[0].n}`)
+
+  const docNo3 = await client.query(`select generate_doc_number('ABC','vendor_receipt',2569,2) n`)
+  docNo3.rows[0].n === 'RCT-002-2569-001' ? ok(`new vendor starts at 001 → ${docNo3.rows[0].n}`) : fail(`vendor series got ${docNo3.rows[0].n}`)
 
   await client.query(`insert into wht_vendors (user_id, name, tax_id, vendor_type) values ('ABC','ผู้ขาย ทดสอบ','1234567890123','individual')`)
   const cert = await client.query(`select generate_wht_certificate_no('ABC', '2026-09-18'::date) n`)

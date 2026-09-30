@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom'
-import { Download } from 'lucide-react'
+import { Download, ReceiptText } from 'lucide-react'
 import { useWht } from '../hooks/useWht'
 import { fmtWhtDate, fmtWhtNum } from '../lib/wht'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
 import { Button } from '../components/ui/button'
+import { EmptyState } from '../components/ui/empty-state'
 
 const thCls = 'px-3 py-2 text-left text-label font-semibold uppercase tracking-wide text-ink-500'
 
@@ -17,7 +18,7 @@ export function WhtList() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="ภาษีหัก ณ ที่จ่าย (WHT)" sub="ใบรับรองการหักภาษี ณ ที่จ่าย — แบบฟอร์มราชการ (PND)" />
+      <PageHeader title="ภาษีหัก ณ ที่จ่าย (WHT)" sub="หนังสือรับรองการหักภาษี ณ ที่จ่าย — แบบฟอร์มราชการ (แบบ ภ.ง.ด.)" />
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
@@ -40,8 +41,8 @@ export function WhtList() {
                   <td className="px-3 py-2.5 font-semibold">{vendorName(r.vendorId)}</td>
                   <td className="px-3 py-2.5 font-mono text-body uppercase">{r.formType}</td>
                   <td className="px-3 py-2.5">{fmtWhtDate(r.issueDate)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">฿{fmtWhtNum(r.amount)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">฿{fmtWhtNum(r.whtAmount)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{fmtWhtNum(r.amount)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{fmtWhtNum(r.whtAmount)}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex justify-end">
                       <Link to={`/wht/print?ids=${r.id}&layout=pnd`} target="_blank">
@@ -55,7 +56,11 @@ export function WhtList() {
           </table>
         </div>
         {records.length === 0 && (
-          <CardBody><p className="py-8 text-center text-body text-ink-500">ยังไม่มีรายการ WHT</p></CardBody>
+          <EmptyState
+            icon={ReceiptText}
+            title="ยังไม่มีรายการภาษีหัก ณ ที่จ่าย"
+            description="รายการจะปรากฏเมื่อมีธุรกรรมที่หักภาษี ณ ที่จ่าย"
+          />
         )}
         {records.length > 1 && (
           <CardBody className="flex justify-end gap-2 border-t border-card-border">

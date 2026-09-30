@@ -1,20 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { formatReceiptNumber, nextReceiptNumber, receiptPrefix } from './receipt-number'
+import { formatReceiptNumber, nextReceiptNumber, vendorReceiptPrefix } from './receipt-number'
 
-describe('receipt-number', () => {
-  it('formats {CODE}-R-{BE_YEAR}-{NNN} with 3 digits', () => {
-    expect(formatReceiptNumber('ABC', 2569, 1)).toBe('ABC-R-2569-001')
-    expect(formatReceiptNumber('ABC', 2569, 42)).toBe('ABC-R-2569-042')
-    expect(receiptPrefix('DEMO', 2569)).toBe('DEMO-R-2569-')
+describe('receipt-number (per vendor)', () => {
+  it('formats RCT-{VENDORNO}-{BE_YEAR}-{SEQ} with 3 digits', () => {
+    expect(formatReceiptNumber(1, 2569, 1)).toBe('RCT-001-2569-001')
+    expect(formatReceiptNumber(12, 2569, 42)).toBe('RCT-012-2569-042')
+    expect(vendorReceiptPrefix(3, 2569)).toBe('RCT-003-2569-')
   })
 
-  it('picks the next number from existing ones (per tenant/year)', () => {
-    const existing = ['ABC-R-2569-001', 'ABC-R-2569-002', 'DEMO-R-2569-009', undefined]
-    expect(nextReceiptNumber('ABC', 2569, existing)).toBe('ABC-R-2569-003')
-    expect(nextReceiptNumber('DEMO', 2569, existing)).toBe('DEMO-R-2569-010')
-    // different year → starts at 001
-    expect(nextReceiptNumber('ABC', 2570, existing)).toBe('ABC-R-2570-001')
+  it('keeps a separate running book per vendor', () => {
+    const existing = [
+      'RCT-001-2569-001', 'RCT-001-2569-002', // vendor 1 → next 003
+      'RCT-002-2569-001', // vendor 2 → next 002
+      'RCT-009-2568-005', undefined,
+    ]
+    expect(nextReceiptNumber(1, 2569, existing)).toBe('RCT-001-2569-003')
+    expect(nextReceiptNumber(2, 2569, existing)).toBe('RCT-002-2569-002')
+    // a brand-new vendor starts at 001
+    expect(nextReceiptNumber(7, 2569, existing)).toBe('RCT-007-2569-001')
+    // different year → starts at 001 for each vendor
+    expect(nextReceiptNumber(1, 2570, existing)).toBe('RCT-001-2570-001')
     // no history → 001
-    expect(nextReceiptNumber('ABC', 2569, [])).toBe('ABC-R-2569-001')
+    expect(nextReceiptNumber(1, 2569, [])).toBe('RCT-001-2569-001')
   })
 })

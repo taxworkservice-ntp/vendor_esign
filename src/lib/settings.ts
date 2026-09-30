@@ -1,13 +1,13 @@
 import { PILOT_CONFIG } from './config'
 import { clientFor } from './mock-clients'
-import { DEFAULT_CONSENT, type TenantSettings } from './settings-types'
+import { DEFAULT_CONSENT, DEFAULT_INVITE_TEMPLATE, currentBeYear, type TenantSettings } from './settings-types'
 
 // Per-tenant settings runtime: defaults (seed from the current hard-coded
 // PILOT_CONFIG so behaviour is unchanged until edited) + a localStorage store.
 // Types + validation live in settings-types.ts (importable from the server).
 // Server parity: the `config` table + tenants profile columns.
 
-export { DEFAULT_CONSENT, validateSettings, whtRateFor } from './settings-types'
+export { DEFAULT_CONSENT, DEFAULT_INVITE_TEMPLATE, currentBeYear, renderInviteMessage, validateSettings, whtRateFor } from './settings-types'
 export type { TenantSettings, WhtRate } from './settings-types'
 
 export function defaultSettings(tenantId?: string): TenantSettings {
@@ -18,7 +18,7 @@ export function defaultSettings(tenantId?: string): TenantSettings {
     address: client.address,
     taxId: client.taxId,
     contactName: client.contactName,
-    beYear: client.beYear || Number(PILOT_CONFIG.beYear),
+    beYear: currentBeYear(),
     paymentTypes: [...PILOT_CONFIG.paymentTypes],
     whtRates: PILOT_CONFIG.whtRates.map((r) => ({ paymentType: r.paymentType, value: r.value, label: r.label })),
     stampDutyWarningThreshold: PILOT_CONFIG.stampDutyWarningThreshold,
@@ -26,6 +26,7 @@ export function defaultSettings(tenantId?: string): TenantSettings {
     consentTextV1: DEFAULT_CONSENT,
     receiptNote: '',
     showVerifyQr: false,
+    inviteMessageTemplate: DEFAULT_INVITE_TEMPLATE,
   }
 }
 

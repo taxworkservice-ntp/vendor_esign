@@ -150,7 +150,7 @@ function CleanPage({ record, profile }: { record: RecordWithVendor; profile: Wht
         <div style={{ fontSize: '12px', textAlign: 'center', marginBottom: '4mm' }}>ตามมาตรา 50 ทวิ แห่งประมวลรัษฎากร</div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3mm' }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '10px', color: '#666', marginBottom: '1mm' }}>ผู้จ่ายเงิน (Payer)</div>
+            <div style={{ fontSize: '10px', color: '#666', marginBottom: '1mm' }}>ผู้จ่ายเงิน</div>
             <div style={{ fontSize: '13px', fontWeight: 600 }}>{profile.company_name_th || '-'}</div>
             <div style={{ fontSize: '10px', color: '#666' }}>เลขที่ผู้เสียภาษี: {splitTaxId(profile.tax_id)}</div>
             <div style={{ fontSize: '10px', color: '#666' }}>{profile.address || ''}</div>
@@ -166,7 +166,7 @@ function CleanPage({ record, profile }: { record: RecordWithVendor; profile: Wht
       </div>
       <hr style={{ border: 'none', borderTop: '1px solid #ddd', marginBottom: '4mm' }} />
       <div style={{ marginBottom: '3mm' }}>
-        <div style={{ fontSize: '10px', color: '#666', marginBottom: '1mm' }}>ผู้ถูกหักภาษี ณ ที่จ่าย (Payee)</div>
+        <div style={{ fontSize: '10px', color: '#666', marginBottom: '1mm' }}>ผู้ถูกหักภาษี ณ ที่จ่าย</div>
         <div style={{ fontSize: '13px', fontWeight: 600 }}>{record.vendor?.name || '-'}</div>
         <div style={{ fontSize: '10px', color: '#666' }}>เลขที่ผู้เสียภาษี: {splitTaxId(record.vendor?.taxId)}</div>
         <div style={{ fontSize: '10px', color: '#666' }}>{record.vendor?.address || ''}</div>
@@ -251,7 +251,7 @@ export function WhtPrint() {
       }
       pdf.save(`wht_${ids.length}.pdf`)
     } catch {
-      setErr('สร้าง PDF ไม่สำเร็จ — ลองใหม่อีกครั้ง')
+      setErr('สร้าง PDF ไม่สำเร็จ — โปรดลองใหม่อีกครั้ง')
     } finally {
       setBusy(false)
     }
@@ -262,7 +262,7 @@ export function WhtPrint() {
       <div className="no-print sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2.5">
         <Link to="/wht" className="text-sm font-semibold text-ink-600">← กลับรายการ WHT</Link>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={exportPdf} disabled={busy}>
+          <Button variant="secondary" onClick={exportPdf} loading={busy}>
             <Download size={15} /> {busy ? 'กำลังสร้าง…' : 'ดาวน์โหลด PDF'}
           </Button>
           <Button variant="secondary" onClick={() => window.print()}><Printer size={15} /> พิมพ์</Button>

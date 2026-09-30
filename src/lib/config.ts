@@ -6,7 +6,7 @@ export const PILOT_CONFIG = {
   linkExpiryDays: 7,
   stampDutyWarningThreshold: 20000,
   whtRates: [
-    { value: 0, label: 'ไม่หัก WHT — 0%', paymentType: 'ทั่วไป' },
+    { value: 0, label: 'ไม่หักภาษี ณ ที่จ่าย — 0%', paymentType: 'ทั่วไป' },
     { value: 1, label: 'ค่าขนส่ง — 1%', paymentType: 'ค่าขนส่ง' },
     { value: 3, label: 'ค่าบริการ — 3%', paymentType: 'ค่าบริการ' },
     { value: 5, label: 'ค่าเช่า — 5%', paymentType: 'ค่าเช่า' },

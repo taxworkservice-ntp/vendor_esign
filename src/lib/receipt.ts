@@ -1,14 +1,13 @@
-import { clientFor } from './mock-clients'
+import { currentBeYear } from './settings'
 import type { PaymentTransaction } from './types'
 
-// Mock-only derivation. Real backend: series number from next_receipt_number()
+// Mock-only derivation. Real backend: series number from the counter table
 // inside the finalization txn + random verification_code per receipt.
-// Tenant-aware so each client gets its own {CLIENTCODE}-R-{BE_YEAR}-NNNN series.
-export function mockReceiptNumber(txnId: string, tenantId = 'ABC'): string {
-  const c = clientFor(tenantId)
+// Per-vendor series: RCT-{VENDORNO}-{BE_YEAR}-{NNNN}.
+export function mockReceiptNumber(txnId: string, vendorNo = 0): string {
   let h = 0
   for (const ch of txnId) h = (h * 31 + ch.charCodeAt(0)) >>> 0
-  return `${c.clientCode}-R-${c.beYear}-${String((h % 9000) + 1000)}`
+  return `RCT-${String(vendorNo).padStart(3, '0')}-${currentBeYear()}-${String((h % 9000) + 1000)}`
 }
 
 export function mockVerificationCode(txnId: string): string {
@@ -44,7 +43,7 @@ export function computeMetrics(txns: PaymentTransaction[]): PilotMetrics {
   const hours = signedTx
     .map((t) => {
       const sent = atOf(t, 'ส่งลิงก์ให้ผู้ขาย')
-      const signed = atOf(t, 'ผู้ขายเซ็นรับเงิน + มอบอำนาจ')
+      const signed = atOf(t, 'ผู้ขายลงนามรับเงินและมอบอำนาจ')
       return sent !== null && signed !== null ? (signed - sent) / 3600000 : null
     })
     .filter((h): h is number => h !== null && h >= 0)

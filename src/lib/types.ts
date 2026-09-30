@@ -12,6 +12,8 @@ export type WhtMode = 'deduct' | 'grossup'
 
 export interface Vendor {
   id: string
+  vendorNo?: number // per-tenant vendor number used as a receipt-number segment
+  prefix?: string // คำนำหน้าชื่อ (นาย/นาง/นางสาว) — optional; absent for entities/legacy
   name: string
   address: string
   maskedId: string
@@ -47,7 +49,7 @@ export interface PaymentTransaction {
   slipReference: string
   slipName: string
   status: TxnStatus
-  receiptNumber?: string // assigned once at issuance: {CODE}-R-{BE_YEAR}-{NNN}
+  receiptNumber?: string // assigned once: RCT-{VENDORNO}-{BE_YEAR}-{SEQ}
   createdAt: string
   timeline: { at: string; label: string; detail?: string }[]
   voidReason?: string

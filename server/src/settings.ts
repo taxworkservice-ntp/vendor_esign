@@ -1,5 +1,5 @@
 import { sql, withTenant } from '../../src/server/db'
-import { DEFAULT_CONSENT, type TenantSettings, type WhtRate } from '../../src/lib/settings-types'
+import { DEFAULT_CONSENT, DEFAULT_INVITE_TEMPLATE, type TenantSettings, type WhtRate } from '../../src/lib/settings-types'
 
 // Server-side tenant settings (mirrors src/lib/settings.ts). Reads tenants profile
 // columns + the config table. [VERIFY] on first real DB run.
@@ -33,6 +33,7 @@ export async function getTenantSettings(tenantId: string): Promise<TenantSetting
       consentTextV1: String((m.get('consent_text_v1') as { th?: string } | undefined)?.th ?? DEFAULT_CONSENT),
       receiptNote: String(m.get('receipt_note') ?? ''),
       showVerifyQr: Boolean(m.get('show_verify_qr') ?? false),
+      inviteMessageTemplate: String(m.get('invite_message_template') ?? DEFAULT_INVITE_TEMPLATE),
     }
   })
 }
@@ -55,5 +56,6 @@ export async function saveTenantSettings(tenantId: string, s: TenantSettings): P
     await put('consent_text_v1', { th: s.consentTextV1 })
     await put('receipt_note', s.receiptNote)
     await put('show_verify_qr', s.showVerifyQr)
+    await put('invite_message_template', s.inviteMessageTemplate)
   })
 }

@@ -43,6 +43,7 @@ function toRecord(r: Record<string, unknown>): WhtRecord {
     note: (r.note as string | null) ?? undefined,
     status: r.status === 'done' ? 'done' : 'active',
     createdAt: new Date(String(r.created_at ?? Date.now())).toISOString(),
+    sourceTransactionId: (r.source_transaction_id as string | null) ?? undefined,
   }
 }
 

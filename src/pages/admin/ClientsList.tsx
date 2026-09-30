@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Plus, Search } from 'lucide-react'
+import { Building2, ChevronRight, Plus, Search } from 'lucide-react'
 import { useAdminTenants } from '../../hooks/useAdmin'
 import { Card, CardBody } from '../../components/ui/card'
 import { PageHeader } from '../../components/ui/page-header'
 import { Input } from '../../components/ui/input'
+import { FilterChip } from '../../components/ui/filter-chip'
 import { Button } from '../../components/ui/button'
+import { EmptyState } from '../../components/ui/empty-state'
+import { TableSkeleton } from '../../components/ui/table-skeleton'
 
 const FILTERS = [
   { v: 'all', th: 'ทั้งหมด' },
@@ -24,7 +27,7 @@ export function ClientsList() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="ลูกค้า (Clients)"
+        title="ลูกค้า"
         sub="สมัครลูกค้าใหม่ · ระงับ/เปิดใช้งาน · จัดการผู้ใช้แยกตามลูกค้า"
         actions={
           <Link to="/admin/clients/new">
@@ -43,15 +46,9 @@ export function ClientsList() {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {FILTERS.map((f) => (
-              <button
-                key={f.v}
-                onClick={() => setStatus(f.v)}
-                className={`rounded-full px-3.5 py-2 text-body font-semibold transition ${
-                  status === f.v ? 'bg-ink-900 text-white' : 'bg-ink-100 text-ink-700 hover:bg-ink-100'
-                }`}
-              >
+              <FilterChip key={f.v} active={status === f.v} onClick={() => setStatus(f.v)} className="h-9 px-3.5">
                 {f.th}
-              </button>
+              </FilterChip>
             ))}
           </div>
         </CardBody>
@@ -63,7 +60,7 @@ export function ClientsList() {
             <thead>
               <tr className="border-b border-card-border bg-ink-50/80">
                 <th className={thCls}>ลูกค้า</th>
-                <th className={thCls}>Series</th>
+                <th className={thCls}>ชุดเลขที่</th>
                 <th className={`${thCls} text-right`}>ธุรกรรม</th>
                 <th className={`${thCls} text-right`}>ใบเสร็จ</th>
                 <th className={`${thCls} text-right`}>ผู้ใช้</th>
@@ -72,14 +69,15 @@ export function ClientsList() {
               </tr>
             </thead>
             <tbody>
-              {data?.map((t) => (
+              {isLoading && <TableSkeleton rows={5} cols={7} />}
+              {!isLoading && data?.map((t) => (
                 <tr
                   key={t.id}
                   onClick={() => nav(`/admin/clients/${t.id}`)}
-                  className="cursor-pointer border-b border-card-border transition last:border-0 hover:bg-ink-50"
+                  className="cursor-pointer border-b border-card-border transition last:border-0 hover:bg-ink-50 focus-within:bg-ink-50"
                 >
                   <td className="px-4 py-3.5">
-                    <p className="font-semibold leading-snug">{t.displayName}</p>
+                    <Link to={`/admin/clients/${t.id}`} className="font-semibold leading-snug hover:underline">{t.displayName}</Link>
                     <p className="mt-0.5 font-mono text-body text-ink-500">{t.clientCode}</p>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3.5 font-mono text-body">
@@ -95,18 +93,23 @@ export function ClientsList() {
                       {t.status === 'active' ? 'ใช้งาน' : 'ระงับ'}
                     </span>
                   </td>
-                  <td className="px-2 py-3.5 text-ink-400"><ChevronLeft size={16} className="rotate-180" /></td>
+                  <td className="px-2 py-3.5 text-ink-400"><ChevronRight size={16} /></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        {isLoading && <p className="px-4 py-6 text-body text-ink-500">กำลังโหลด…</p>}
         {data?.length === 0 && !isLoading && (
-          <div className="px-4 py-12 text-center">
-            <p className="font-semibold">ยังไม่มีลูกค้าในช่วงนี้</p>
-            <p className="mt-1 text-body text-ink-500">ลองเปลี่ยนตัวกรอง หรือเพิ่มลูกค้าใหม่</p>
-          </div>
+          <EmptyState
+            icon={Building2}
+            title="ยังไม่มีลูกค้า"
+            description="โปรดเปลี่ยนตัวกรอง หรือเพิ่มลูกค้าใหม่"
+            action={
+              <Link to="/admin/clients/new">
+                <Button><Plus size={17} /> เพิ่มลูกค้า</Button>
+              </Link>
+            }
+          />
         )}
       </Card>
     </div>

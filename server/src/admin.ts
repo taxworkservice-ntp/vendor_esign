@@ -176,8 +176,8 @@ adminApp.post('/api/admin/tenants', async (c) => {
     (${id}, 'link_expiry_days', '7'),
     (${id}, 'consent_text_v1', '{"th": "ข้าพเจ้าได้รับเงินจำนวนดังกล่าวแล้ว และมอบอำนาจให้ลูกค้าออกใบเสร็จรับเงินในนามของข้าพเจ้าเฉพาะธุรกรรมนี้เท่านั้น"}')
     on conflict (user_id, key) do nothing`
-  await db`insert into doc_number_sequences (user_id, doc_type, be_year, last_number, prefix) values (${id}, 'vendor_receipt', ${beYear}, ${start - 1}, ${code + '-R'})
-    on conflict (user_id, doc_type, be_year) do nothing`
+  await db`insert into doc_number_sequences (user_id, doc_type, be_year, vendor_no, last_number) values (${id}, 'vendor_receipt', ${beYear}, 0, ${start - 1})
+    on conflict (user_id, doc_type, be_year, vendor_no) do nothing`
   await withAuditTenant(id, 'super_admin', u.userId, async () =>
     audit(id, 'client_profiles', id, 'tenant.created', u.email, { clientCode: code }, ip))
   return c.json({ ok: true, id })

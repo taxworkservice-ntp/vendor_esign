@@ -2,16 +2,17 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { PaymentTransaction } from '../lib/types'
 import { loadTxns, saveTxns } from '../lib/mock'
 import { normalizeTaxId, taxIdHash } from '../lib/taxid'
-import { loadSettings } from '../lib/settings'
+import { currentBeYear } from '../lib/settings'
 import { nextReceiptNumber } from '../lib/receipt-number'
 
 export interface VendorCorrection {
-  field: 'name' | 'address'
+  field: 'prefix' | 'name' | 'address'
   from: string
   to: string
 }
 
 export interface VendorAuth {
+  vendorPrefix: string
   vendorName: string
   vendorAddress: string
   vendorIdLast4: string
@@ -139,13 +140,19 @@ export function useVendorActions() {
       signatures.set(id, auth.signaturePng)
       writeAuth({ ...readAuth(), [id]: withoutPng(auth) })
       touch(id, (t, all) => {
-        // Assign the receipt number once, at issuance, from the per-tenant/year counter.
-        const cfg = loadSettings(t.tenantId)
+        // Assign the receipt number as soon as the vendor signs, so the receipt
+        // (and the vendor's copy) always shows a number. Finalization keeps it.
         const receiptNumber =
           t.receiptNumber ??
-          nextReceiptNumber(cfg.clientCode, cfg.beYear, all.filter((x) => x.tenantId === t.tenantId).map((x) => x.receiptNumber))
+          nextReceiptNumber(
+            t.vendor.vendorNo ?? 0,
+            currentBeYear(),
+            all.filter((x) => x.tenantId === t.tenantId && x.id !== t.id).map((x) => x.receiptNumber),
+          )
         // Diff against client records — reported back on the detail page.
         const corrections: VendorCorrection[] = []
+        if (auth.vendorPrefix !== (t.vendor.prefix ?? ''))
+          corrections.push({ field: 'prefix', from: t.vendor.prefix ?? '', to: auth.vendorPrefix })
         if (auth.vendorName !== t.vendor.name)
           corrections.push({ field: 'name', from: t.vendor.name, to: auth.vendorName })
         if (auth.vendorAddress !== t.vendor.address)
@@ -159,12 +166,12 @@ export function useVendorActions() {
           inviteToken: undefined, // single-use: consumed on signing
           timeline: [
             ...t.timeline,
-            { at: auth.signedAt, label: 'ผู้ขายเซ็นรับเงิน + มอบอำนาจ', detail: 'ยืนยันแบบ stub-deferred (LINE เปิดภายหลัง)' },
+            { at: auth.signedAt, label: 'ผู้ขายลงนามรับเงินและมอบอำนาจ', detail: 'ยืนยันด้วยลายเซ็น (การยืนยันผ่าน LINE จะเปิดใช้งานในภายหลัง)' },
             ...(corrections.length
               ? [{
                   at: auth.signedAt,
                   label: 'ผู้ขายแก้ไขข้อมูล',
-                  detail: corrections.map((x) => `${x.field === 'name' ? 'ชื่อ' : 'ที่อยู่'}: ${x.from} → ${x.to}`).join(' · '),
+                  detail: corrections.map((x) => `${x.field === 'name' ? 'ชื่อ' : x.field === 'address' ? 'ที่อยู่' : 'คำนำหน้า'}: ${x.from || '—'} → ${x.to || '—'}`).join(' · '),
                 }]
               : []),
           ],

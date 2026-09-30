@@ -4,6 +4,10 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { sql, withTenant } from '../../src/server/db'
 import { amountToThaiWords } from '../../src/lib/thai-words'
+import { isVendorPrefix, prefixRequired, isEntityName, vendorDisplayName } from '../../src/lib/vendor-name'
+import { currentBeYear } from '../../src/lib/settings-types'
+import { formTypeForVendorType } from '../../src/lib/wht'
+import { decryptId } from './crypto'
 import { saveBytes } from './storage'
 import { buildReceiptPdf } from './pdf'
 import { sha256hex, sessionUser } from './auth'
@@ -84,7 +88,7 @@ app.get('/api/vendor/:token', async (c) => {
       t.id, t.ref, t.description, t.payment_type, t.gross_amount, t.wht_rate,
       t.wht_amount, t.net_amount, t.transfer_date, t.slip_reference, t.status,
       t.tax_id_hash, t.tax_id_last4,
-      v.name as vendor_name, v.address as vendor_address
+      v.prefix as vendor_prefix, v.name as vendor_name, v.address as vendor_address
     from vendor_requests vr
     join vendor_payables t on t.id = vr.transaction_id
     join vendor_payees v on v.id = t.vendor_id
@@ -108,7 +112,7 @@ app.get('/api/vendor/:token', async (c) => {
     // Gate + confirm-and-sign prefill (name/address are not secret).
     gated: (r as Record<string, unknown>).tax_id_hash != null,
     idLast4: (r as Record<string, unknown>).tax_id_last4 ?? null,
-    vendorName: r.vendor_name, vendorAddress: r.vendor_address,
+    vendorPrefix: r.vendor_prefix, vendorName: r.vendor_name, vendorAddress: r.vendor_address,
     unlocked: (r as Record<string, unknown>).unlocked_at != null,
   })
 })
@@ -129,7 +133,7 @@ app.post('/api/vendor/:token/unlock', async (c) => {
   const rows = await db`
     select vr.id as req_id, vr.user_id, vr.expires_at, vr.used_at, vr.revoked_at, vr.unlocked_at,
       t.id, t.status, t.tax_id_hash, t.tax_id_last4,
-      v.name as vendor_name, v.address as vendor_address
+      v.prefix as vendor_prefix, v.name as vendor_name, v.address as vendor_address
     from vendor_requests vr
     join vendor_payables t on t.id = vr.transaction_id
     join vendor_payees v on v.id = t.vendor_id
@@ -141,7 +145,7 @@ app.post('/api/vendor/:token/unlock', async (c) => {
   if (!r.tax_id_hash) {
     // Legacy row: no gate — mark unlocked so sign can proceed.
     await db`update vendor_requests set unlocked_at = coalesce(unlocked_at, now()) where id = ${String(r.req_id)}`
-    return c.json({ ok: true, legacy: true, vendorName: r.vendor_name, vendorAddress: r.vendor_address })
+    return c.json({ ok: true, legacy: true, vendorPrefix: r.vendor_prefix, vendorName: r.vendor_name, vendorAddress: r.vendor_address })
   }
   const a = Buffer.from(sha256hex(idNumber), 'hex')
   const b = Buffer.from(String(r.tax_id_hash), 'hex')
@@ -159,7 +163,7 @@ app.post('/api/vendor/:token/unlock', async (c) => {
   await withTenant(rowTenant, 'client', async () =>
     audit(rowTenant, 'vendor_requests', String(r.req_id), 'vendor.unlocked', 'vendor', {}, ip))
   // Prefill for confirm-and-sign: vendor confirms instead of retyping.
-  return c.json({ ok: true, vendorName: r.vendor_name, vendorAddress: r.vendor_address, idLast4: r.tax_id_last4 })
+  return c.json({ ok: true, vendorPrefix: r.vendor_prefix, vendorName: r.vendor_name, vendorAddress: r.vendor_address, idLast4: r.tax_id_last4 })
 })
 
 // Vendor: sign. Single-use — consumes the token. Verification is
@@ -169,11 +173,14 @@ app.post('/api/vendor/:token/sign', async (c) => {
   if (rateLimited(`sign:${ip}`, 10)) return c.json({ error: 'too-many-requests' }, 429)
   const token = c.req.param('token')
   const body = await c.req.json().catch(() => null) as {
-    vendorName?: string; vendorAddress?: string; idNumberEncrypted?: string;
+    vendorPrefix?: string; vendorName?: string; vendorAddress?: string; idNumberEncrypted?: string;
     idLast4?: string; signaturePng?: string; consentVersion?: string; lineUserId?: string;
   } | null
   if (!body?.vendorName || !body?.vendorAddress || !body?.signaturePng || body.consentVersion !== 'v1')
     return c.json({ error: 'invalid-body' }, 400)
+  const subPrefix = (body.vendorPrefix ?? '').trim()
+  if (prefixRequired(String(body.vendorName)) && !isVendorPrefix(subPrefix))
+    return c.json({ error: 'invalid-prefix' }, 400)
   // idLast4 is printed on the receipt in masked form (x-xxxx-xxxxx-AB-C) per
   // spec; the full ID travels/stays encrypted via idNumberEncrypted only.
   const last4 = (body.idLast4 ?? '').replace(/\D/g, '').slice(-4)
@@ -188,7 +195,7 @@ app.post('/api/vendor/:token/sign', async (c) => {
   const rows = await db`
     select vr.id as req_id, vr.user_id, vr.expires_at, vr.used_at, vr.revoked_at, vr.unlocked_at,
       t.id, t.status, t.net_amount, t.tax_id_hash,
-      v.name as record_name, v.address as record_address
+      v.prefix as record_prefix, v.name as record_name, v.address as record_address
     from vendor_requests vr
     join vendor_payables t on t.id = vr.transaction_id
     join vendor_payees v on v.id = t.vendor_id
@@ -208,16 +215,18 @@ app.post('/api/vendor/:token/sign', async (c) => {
   const corrections: { field: string; from: string; to: string }[] = []
   const subName = String(body.vendorName).slice(0, 200)
   const subAddr = String(body.vendorAddress).slice(0, 500)
+  if (subPrefix !== String(r.record_prefix ?? ''))
+    corrections.push({ field: 'prefix', from: String(r.record_prefix ?? ''), to: subPrefix })
   if (subName !== String(r.record_name))
     corrections.push({ field: 'name', from: String(r.record_name), to: subName })
   if (subAddr !== String(r.record_address))
     corrections.push({ field: 'address', from: String(r.record_address), to: subAddr })
   const sigPath = saveBytes('signatures', `${txnId}.png`, png, rowTenant)
   await db`insert into vendor_authorizations
-    (user_id, transaction_id, vendor_name, vendor_address, vendor_masked_id,
+    (user_id, transaction_id, vendor_prefix, vendor_name, vendor_address, vendor_masked_id,
      signature_image_path, verification_method, line_user_id, ip, user_agent,
      consent_text_version, corrections)
-    values (${rowTenant}, ${txnId}, ${subName}, ${subAddr},
+    values (${rowTenant}, ${txnId}, ${subPrefix}, ${subName}, ${subAddr},
       ${`x-xxxx-xxxxx-${last4.slice(0, 2)}-${last4.slice(2)}`},
       ${sigPath}, 'stub-deferred', ${body.lineUserId ?? null}, ${ip},
       ${(c.req.header('user-agent') ?? '').slice(0, 500)}, 'v1',
@@ -261,9 +270,12 @@ app.post('/api/transactions/:id/finalize', async (c) => {
       where transaction_id = ${txnId} and user_id = ${rowTenant}`
     if (!one(auth)) return c.json({ error: 'not-signed' }, 422)
     code = randomBytes(6).toString('hex')
-    // {CODE}-R-{BE_YEAR}-{NNN} via generate_doc_number(user_id, doc_type, year, prefix)
-    const prefix = `${prof.code}-R`
-    const n = await db`select generate_doc_number(${rowTenant}, 'vendor_receipt', ${prof.beYear}, ${prefix}) as number`
+    // RCT-{VENDORNO}-{BE_YEAR}-{NNN} via generate_doc_number(user_id, doc_type, year, vendor_no)
+    const vno = one<{ vendor_no: number }>(await db`
+      select v.vendor_no from vendor_payables p
+      join vendor_payees v on v.id = p.vendor_id
+      where p.id = ${txnId} and p.user_id = ${rowTenant}`)
+    const n = await db`select generate_doc_number(${rowTenant}, 'vendor_receipt', ${currentBeYear()}, ${Number(vno?.vendor_no ?? 0)}) as number`
     number = String(one<Record<string, unknown>>(n)?.number)
     await db`insert into vendor_receipts (user_id, transaction_id, number, issue_date, verification_code, status)
       values (${rowTenant}, ${txnId}, ${number}, CURRENT_DATE, ${code}, 'issued')`
@@ -275,7 +287,7 @@ app.post('/api/transactions/:id/finalize', async (c) => {
   const rows = await db`
     select t.description, t.note, t.line_items, t.gross_amount, t.wht_rate, t.wht_amount, t.net_amount,
       t.transfer_date, t.slip_reference,
-      a.vendor_name, a.vendor_address, a.vendor_masked_id, a.signature_image_path,
+      a.vendor_prefix, a.vendor_name, a.vendor_address, a.vendor_masked_id, a.signature_image_path,
       a.signed_at, a.verification_method, a.consent_text_version
     from vendor_payables t
     join vendor_authorizations a on a.transaction_id = t.id
@@ -284,11 +296,50 @@ app.post('/api/transactions/:id/finalize', async (c) => {
     description: string; note: string; line_items: unknown;
     gross_amount: string; wht_rate: string; wht_amount: string;
     net_amount: string; transfer_date: string; slip_reference: string;
-    vendor_name: string; vendor_address: string; vendor_masked_id: string;
+    vendor_prefix: string; vendor_name: string; vendor_address: string; vendor_masked_id: string;
     signature_image_path: string; signed_at: string;
     verification_method: string; consent_text_version: string;
   }>(rows)
   if (!d) return c.json({ error: 'not-signed' }, 422)
+
+  // Auto-generate the withholding certificate on issuance (idempotent per txn).
+  const whtAmountNum = Number(d.wht_amount)
+  if (whtAmountNum > 0) {
+    await withTenant(rowTenant, 'owner', async () => {
+      const already = one<{ id: string }>(
+        await db`select id from wht_records where user_id = ${rowTenant} and source_transaction_id = ${txnId}`,
+      )
+      if (already) return
+      let taxId = ''
+      try {
+        const enc = one<{ id_number_encrypted: string | null }>(await db`
+          select v.id_number_encrypted from vendor_payables p
+          join vendor_payees v on v.id = p.vendor_id
+          where p.id = ${txnId} and p.user_id = ${rowTenant}`)
+        if (enc?.id_number_encrypted) taxId = decryptId(enc.id_number_encrypted) ?? ''
+      } catch {
+        /* key absent — certificate still issues without tax id */
+      }
+      const vName = vendorDisplayName(d.vendor_prefix, d.vendor_name)
+      const vType: 'individual' | 'company' = isEntityName(d.vendor_name) ? 'company' : 'individual'
+      const wv = one<{ id: string }>(await db`select id from wht_vendors
+        where user_id = ${rowTenant} and ((${taxId} <> '' and tax_id = ${taxId}) or name = ${vName}) limit 1`)
+      let vendorId = wv?.id
+      if (!vendorId) {
+        vendorId = String(
+          one<{ id: string }>(await db`insert into wht_vendors (user_id, name, tax_id, address, vendor_type)
+            values (${rowTenant}, ${vName}, ${taxId}, ${d.vendor_address}, ${vType}) returning id`)?.id,
+        )
+      }
+      const issueDate = String(d.transfer_date).slice(0, 10)
+      await db`insert into wht_records
+        (user_id, vendor_id, form_type, issue_date, amount, wht_rate, wht_amount, description, status, certificate_no, source_transaction_id)
+        values (${rowTenant}, ${vendorId}, ${formTypeForVendorType(vType)}, ${issueDate}::date,
+          ${Number(d.gross_amount)}, ${Number(d.wht_rate)}, ${whtAmountNum}, ${d.note || d.description}, 'active',
+          generate_wht_certificate_no(${rowTenant}, ${issueDate}::date), ${txnId})`
+    })
+  }
+
   const rawItems = Array.isArray(d.line_items) ? (d.line_items as { description?: unknown; amount?: unknown }[]) : []
   const lineItems = rawItems
     .map((it) => ({ description: String(it.description ?? ''), amount: Number(it.amount) || 0 }))
@@ -309,7 +360,7 @@ app.post('/api/transactions/:id/finalize', async (c) => {
     consentVersion: d.consent_text_version,
     signedAt: d.signed_at,
     client: { code: prof.code, display: prof.display },
-    vendor: { name: d.vendor_name, address: d.vendor_address, maskedId: d.vendor_masked_id },
+    vendor: { prefix: d.vendor_prefix, name: d.vendor_name, address: d.vendor_address, maskedId: d.vendor_masked_id },
     lineItems,
     note: d.note,
     description: d.description,

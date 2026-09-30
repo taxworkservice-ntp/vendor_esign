@@ -6,6 +6,7 @@ import { PILOT_CONFIG, calcWht, isDuplicateSlipRef } from '../lib/config'
 import { defaultSettings, whtRateFor } from '../lib/settings'
 import { itemsTotal, lineTotal, normalizeLineItem } from '../lib/line-items'
 import { vendorTaxIdMatches } from '../lib/vendor-match'
+import { vendorDisplayName } from '../lib/vendor-name'
 import { useAllSlipRefs, useCreateTransaction } from '../hooks/useTransactions'
 import { useAllVendors, useRecalledVendorId, useVendorMemory } from '../hooks/useVendors'
 import { useAllItems } from '../hooks/useItems'
@@ -14,8 +15,10 @@ import { VendorPicker } from '../components/vendor-picker'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
 import { Button } from '../components/ui/button'
-import { FieldError, Input, Label, inputCls } from '../components/ui/input'
-import { fmtTHB } from '../lib/format'
+import { FieldError, Input, Label } from '../components/ui/input'
+import { Select } from '../components/ui/select'
+import { ConfirmDialog } from '../components/ui/confirm-dialog'
+import { fmtTHB, fmtDateTH } from '../lib/format'
 import { cn } from '../lib/cn'
 import type { LineItem, WhtMode } from '../lib/types'
 
@@ -81,6 +84,7 @@ export function TransactionNew() {
   const [slipName, setSlipName] = useState('')
   const [vendorTaxId, setVendorTaxId] = useState('')
   const [touched, setTouched] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   // Vendor memory: auto-fill if the user hasn't typed yet, else offer suggestions.
   const memory = useVendorMemory(vendorId)
@@ -231,6 +235,11 @@ export function TransactionNew() {
   const submit = () => {
     setTouched(true)
     if (invalid) return
+    setConfirmOpen(true)
+  }
+
+  const confirmSave = () => {
+    setConfirmOpen(false)
     create.mutate(
       {
         vendorId,
@@ -250,7 +259,7 @@ export function TransactionNew() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
-      <PageHeader title="สร้างรายการใหม่" sub="ชำระผ่านธนาคาร · เลขที่ใบเสร็จออกเมื่อผู้ขายลงนามแล้ว" />
+      <PageHeader title="สร้างรายการใหม่" sub="ชำระผ่านธนาคาร · เลขที่ใบเสร็จจะออกเมื่อผู้ขายลงนามแล้ว" />
 
       <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
         {/* ── Main column ── */}
@@ -269,6 +278,7 @@ export function TransactionNew() {
                 placeholder="13 หลัก — ใช้ล็อกหน้าผู้ขาย"
                 inputMode="numeric"
                 className="font-mono"
+                invalid={touched && !!errors.vendorTaxId}
               />
               <div className="mt-1.5 text-body">
                 {selectedVendor?.taxId ? (
@@ -283,14 +293,14 @@ export function TransactionNew() {
                   )
                 ) : (
                   <p className={taxDigits === 13 ? 'font-medium text-emerald-600' : 'text-ink-400'}>
-                    {taxDigits === 13 ? '✓ ครบ 13 หลัก — ใช้ล็อกหน้าผู้ขายได้' : `• ครบ 13 หลัก (${taxDigits}/13)`}
+                    {taxDigits === 13 ? 'ครบ 13 หลัก — ใช้เป็นรหัสล็อกหน้าลงนามได้' : `• กรอกแล้ว ${taxDigits}/13 หลัก`}
                   </p>
                 )}
               </div>
               {recalledId.data && !selectedVendor?.taxId && recalledId.data === vendorTaxId && (
                 <div className="mt-1.5 flex items-center justify-between gap-2 rounded-control bg-teal-50 px-3 py-2 text-body text-teal-800">
                   <span className="flex items-center gap-1.5 font-medium">
-                    <Sparkles size={13} /> ดึงเลขบัตรที่บันทึกไว้ (เข้ารหัส) ของ {selectedVendor?.name}
+                    <Sparkles size={13} /> เรียกเลขบัตรประชาชนที่บันทึกไว้ (เข้ารหัส) ของ {selectedVendor?.name}
                   </span>
                   <button
                     type="button"
@@ -310,7 +320,7 @@ export function TransactionNew() {
               {appliedVendor === vendorId && rows.some((r) => r.description) && (
                 <div className="flex items-center justify-between gap-2 rounded-control bg-teal-50 px-3.5 py-2.5 text-body text-teal-800">
                   <span className="flex items-center gap-1.5 font-medium">
-                    <Sparkles size={14} /> ดึงจากรายการล่าสุดของ {selectedVendor?.name}
+                    <Sparkles size={14} /> คัดลอกจากรายการล่าสุดของ {selectedVendor?.name}
                   </span>
                   <button type="button" onClick={clearAuto} className="inline-flex items-center gap-1 rounded-control px-2 py-1 font-semibold hover:bg-teal-100">
                     <X size={13} /> ล้าง
@@ -320,7 +330,7 @@ export function TransactionNew() {
               {showSuggest && catalog.length > 0 && (
                 <div className="rounded-control bg-ink-50 px-3.5 py-3">
                   <p className="flex items-center gap-1.5 text-body font-semibold text-ink-500">
-                    <Sparkles size={14} /> รายการที่ใช้บ่อยของ {selectedVendor?.name} — เลือกเพื่อเพิ่มรายการ
+                    <Sparkles size={14} /> รายการที่ใช้เป็นประจำของ {selectedVendor?.name} — เลือกเพื่อเพิ่มรายการ
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {catalog.slice(0, 8).map((it) => (
@@ -332,7 +342,7 @@ export function TransactionNew() {
                         title={`ใช้ ${it.timesUsed} ครั้ง`}
                         aria-label={`เพิ่ม ${it.description} จำนวน ${it.lastAmount} บาท`}
                       >
-                        {it.description} · ฿{fmtTHB(it.lastAmount)}
+                        {it.description} · {fmtTHB(it.lastAmount)}
                       </button>
                     ))}
                   </div>
@@ -354,10 +364,11 @@ export function TransactionNew() {
                 <div className="flex items-center gap-2 border-b border-card-border bg-ink-50/80 px-3 py-2 text-label font-semibold uppercase tracking-wide text-ink-500">
                   <span className="w-6 shrink-0 text-right">#</span>
                   <span className="min-w-[160px] flex-1">รายละเอียด</span>
-                  <span className="w-40 shrink-0">จำนวน</span>
-                  <span className="w-24 shrink-0 text-right">ราคา</span>
+                  <span className="w-14 shrink-0 text-right">จำนวน</span>
+                  <span className="w-24 shrink-0">หน่วย</span>
+                  <span className="w-24 shrink-0 text-right">ราคา/หน่วย</span>
                   <span className="w-20 shrink-0 text-right">ส่วนลด</span>
-                  <span className="w-24 shrink-0 text-right">จำนวนเงิน (฿)</span>
+                  <span className="w-24 shrink-0 text-right">จำนวนเงิน (บาท)</span>
                   <span className="w-8 shrink-0" />
                 </div>
                 <div className="divide-y divide-ink-100">
@@ -377,21 +388,19 @@ export function TransactionNew() {
                           list={CATALOG_DATALIST}
                           className="h-10 min-w-[160px] flex-1 rounded-control border border-transparent bg-transparent px-2 text-body outline-none placeholder:text-ink-400 focus:border-ink-300 focus:bg-white"
                         />
-                        <div className="flex w-40 shrink-0 items-center gap-1">
-                          <input
-                            value={r.quantity}
-                            onChange={(e) => setRow(i, { quantity: e.target.value })}
-                            inputMode="decimal"
-                            placeholder="1"
-                            className="h-10 w-14 shrink-0 rounded-control border border-transparent bg-transparent px-1.5 text-right text-body tabular-nums outline-none placeholder:text-ink-400 focus:border-ink-300 focus:bg-white"
-                          />
-                          <input
-                            value={r.unit}
-                            onChange={(e) => setRow(i, { unit: e.target.value })}
-                            placeholder="รายการ"
-                            className="h-10 min-w-0 flex-1 rounded-control border border-transparent bg-transparent px-1.5 text-body text-ink-600 outline-none placeholder:text-ink-400 focus:border-ink-300 focus:bg-white"
-                          />
-                        </div>
+                        <input
+                          value={r.quantity}
+                          onChange={(e) => setRow(i, { quantity: e.target.value })}
+                          inputMode="decimal"
+                          placeholder="1"
+                          className="h-10 w-14 shrink-0 rounded-control border border-transparent bg-transparent px-1.5 text-right text-body tabular-nums outline-none placeholder:text-ink-400 focus:border-ink-300 focus:bg-white"
+                        />
+                        <input
+                          value={r.unit}
+                          onChange={(e) => setRow(i, { unit: e.target.value })}
+                          placeholder="รายการ"
+                          className="h-10 w-24 shrink-0 rounded-control border border-transparent bg-transparent px-1.5 text-body text-ink-600 outline-none placeholder:text-ink-400 focus:border-ink-300 focus:bg-white"
+                        />
                         <input
                           value={r.unitPrice}
                           onChange={(e) => setRow(i, { unitPrice: e.target.value })}
@@ -406,7 +415,7 @@ export function TransactionNew() {
                           placeholder="0"
                           className="h-10 w-20 shrink-0 rounded-control border border-transparent bg-transparent px-2 text-right text-body tabular-nums outline-none placeholder:text-ink-400 focus:border-ink-300 focus:bg-white"
                         />
-                        <span className="w-24 shrink-0 text-right text-body font-semibold tabular-nums">฿{fmtTHB(rowAmount)}</span>
+                        <span className="w-24 shrink-0 text-right text-body font-semibold tabular-nums">{fmtTHB(rowAmount)}</span>
                         <button
                           type="button"
                           onClick={() => setRows((rs) => (rs.length > 1 ? rs.filter((_, idx) => idx !== i) : rs))}
@@ -430,11 +439,11 @@ export function TransactionNew() {
                       <Plus size={15} /> เพิ่มบรรทัด
                     </button>
                     <Link to="/items" className="text-body font-semibold text-ink-500 underline hover:text-ink-900">
-                      แคตตาล็อก
+                      รายการสินค้า/บริการ
                     </Link>
                   </div>
                   <span className="text-body text-ink-500">
-                    {validItems.length} รายการ · ฿{fmtTHB(grossNum)}
+                    {validItems.length} รายการ · {fmtTHB(grossNum)}
                   </span>
                 </div>
               </div>
@@ -453,16 +462,16 @@ export function TransactionNew() {
           <Section step="3" title="การชำระเงิน" desc="ยอดและอัตราภาษีหัก ณ ที่จ่าย">
             <div>
               <Label>ประเภทการจ่าย</Label>
-              <select className={inputCls} value={paymentType} onChange={(e) => changePaymentType(e.target.value)}>
+              <Select value={paymentType} onChange={(e) => changePaymentType(e.target.value)}>
                 {cfg.paymentTypes.map((p) => (
                   <option key={p}>{p}</option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div>
-              <Label hint="ผู้ขายรับเต็ม = ผู้จ่ายรับภาระ WHT ให้">วิธีคิด WHT</Label>
+              <Label hint="ผู้ขายรับเต็มจำนวน = ผู้จ่ายรับภาระภาษีหัก ณ ที่จ่ายแทน">วิธีคิดภาษีหัก ณ ที่จ่าย</Label>
               <div className="grid grid-cols-2 gap-1.5 rounded-control bg-ink-100 p-1">
-                {([['deduct', 'หักจากยอด'], ['grossup', 'ผู้ขายรับเต็ม']] as const).map(([v, th]) => (
+                {([['deduct', 'หักจากยอดชำระ'], ['grossup', 'ผู้ขายรับเต็มจำนวน']] as const).map(([v, th]) => (
                   <button
                     key={v}
                     type="button"
@@ -478,21 +487,21 @@ export function TransactionNew() {
               </div>
               <p className="mt-1.5 text-label text-ink-500">
                 {whtMode === 'deduct'
-                  ? `หัก ณ ที่จ่าย ${whtRate}% จากยอด → ผู้ขายได้รับ ฿${fmtTHB(net)}`
-                  : `ผู้ขายได้รับเต็ม ฿${fmtTHB(net)} · บวก WHT ${whtRate}% → ผู้จ่ายจ่ายรวม ฿${fmtTHB(gross)}`}
+                  ? `หักภาษี ณ ที่จ่าย ${whtRate}% จากยอดชำระ → ผู้ขายได้รับ ${fmtTHB(net)}`
+                  : `ผู้ขายได้รับเต็มจำนวน ${fmtTHB(net)} · บวกภาษีหัก ณ ที่จ่าย ${whtRate}% → ผู้จ่ายจ่ายรวม ${fmtTHB(gross)}`}
               </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>WHT %</Label>
-                <select className={inputCls} value={whtRate} onChange={(e) => { markTouched(); setWhtRate(Number(e.target.value)) }}>
+                <Label>อัตราภาษีหัก ณ ที่จ่าย (%)</Label>
+                <Select value={whtRate} onChange={(e) => { markTouched(); setWhtRate(Number(e.target.value)) }}>
                   {cfg.whtRates.map((r) => (
                     <option key={`${r.paymentType}-${r.value}`} value={r.value}>
                       {r.label || `${r.paymentType} — ${r.value}%`}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
               <div>
                 <Label>วันที่โอน</Label>
@@ -505,37 +514,37 @@ export function TransactionNew() {
                 <>
                   <div className="flex justify-between py-0.5">
                     <span className="text-ink-500">รวมเป็นเงิน (ฐานภาษี)</span>
-                    <span className="font-semibold tabular-nums">฿{fmtTHB(gross)}</span>
+                    <span className="font-semibold tabular-nums">{fmtTHB(gross)}</span>
                   </div>
                   <div className="flex justify-between py-0.5">
                     <span className="text-ink-500">หัก WHT ({whtRate}%)</span>
-                    <span className="font-semibold tabular-nums text-ink-500">− ฿{fmtTHB(wht)}</span>
+                    <span className="font-semibold tabular-nums text-ink-500">− {fmtTHB(wht)}</span>
                   </div>
                   <div className="mt-1.5 flex justify-between border-t border-card-border pt-2">
                     <span className="font-semibold">ยอดสุทธิที่ผู้ขายได้รับ</span>
-                    <span className="text-lg font-semibold tabular-nums">฿{fmtTHB(net)}</span>
+                    <span className="text-lg font-semibold tabular-nums">{fmtTHB(net)}</span>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="flex justify-between py-0.5">
                     <span className="text-ink-500">ผู้ขายได้รับ (เต็ม)</span>
-                    <span className="font-semibold tabular-nums">฿{fmtTHB(net)}</span>
+                    <span className="font-semibold tabular-nums">{fmtTHB(net)}</span>
                   </div>
                   <div className="flex justify-between py-0.5">
                     <span className="text-ink-500">บวก WHT ({whtRate}%)</span>
-                    <span className="font-semibold tabular-nums text-ink-500">+ ฿{fmtTHB(wht)}</span>
+                    <span className="font-semibold tabular-nums text-ink-500">+ {fmtTHB(wht)}</span>
                   </div>
                   <div className="mt-1.5 flex justify-between border-t border-card-border pt-2">
                     <span className="font-semibold">ยอดจ่ายรวม (ฐานภาษี)</span>
-                    <span className="text-lg font-semibold tabular-nums">฿{fmtTHB(gross)}</span>
+                    <span className="text-lg font-semibold tabular-nums">{fmtTHB(gross)}</span>
                   </div>
                 </>
               )}
               {gross >= cfg.stampDutyWarningThreshold && (
                 <p className="mt-3 flex gap-2 rounded-control bg-amber-50 p-3 text-body font-medium text-amber-800">
                   <TriangleAlert size={16} className="mt-0.5 shrink-0" />
-                  ยอดเกิน ฿{fmtTHB(cfg.stampDutyWarningThreshold)} — โปรดตรวจสอบอากรแสตมป์กับนักบัญชีก่อนออกเอกสาร
+                  ยอดเกิน {fmtTHB(cfg.stampDutyWarningThreshold)} — โปรดตรวจสอบอากรแสตมป์กับนักบัญชีก่อนออกเอกสาร
                 </p>
               )}
               {whtMismatch && <FieldError msg="อัตราภาษีหัก ณ ที่จ่ายไม่อยู่ในค่ามาตรฐาน — ระบบจะทำเครื่องหมายให้ตรวจสอบ" />}
@@ -545,9 +554,9 @@ export function TransactionNew() {
           <Section step="4" title="เอกสารอ้างอิง" desc="ไม่บังคับ — แนบภายหลังได้">
             <div>
               <Label>เลขที่อ้างอิงสลิป</Label>
-              <Input value={slipRef} onChange={(e) => setSlipRef(e.target.value)} placeholder="เช่น TRF-881201" className="font-mono" />
+              <Input value={slipRef} onChange={(e) => setSlipRef(e.target.value)} placeholder="เช่น TRF-881201" className="font-mono" invalid={touched && !!errors.slipRef} />
               {touched && <FieldError msg={errors.slipRef} />}
-              {slipRef && !dup && <p className="mt-1.5 text-body text-emerald-600">เลขนี้ยังไม่ซ้ำ ✓</p>}
+              {slipRef && !dup && <p className="mt-1.5 text-body text-emerald-600">เลขที่อ้างอิงนี้ยังไม่ถูกใช้ในระบบ</p>}
             </div>
             <div>
               <Label>สลิปโอนเงิน</Label>
@@ -570,12 +579,86 @@ export function TransactionNew() {
             <Button variant="ghost" onClick={() => nav(-1)} className="sm:flex-1">
               ยกเลิก
             </Button>
-            <Button onClick={submit} disabled={create.isPending} className="sm:flex-[2]">
+            <Button onClick={submit} loading={create.isPending} className="sm:flex-[2]">
               {create.isPending ? 'กำลังบันทึก…' : 'บันทึกรายการ'}
             </Button>
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        tone="primary"
+        size="lg"
+        title="ตรวจสอบรายการก่อนบันทึก"
+        confirmLabel="ยืนยันบันทึก"
+        busy={create.isPending}
+        onConfirm={confirmSave}
+        onCancel={() => setConfirmOpen(false)}
+        message={
+          <div className="space-y-3 text-ink-700">
+            <div className="rounded-control bg-ink-50 p-3.5 text-body">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-ink-500">ผู้ขาย</p>
+                  <p className="truncate font-semibold">{vendorDisplayName(selectedVendor?.prefix, selectedVendor?.name)}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-ink-500">วันที่โอน</p>
+                  <p className="font-semibold">{fmtDateTH(transferDate)}</p>
+                </div>
+              </div>
+              <p className="mt-2 text-ink-500">ประเภทการจ่าย · {paymentType || '—'}</p>
+              {note.trim() && <p className="mt-0.5 text-ink-500">บันทึกช่วยจำ · {note.trim()}</p>}
+            </div>
+
+            <div className="divide-y divide-ink-100 rounded-control border border-card-border">
+              <div className="flex items-baseline gap-2 bg-ink-50/70 px-3 py-1.5 text-label font-semibold uppercase tracking-wide text-ink-500">
+                <span className="min-w-0 flex-1">รายละเอียด</span>
+                <span className="w-10 shrink-0 text-right">จำนวน</span>
+                <span className="w-16 shrink-0 text-right">หน่วย</span>
+                <span className="w-24 shrink-0 text-right">ราคา/หน่วย</span>
+                <span className="w-24 shrink-0 text-right">จำนวนเงิน</span>
+              </div>
+              {validItems.map((it, i) => (
+                <div key={i} className="flex items-baseline gap-2 px-3 py-1.5 text-body">
+                  <span className="min-w-0 flex-1 truncate">{it.description}</span>
+                  <span className="w-10 shrink-0 text-right tabular-nums">{it.quantity ?? 1}</span>
+                  <span className="w-16 shrink-0 text-right text-ink-500">{it.unit || 'รายการ'}</span>
+                  <span className="w-24 shrink-0 text-right tabular-nums">{fmtTHB(it.unitPrice ?? it.amount)}</span>
+                  <span className="w-24 shrink-0 text-right font-semibold tabular-nums">{fmtTHB(it.amount)}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-0.5 rounded-control bg-ink-50 p-3.5 text-body">
+              <div className="flex justify-between">
+                <span className="text-ink-500">รวมเป็นเงิน (ฐานภาษี)</span>
+                <span className="font-semibold tabular-nums">{fmtTHB(gross)}</span>
+              </div>
+              {wht > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-ink-500">หักภาษี ณ ที่จ่าย {whtRate}%</span>
+                  <span className="font-semibold tabular-nums text-ink-500">− {fmtTHB(wht)}</span>
+                </div>
+              )}
+              <div className="mt-1 flex justify-between border-t border-card-border pt-1.5">
+                <span className="font-semibold">ยอดสุทธิที่ผู้ขายได้รับ</span>
+                <span className="text-base font-semibold tabular-nums">{fmtTHB(net)}</span>
+              </div>
+            </div>
+
+            {(slipRef.trim() || slipName) && (
+              <p className="text-body text-ink-500">
+                เอกสารอ้างอิง · {slipRef.trim() || '—'}{slipName ? ` · ${slipName}` : ''}
+              </p>
+            )}
+            <p className="text-label text-ink-400">
+              เมื่อบันทึกแล้ว ระบบจะสร้างลิงก์สำหรับส่งให้ผู้ขายลงนาม (เอกสารแก้ไข/ลบไม่ได้ แต่ยกเลิกได้)
+            </p>
+          </div>
+        }
+      />
     </div>
   )
 }

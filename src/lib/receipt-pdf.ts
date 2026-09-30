@@ -11,6 +11,9 @@
 
 export async function downloadElementAsA4Pdf(el: HTMLElement, filename: string): Promise<void> {
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')])
+  // Guard against the on-screen fit-to-width zoom skewing the capture.
+  const prevZoom = el.style.zoom
+  el.style.zoom = '1'
   // The export class normalizes the sheet to a clean, border-less A4 page.
   el.classList.add('pdf-export')
   try {
@@ -25,5 +28,6 @@ export async function downloadElementAsA4Pdf(el: HTMLElement, filename: string):
     pdf.save(filename)
   } finally {
     el.classList.remove('pdf-export')
+    el.style.zoom = prevZoom
   }
 }

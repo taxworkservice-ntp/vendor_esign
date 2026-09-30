@@ -20,18 +20,18 @@ export function VerifyPage() {
         </span>
         <div className="leading-tight">
           <p className="text-body font-semibold">ตรวจสอบใบเสร็จ</p>
-          <p className="text-label text-ink-500">Taxwork pilot · แสดงเฉพาะข้อมูลที่จำเป็น</p>
+          <p className="text-label text-ink-500">ระบบออกใบเสร็จรับเงิน · แสดงเฉพาะข้อมูลที่จำเป็น</p>
         </div>
       </div>
       {!t ? (
         <Card><CardBody className="py-10 text-center">
           <p className="font-semibold">ไม่พบรหัสตรวจสอบนี้</p>
-          <p className="mt-1 text-body text-ink-500">ตรวจตัวอักษรอีกครั้ง หรือสแกน QR บนเอกสารใหม่</p>
+          <p className="mt-1 text-body text-ink-500">โปรดตรวจสอบรหัสอีกครั้ง หรือสแกน QR บนเอกสาร</p>
         </CardBody></Card>
       ) : (
         <Card><CardBody className="space-y-3 text-body">
           <div className="flex items-center justify-between">
-            <span className="font-mono text-body">{t.receiptNumber ?? mockReceiptNumber(t.id, t.tenantId)}</span>
+            <span className="font-mono text-body">{t.receiptNumber ?? mockReceiptNumber(t.id, t.vendor.vendorNo ?? 0)}</span>
             <StatusBadge status={t.status} />
           </div>
           <p className="flex justify-between border-t border-card-border pt-3"><span className="text-ink-500">วันที่ออก</span><span className="font-semibold">{fmtDateTH(t.transferDate)}</span></p>

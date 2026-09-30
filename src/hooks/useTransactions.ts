@@ -6,7 +6,10 @@ import { normalizeTaxId, taxIdHash, taxIdLast4 } from '../lib/taxid'
 import { emptyFilters, filterTransactions, sortTransactions, type TransactionFilters } from '../lib/txn-filters'
 import { loadTxns, saveTxns } from '../lib/mock'
 import { loadVendors } from '../lib/vendors-mock'
+import { currentBeYear } from '../lib/settings'
+import { nextReceiptNumber } from '../lib/receipt-number'
 import { rememberVendorId } from '../lib/vendor-id'
+import { generateWhtForTxn } from '../lib/wht-mock'
 import { apiGet, apiSend, hasServer } from '../lib/api-client'
 import { useClientAuth } from '../lib/client-auth'
 
@@ -76,7 +79,7 @@ export function useCreateTransaction() {
       const slipRef = input.slipReference.trim()
       const inTenant = all.filter((t) => t.tenantId === activeTenant)
       if (slipRef && isDuplicateSlipRef(slipRef, inTenant.map((t) => t.slipReference))) {
-        throw new Error('เลขที่อ้างอิงสลิปนี้ถูกใช้แล้ว — ตรวจสอบสลิปซ้ำ')
+        throw new Error('เลขที่อ้างอิงสลิปนี้ถูกใช้แล้ว — โปรดตรวจสอบสลิปซ้ำ')
       }
       const lineItems = input.lineItems
         .map((it) => ({ description: it.description.trim(), amount: Number(it.amount) || 0 }))
@@ -86,9 +89,9 @@ export function useCreateTransaction() {
       const found = loadVendors(activeTenant).find((v) => v.id === input.vendorId)
       if (!found) throw new Error('กรุณาเลือกผู้ขาย')
       if (found.taxId && normalizeTaxId(found.taxId) !== normalizeTaxId(input.vendorTaxId)) {
-        throw new Error('เลขบัตรไม่ตรงกับทะเบียนผู้ขาย — ตรวจสอบอีกครั้ง')
+        throw new Error('เลขบัตรไม่ตรงกับทะเบียนผู้ขาย — โปรดตรวจสอบอีกครั้ง')
       }
-      const vendor = { id: found.id, name: found.name, address: found.address, maskedId: found.maskedId, taxId: found.taxId }
+      const vendor = { id: found.id, vendorNo: found.vendorNo, prefix: found.prefix, name: found.name, address: found.address, maskedId: found.maskedId, taxId: found.taxId }
       const id = `TX-${1043 + all.length}`
       const now = new Date().toISOString()
       const note = input.note.trim()
@@ -117,7 +120,7 @@ export function useCreateTransaction() {
         checks: [
           { key: 'slip', label: slipRef ? 'สลิปตรงยอดสุทธิ' : 'ยังไม่มีสลิป — รอแนบภายหลัง', state: slipRef ? 'pass' : 'warn' },
           { key: 'name', label: 'ชื่อผู้รับตรงกับผู้ขาย', state: 'pass' },
-          { key: 'wht', label: 'WHT ตรงตามค่าที่ตั้งไว้', state: 'pass' },
+          { key: 'wht', label: 'ภาษีหัก ณ ที่จ่ายตรงตามค่าที่ตั้งไว้', state: 'pass' },
         ],
       }
       write([txn, ...all])
@@ -151,8 +154,8 @@ export function useTransactionActions() {
       }
       apply((all) =>
         all.map((t) =>
-          t.id === id
-            ? { ...t, status: 'sent', timeline: [...t.timeline, { at: new Date().toISOString(), label: 'ส่งลิงก์ให้ผู้ขาย' }] }
+          t.id === id && t.status === 'draft'
+            ? { ...t, status: 'sent', inviteToken: t.inviteToken ?? `tok_${Math.random().toString(36).slice(2, 10)}`, timeline: [...t.timeline, { at: new Date().toISOString(), label: 'ส่งลิงก์ให้ผู้ขาย' }] }
             : t,
         ),
       )
@@ -180,7 +183,80 @@ export function useTransactionActions() {
       apply((all) =>
         all.map((t) =>
           t.id === id
-            ? { ...t, status: 'void', voidReason: reason, timeline: [...t.timeline, { at: new Date().toISOString(), label: 'ยกเลิกเอกสาร (void)', detail: reason }] }
+            ? { ...t, status: 'void', voidReason: reason, timeline: [...t.timeline, { at: new Date().toISOString(), label: 'ยกเลิกเอกสาร', detail: reason }] }
+            : t,
+        ),
+      )
+    },
+    // Finalize: only a signed transaction can be issued. Assigns the receipt
+    // number once (never recomputed) and advances the status to 'issued'.
+    issue: async (id: string) => {
+      if (hasServer) {
+        await apiSend(`/api/transactions/${id}/finalize`, 'POST')
+        refresh()
+        qc.invalidateQueries({ queryKey: ['wht'] })
+        return
+      }
+      const all = read()
+      const target = all.find((t) => t.id === id)
+      if (!target || target.status !== 'signed') return
+      const receiptNumber =
+        target.receiptNumber ??
+        nextReceiptNumber(
+          target.vendor.vendorNo ?? 0,
+          currentBeYear(),
+          all.filter((t) => t.tenantId === target.tenantId && t.id !== id).map((t) => t.receiptNumber),
+        )
+      apply((rows) =>
+        rows.map((t) =>
+          t.id === id
+            ? {
+                ...t,
+                status: 'issued',
+                receiptNumber,
+                timeline: [...t.timeline, { at: new Date().toISOString(), label: 'ออกใบเสร็จ', detail: receiptNumber }],
+              }
+            : t,
+        ),
+      )
+      // Issuing a receipt with WHT auto-generates the withholding certificate.
+      if (target.whtAmount > 0) {
+        generateWhtForTxn({ ...target, status: 'issued', receiptNumber })
+        qc.invalidateQueries({ queryKey: ['wht'] })
+      }
+    },
+    // Slip is optional at creation and can be attached later. Reference stays
+    // unique per tenant (case/space-insensitive), matching the create-time rule.
+    attachSlip: async (id: string, input: { slipReference: string; slipName: string }) => {
+      if (hasServer) {
+        await apiSend(`/api/client/transactions/${id}/slip`, 'POST', input)
+        refresh()
+        return
+      }
+      const all = read()
+      const target = all.find((t) => t.id === id)
+      if (!target) return
+      const ref = input.slipReference.trim()
+      const others = all
+        .filter((t) => t.id !== id && t.tenantId === target.tenantId)
+        .map((t) => t.slipReference)
+      if (ref && isDuplicateSlipRef(ref, others)) {
+        throw new Error('เลขที่อ้างอิงสลิปนี้ถูกใช้แล้ว — โปรดตรวจสอบสลิปซ้ำ')
+      }
+      apply((rows) =>
+        rows.map((t) =>
+          t.id === id
+            ? {
+                ...t,
+                slipReference: ref,
+                slipName: input.slipName.trim(),
+                checks: t.checks.map((c) =>
+                  c.key === 'slip'
+                    ? { ...c, label: ref ? 'สลิปตรงยอดสุทธิ' : 'ยังไม่มีสลิป — รอแนบภายหลัง', state: ref ? 'pass' : 'warn' }
+                    : c,
+                ),
+                timeline: [...t.timeline, { at: new Date().toISOString(), label: 'แนบเอกสารอ้างอิงสลิป', detail: ref || undefined }],
+              }
             : t,
         ),
       )

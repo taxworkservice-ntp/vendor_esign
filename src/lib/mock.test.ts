@@ -16,8 +16,8 @@ describe('multi-client mock seed', () => {
     expect(SEED_TXNS.filter((t) => t.tenantId === 'ABC').some((t) => demoVendorIds.has(t.vendor.id))).toBe(false)
   })
 
-  it('derives a per-client receipt series', () => {
-    expect(mockReceiptNumber('TX-1041', 'ABC').startsWith('ABC-R-2569-')).toBe(true)
-    expect(mockReceiptNumber('DM-2002', 'DEMO').startsWith('DEMO-R-2569-')).toBe(true)
+  it('derives a per-vendor receipt series', () => {
+    expect(mockReceiptNumber('TX-1041', 2).startsWith('RCT-002-2569-')).toBe(true)
+    expect(mockReceiptNumber('DM-2002', 2).startsWith('RCT-002-2569-')).toBe(true)
   })
 })

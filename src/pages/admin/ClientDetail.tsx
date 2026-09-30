@@ -6,6 +6,14 @@ import { Card, CardBody } from '../../components/ui/card'
 import { PageHeader } from '../../components/ui/page-header'
 import { Button } from '../../components/ui/button'
 import { FieldError, Input, Label } from '../../components/ui/input'
+import { Select } from '../../components/ui/select'
+import { ConfirmDialog } from '../../components/ui/confirm-dialog'
+
+type AdminConfirm =
+  | { kind: 'suspend' }
+  | { kind: 'activate' }
+  | { kind: 'reset'; userId: string; email: string }
+  | { kind: 'disable'; userId: string; email: string }
 
 export function ClientDetail() {
   const { id } = useParams()
@@ -19,6 +27,19 @@ export function ClientDetail() {
   const [role, setRole] = useState<'owner' | 'manager' | 'officer'>('officer')
   const [tempPw, setTempPw] = useState('')
   const [err, setErr] = useState('')
+  const [confirm, setConfirm] = useState<AdminConfirm | null>(null)
+
+  const runConfirm = () => {
+    if (!confirm) return
+    if (confirm.kind === 'suspend') void update.mutateAsync({ status: 'suspended' })
+    else if (confirm.kind === 'activate') void update.mutateAsync({ status: 'active' })
+    else if (confirm.kind === 'disable') void actions.disable(confirm.userId)
+    else if (confirm.kind === 'reset') {
+      const u = confirm
+      void actions.reset(u.userId).then((pw) => setTempPw(pw))
+    }
+    setConfirm(null)
+  }
 
   const makeUser = async () => {
     setErr('')
@@ -39,16 +60,16 @@ export function ClientDetail() {
     <div className="space-y-5">
       <PageHeader
         title={`${t.clientCode} · ${t.displayName}`}
-        sub={`Series ${t.clientCode}-R-${t.beYear}- · เริ่มที่ ${t.startNumber} · สถานะ ${t.status === 'active' ? 'ใช้งาน' : 'ระงับ'}`}
+        sub={`ชุดเลขที่ ${t.clientCode}-R-${t.beYear}- · เริ่มที่ ${t.startNumber} · สถานะ ${t.status === 'active' ? 'ใช้งาน' : 'ระงับ'}`}
         actions={
           t.status === 'active'
-            ? <Button variant="secondary" onClick={() => update.mutateAsync({ status: 'suspended' })}><PauseCircle size={16} /> ระงับ</Button>
-            : <Button variant="secondary" onClick={() => update.mutateAsync({ status: 'active' })}><PlayCircle size={16} /> เปิดใช้งาน</Button>
+            ? <Button variant="secondary" onClick={() => setConfirm({ kind: 'suspend' })}><PauseCircle size={16} /> ระงับ</Button>
+            : <Button variant="secondary" onClick={() => setConfirm({ kind: 'activate' })}><PlayCircle size={16} /> เปิดใช้งาน</Button>
         }
       />
 
       <div className="flex gap-1.5">
-        {([['info', 'ข้อมูล'], ['users', `ผู้ใช้ (${users?.length ?? 0})`], ['config', 'Config']] as const).map(([v, th]) => (
+        {([['info', 'ข้อมูล'], ['users', `ผู้ใช้ (${users?.length ?? 0})`], ['config', 'การตั้งค่า']] as const).map(([v, th]) => (
           <button
             key={v}
             onClick={() => setTab(v)}
@@ -65,7 +86,7 @@ export function ClientDetail() {
         <Card>
           <CardBody className="grid gap-4 sm:grid-cols-2">
             <div><Label>ชื่อแสดงบนใบเสร็จ</Label><p className="font-semibold">{t.displayName}</p></div>
-            <div><Label>รหัส / Series</Label><p className="font-mono">{t.clientCode}-R-{t.beYear}-NNNN</p></div>
+            <div><Label>รหัส / ชุดเลขที่</Label><p className="font-mono">{t.clientCode}-R-{t.beYear}-NNNN</p></div>
             <div className="sm:col-span-2"><Label>ที่อยู่ผู้ซื้อ</Label><p>{t.address || '— ยังไม่กรอก'}</p></div>
             <div><Label>เลขภาษี</Label><p className="font-mono">{t.taxId || '—'}</p></div>
             <div><Label>ผู้ติดต่อ</Label><p>{t.contactName || '—'}</p></div>
@@ -77,24 +98,24 @@ export function ClientDetail() {
         <div className="space-y-4">
           <Card>
             <CardBody className="space-y-3">
-              <Label>สร้างผู้ใช้ใหม่ (admin ตั้งรหัสผ่านชั่วคราวให้ — ผู้ใช้ต้องเปลี่ยนตอน login ครั้งแรก)</Label>
+              <Label>สร้างผู้ใช้ใหม่ (ผู้ดูแลระบบกำหนดรหัสผ่านชั่วคราวให้ ผู้ใช้ต้องเปลี่ยนเมื่อเข้าสู่ระบบครั้งแรก)</Label>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Input placeholder="email@client.co.th" value={email} onChange={(e) => setEmail(e.target.value)} className="flex-1" />
-                <select value={role} onChange={(e) => setRole(e.target.value as typeof role)} className="h-11 rounded-control border border-card-border bg-white px-3 text-body">
-                  <option value="owner">owner — เจ้าของบัญชี (จัดการได้ทุกอย่าง)</option>
-                  <option value="manager">manager — ผู้จัดการ (ตามสิทธิ์ที่กำหนด)</option>
-                  <option value="officer">officer — เจ้าหน้าที่ (ตามสิทธิ์ที่กำหนด)</option>
-                </select>
-                <Button onClick={makeUser} disabled={createUser.isPending || !email.trim()}>
-                  {createUser.isPending ? 'กำลังสร้าง…' : 'สร้าง + ออกรหัสชั่วคราว'}
+                <Select value={role} onChange={(e) => setRole(e.target.value as typeof role)} className="sm:w-56">
+                  <option value="owner">เจ้าของบัญชี — จัดการได้ทั้งหมด</option>
+                  <option value="manager">ผู้จัดการ — ตามสิทธิ์ที่กำหนด</option>
+                  <option value="officer">เจ้าหน้าที่ — ตามสิทธิ์ที่กำหนด</option>
+                </Select>
+                <Button onClick={makeUser} loading={createUser.isPending} disabled={!email.trim()}>
+                  {createUser.isPending ? 'กำลังสร้าง…' : 'สร้างและออกรหัสผ่านชั่วคราว'}
                 </Button>
               </div>
               <FieldError msg={err} />
               {tempPw && (
                 <div className="rounded-control bg-amber-50 p-3 text-body">
-                  <p className="font-semibold text-amber-800">รหัสชั่วคราว (แสดงครั้งเดียว — ส่งให้ผู้ใช้นอกระบบ แล้วบังคับเปลี่ยน):</p>
+                  <p className="font-semibold text-amber-800">รหัสผ่านชั่วคราว (แสดงเพียงครั้งเดียว — โปรดส่งให้ผู้ใช้ผ่านช่องทางอื่น แล้วระบบจะบังคับให้เปลี่ยน):</p>
                   <p className="mt-1 font-mono text-lg font-semibold tracking-wide">{tempPw}</p>
-                  <p className="mt-1 text-label text-amber-700">หมดอายุใน 7 วัน · ไม่ถูกเก็บเป็น plaintext ใน DB (เก็บเฉพาะ scrypt hash)</p>
+                  <p className="mt-1 text-label text-amber-700">หมดอายุใน 7 วัน · ไม่ถูกจัดเก็บเป็นข้อความธรรมดาในฐานข้อมูล (จัดเก็บเฉพาะค่าแฮช scrypt)</p>
                 </div>
               )}
             </CardBody>
@@ -124,15 +145,12 @@ export function ClientDetail() {
                         <Button
                           variant="secondary"
                           className="h-9 px-3 text-body"
-                          onClick={async () => {
-                            const pw = await actions.reset(u.id)
-                            setTempPw(pw)
-                          }}
+                          onClick={() => setConfirm({ kind: 'reset', userId: u.id, email: u.email })}
                         >
-                          <KeyRound size={14} /> รีเซ็ต
+                          <KeyRound size={14} /> ตั้งรหัสใหม่
                         </Button>
                         {u.status === 'active' && (
-                          <Button variant="secondary" className="h-9 px-3 text-body" onClick={() => actions.disable(u.id)}>
+                          <Button variant="secondary" className="h-9 px-3 text-body" onClick={() => setConfirm({ kind: 'disable', userId: u.id, email: u.email })}>
                             ปิดใช้งาน
                           </Button>
                         )}
@@ -149,11 +167,32 @@ export function ClientDetail() {
       {tab === 'config' && (
         <Card>
           <CardBody className="space-y-2 text-body">
-            <p>อัตราภาษีหัก ณ ที่จ่าย · เกณฑ์เตือนอากรแสตมป์ · อายุลิงก์ผู้ขาย · ข้อความยินยอม — แยกตามลูกค้าแต่ละราย</p>
+            <p>อัตราภาษีหัก ณ ที่จ่าย · เกณฑ์เตือนอากรแสตมป์ · อายุลิงก์ผู้ขาย · ข้อความให้ความยินยอม — แยกตามลูกค้าแต่ละราย</p>
             <p className="text-ink-500">ผู้ดูแลลูกค้าปรับค่าเหล่านี้ได้ที่เมนู “ตั้งค่า” ของลูกค้ารายนั้น ส่วนหน้านี้เป็นมุมมองผู้ดูแลระบบ</p>
           </CardBody>
         </Card>
       )}
+
+      <ConfirmDialog
+        open={confirm !== null}
+        tone={confirm?.kind === 'activate' ? 'primary' : 'danger'}
+        title={
+          confirm?.kind === 'suspend' ? 'ยืนยันการระงับลูกค้า'
+            : confirm?.kind === 'activate' ? 'ยืนยันการเปิดใช้งานลูกค้า'
+              : confirm?.kind === 'disable' ? 'ยืนยันการปิดใช้งานผู้ใช้'
+                : 'ยืนยันการตั้งรหัสผ่านใหม่'
+        }
+        message={
+          confirm?.kind === 'suspend' ? 'ลูกค้ารายนี้และผู้ใช้ทั้งหมดจะไม่สามารถเข้าใช้งานระบบได้ จนกว่าจะเปิดใช้งานอีกครั้ง'
+            : confirm?.kind === 'activate' ? 'ลูกค้ารายนี้และผู้ใช้ทั้งหมดจะกลับมาใช้งานระบบได้ตามปกติ'
+              : confirm?.kind === 'disable' ? <>ผู้ใช้ <b>{confirm.email}</b> จะไม่สามารถเข้าสู่ระบบได้อีก</>
+                : confirm?.kind === 'reset' ? <>ระบบจะออก <b>รหัสผ่านชั่วคราว</b> ใหม่ให้ <b>{confirm.email}</b> และรหัสเดิมจะใช้ไม่ได้ทันที</>
+                  : ''
+        }
+        confirmLabel={confirm?.kind === 'suspend' ? 'ระงับลูกค้า' : confirm?.kind === 'activate' ? 'เปิดใช้งาน' : confirm?.kind === 'disable' ? 'ปิดใช้งาน' : 'ตั้งรหัสใหม่'}
+        onConfirm={runConfirm}
+        onCancel={() => setConfirm(null)}
+      />
     </div>
   )
 }
