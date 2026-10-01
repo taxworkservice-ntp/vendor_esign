@@ -2,10 +2,13 @@ import { Hono } from 'hono'
 import { randomBytes } from 'node:crypto'
 import { sql, withTenant } from '../../src/server/db'
 import { guard } from './data'
-import { parseMonthParam } from './month'
 import { sha256hex } from './auth'
 import { calcWht } from '../../src/lib/wht-calc'
 import { itemsSummary, itemsTotal, normalizeLineItem } from '../../src/lib/line-items'
+import { emptyTotals, type TxnTotals } from '../../src/lib/txn-filters'
+import { parseListQuery } from '../../src/lib/txn-list-query'
+import { limitClause, orderByClause, totalsClause, whereClause } from './txn-sql'
+import { readStored } from './storage'
 import type { PaymentTransaction } from '../../src/lib/types'
 
 // ── Client transactions API ───────────────────────────────────────────────
@@ -23,19 +26,86 @@ const SELECT = `
     p.gross_amount, p.wht_rate, p.wht_mode, p.wht_amount, p.net_amount, p.transfer_date,
     p.slip_reference, p.slip_file_path, p.status, p.void_reason, p.tax_id_last4, p.created_at,
     v.name as vendor_name, v.address as vendor_address, v.prefix as vendor_prefix, v.vendor_no as vendor_no,
-    (select r.number from vendor_receipts r where r.transaction_id = p.id
-       order by r.issue_date desc limit 1) as receipt_number,
-    (select vr.token from vendor_requests vr where vr.transaction_id = p.id
-       and vr.used_at is null and vr.revoked_at is null and vr.expires_at > now()
-       order by vr.created_at desc limit 1) as invite_token
+    (select row_to_json(x) from (
+       select number, issue_date from vendor_receipts rr where rr.transaction_id = p.id
+       order by rr.issue_date desc limit 1) x) as receipt,
+    (select row_to_json(x) from (
+       select token, created_at, opened_at, used_at, revoked_at, expires_at
+       from vendor_requests vr where vr.transaction_id = p.id
+       order by vr.created_at desc limit 1) x) as req,
+    (select row_to_json(x) from (
+       select min(created_at) as sent_at, min(opened_at) as opened_at, max(expires_at) as expires_at
+       from vendor_requests vr where vr.transaction_id = p.id) x) as life
   from vendor_payables p
   join vendor_payees v on v.id = p.vendor_id`
 
-function toTxn(r: Record<string, unknown>): PaymentTransaction {
+interface Sub {
+  [k: string]: unknown
+}
+
+const iso = (v: unknown): string | undefined => {
+  if (v === null || v === undefined) return undefined
+  const s = v instanceof Date ? v.toISOString() : String(v)
+  return s || undefined
+}
+
+const sub = (v: unknown): Sub | null => (v && typeof v === 'object' ? (v as Sub) : null)
+
+/**
+ * Timeline labels. These strings are a contract: src/lib/receipt.ts derives the
+ * pilot metrics (links opened, median time to sign) by matching on them, so
+ * they must stay identical to the ones the mock store writes.
+ */
+const EV = {
+  created: 'สร้างรายการ',
+  sent: 'ส่งลิงก์ให้ผู้ขาย',
+  opened: 'ผู้ขายเปิดลิงก์',
+  signed: 'ผู้ขายลงนามรับเงินและมอบอำนาจ',
+  issued: 'ออกใบเสร็จ',
+  revoked: 'เพิกถอนลิงก์',
+  voided: 'ยกเลิกเอกสาร',
+} as const
+
+/**
+ * Rebuilds the event history from the request/receipt timestamps. The list
+ * endpoint used to return `timeline: []`, which left the detail page's history
+ * blank and silently zeroed the metrics that read those labels.
+ */
+function buildTimeline(r: Record<string, unknown>, receiptNumber: string | undefined): PaymentTransaction['timeline'] {
+  const req = sub(r.req)
+  const receipt = sub(r.receipt)
+  const out: PaymentTransaction['timeline'] = []
+
+  const push = (at: string | undefined, label: string, detail?: string) => {
+    if (at) out.push(detail ? { at, label, detail } : { at, label })
+  }
+
+  push(iso(r.created_at), EV.created, 'ธุรกรรมฉบับร่าง')
+  push(iso(req?.created_at), EV.sent, 'คัดลอกลิงก์ทาง LINE')
+  push(iso(req?.opened_at), EV.opened)
+  push(iso(req?.used_at), EV.signed)
+  push(iso(receipt?.issue_date) ?? (receiptNumber ? iso(r.created_at) : undefined), EV.issued, receiptNumber)
+  push(iso(req?.revoked_at), EV.revoked)
+  if (r.void_reason) push(iso(r.created_at), EV.voided, String(r.void_reason))
+
+  return out.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))
+}
+
+// Exported for tests: the row mapper owns the timeline labels that
+// src/lib/receipt.ts (metrics) depends on, so it needs direct coverage.
+export function toTxn(r: Record<string, unknown>): PaymentTransaction {
   const items = Array.isArray(r.line_items)
     ? (r.line_items as Record<string, unknown>[]).map((it) => normalizeLineItem(it as never))
     : []
   const last4 = String(r.tax_id_last4 ?? '')
+  const receipt = sub(r.receipt)
+  const receiptNumber = receipt ? (String(receipt.number ?? '') || undefined) : undefined
+  // Only a live, unspent, unexpired link can actually be opened by the vendor.
+  const req = sub(r.req)
+  const live = req ? new Date(String(req.expires_at ?? 0)) > new Date() : false
+  const inviteToken = req && !req.used_at && !req.revoked_at && live ? String(req.token ?? '') || undefined : undefined
+  const life = sub(r.life)
+
   return {
     id: String(r.id),
     tenantId: String(r.user_id),
@@ -60,34 +130,200 @@ function toTxn(r: Record<string, unknown>): PaymentTransaction {
     slipReference: String(r.slip_reference ?? ''),
     slipName: String(r.slip_file_path ?? ''),
     status: (r.status as PaymentTransaction['status']) ?? 'draft',
-    receiptNumber: (r.receipt_number as string | null) ?? undefined,
-    inviteToken: (r.invite_token as string | null) ?? undefined,
+    receiptNumber,
+    inviteToken,
     voidReason: (r.void_reason as string | null) ?? undefined,
     taxIdLast4: last4 || undefined,
     createdAt: new Date(String(r.created_at ?? Date.now())).toISOString(),
-    timeline: [],
+    // Invite lifecycle, so the list can age a row without loading a detail.
+    sentAt: iso(life?.sent_at),
+    openedAt: iso(life?.opened_at),
+    expiresAt: iso(life?.expires_at),
+    timeline: buildTimeline(r, receiptNumber),
     checks: [],
   }
 }
 
+function toTotals(r: Record<string, unknown>): TxnTotals {
+  return {
+    count: Number(r.count ?? 0),
+    gross: Number(r.gross ?? 0),
+    wht: Number(r.wht ?? 0),
+    net: Number(r.net ?? 0),
+    payableCount: Number(r.payable_count ?? 0),
+    payableGross: Number(r.payable_gross ?? 0),
+    payableWht: Number(r.payable_wht ?? 0),
+    payableNet: Number(r.payable_net ?? 0),
+    voidedCount: Number(r.voided_count ?? 0),
+  }
+}
+
+/**
+ * Paged, filtered, sorted list plus totals over the whole filtered set.
+ *
+ * The query is parsed by the shared validator (src/lib/txn-list-query.ts), so a
+ * hand-edited URL cannot widen the scan, and compiled by a whitelisted builder
+ * (txn-sql.ts). `limit=0` returns the full set for CSV export.
+ */
 txnRoutes.get('/transactions', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
-  // Month scope filters on transfer_date (transaction period). Invalid values
-  // are rejected with 400 — never silently widened to all time.
-  const range = parseMonthParam(c.req.query('month'))
-  if (range && 'error' in range) return c.json({ error: 'invalid-month' }, 400)
+  const query = parseListQuery(new URLSearchParams(c.req.query()))
+  const where = whereClause(query, g.ws)
+  const totals = totalsClause(query, g.ws)
+
+  const result = await withTenant(g.ws, 'owner', async () => {
+    const db = sql()
+    const limit = limitClause(query)
+    // Two round trips, not N+1: one page of rows, one aggregate.
+    const [rows, sumRows] = await Promise.all([
+      db.query(`${SELECT}\n  where ${where.text}\n  ${orderByClause(query.sort)}\n  ${limit}`, where.params as never[]),
+      db.query(totals.text, totals.params as never[]),
+    ])
+    return {
+      transactions: (rows as unknown as Record<string, unknown>[]).map(toTxn),
+      totals: (sumRows as unknown as Record<string, unknown>[])[0]
+        ? toTotals((sumRows as unknown as Record<string, unknown>[])[0])
+        : emptyTotals(),
+    }
+  })
+
+  return c.json({
+    transactions: result.transactions,
+    // `total` is the plain row count for callers that only need paging maths.
+    total: result.totals.count,
+    totals: result.totals,
+  })
+})
+
+// Distinct months that actually contain transactions, for the period bar.
+// Registered before /transactions/:id so it is not swallowed by that route.
+txnRoutes.get('/transactions/months', async (c) => {
+  const g = await guard(c)
+  if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
   const rows = await withTenant(g.ws, 'owner', async () => {
     const db = sql()
-    if (range && 'from' in range) {
-      return (await db.query(
-        `${SELECT} where p.user_id = $1 and p.transfer_date >= $2 and p.transfer_date <= $3 order by p.created_at desc`,
-        [g.ws, range.from, range.to],
-      )) as unknown as Record<string, unknown>[]
-    }
-    return (await db.query(`${SELECT} where p.user_id = $1 order by p.created_at desc`, [g.ws])) as unknown as Record<string, unknown>[]
+    return (await db.query(
+      `select distinct to_char(transfer_date, 'YYYY-MM') as month
+       from vendor_payables where user_id = $1 and transfer_date is not null
+       order by 1 desc`,
+      [g.ws],
+    )) as unknown as { month: string }[]
   })
-  return c.json({ transactions: rows.map(toTxn) })
+  return c.json({ months: rows.map((r) => String(r.month)) })
+})
+
+// Slip references already in use, for duplicate detection while creating.
+// Only the references — never the rows.
+txnRoutes.get('/transactions/slips', async (c) => {
+  const g = await guard(c)
+  if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  const rows = await withTenant(g.ws, 'owner', async () => {
+    const db = sql()
+    return (await db.query(
+      `select slip_reference from vendor_payables
+       where user_id = $1 and slip_reference <> ''`,
+      [g.ws],
+    )) as unknown as { slip_reference: string }[]
+  })
+  return c.json({ refs: rows.map((r) => r.slip_reference) })
+})
+
+// The vendor's signed authorization for a transaction: the snapshot of who
+// signed (name/address/prefix as the VENDOR confirmed them), the signature
+// image, and any correction the vendor made to the client's records.
+//
+// This is what the client's receipt view needs and previously had no way to
+// get: the signature PNG is written to private storage at signing time and was
+// only ever read inside finalize, so the accountant's copy silently rendered an
+// empty signature. It also fixes a divergence — finalize builds the issued PDF
+// from vendor_authorizations, while the client's sheet used its own
+// vendor_payees row, so the two documents could show different spellings.
+//
+// Access is plain guard() + tenant scope: the portal has no bookkeeper role (see
+// docs/API.md "Roles and tenancy"), and the external bookkeeper who receives
+// the PDF is not a user of this app.
+txnRoutes.get('/transactions/:id/authorization', async (c) => {
+  const g = await guard(c)
+  if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  const id = c.req.param('id')
+  const rows = await withTenant(g.ws, 'client', async () => {
+    const db = sql()
+    return (await db.query(
+      `select a.vendor_prefix, a.vendor_name, a.vendor_address, a.vendor_masked_id,
+         a.signature_image_path, a.signed_at, a.verification_method, a.consent_text_version,
+         v.prefix as client_prefix, v.name as client_name, v.address as client_address
+       from vendor_authorizations a
+       join vendor_payees v on v.id = (select vendor_id from vendor_payables where id = a.transaction_id and user_id = a.user_id)
+       where a.transaction_id = $1 and a.user_id = $2`,
+      [id, g.ws],
+    )) as unknown as Record<string, unknown>[]
+  })
+  const a = rows[0]
+  if (!a) return c.json({ error: 'not-signed' }, 404)
+
+  // Diff the authorized snapshot against what the client had on file. Stored
+  // nowhere, so this is the only place a vendor's correction is ever visible.
+  const corrections: { field: string; from: string; to: string }[] = []
+  const diff = (field: string, from: unknown, to: unknown) => {
+    if (String(from ?? '') !== String(to ?? '')) {
+      corrections.push({ field, from: String(from ?? ''), to: String(to ?? '') })
+    }
+  }
+  diff('prefix', a.client_prefix, a.vendor_prefix)
+  diff('name', a.client_name, a.vendor_name)
+  diff('address', a.client_address, a.vendor_address)
+
+  // The image is optional: a row can be authorized with an unreadable file, and
+  // the client must be able to tell "not signed" from "signed, image missing".
+  const sig = readStored(g.ws, a.signature_image_path as string)
+
+  return c.json({
+    signedAt: iso(a.signed_at),
+    verificationMethod: String(a.verification_method ?? ''),
+    consentVersion: String(a.consent_text_version ?? ''),
+    vendorPrefix: String(a.vendor_prefix ?? ''),
+    vendorName: String(a.vendor_name ?? ''),
+    vendorAddress: String(a.vendor_address ?? ''),
+    maskedId: String(a.vendor_masked_id ?? ''),
+    corrections,
+    signaturePng: sig ? `data:image/png;base64,${Buffer.from(sig).toString('base64')}` : null,
+  })
+})
+
+// The issued receipt PDF — the statutory artifact. Built by finalize, which
+// embeds the vendor signature and records pdf_sha256; this just serves it back.
+// Until now nothing read the file, so the only download available to the
+// accountant was an unsigned html2canvas snapshot of the screen.
+txnRoutes.get('/transactions/:id/receipt.pdf', async (c) => {
+  const g = await guard(c)
+  if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  const rows = await withTenant(g.ws, 'client', async () => {
+    const db = sql()
+    return (await db.query(
+      `select number, verification_code, pdf_path, pdf_sha256
+       from vendor_receipts where transaction_id = $1 and user_id = $2`,
+      [c.req.param('id'), g.ws],
+    )) as unknown as Record<string, unknown>[]
+  })
+  const r = rows[0]
+  if (!r) return c.json({ error: 'not-issued' }, 404)
+  const bytes = readStored(g.ws, r.pdf_path as string)
+  if (!bytes) return c.json({ error: 'pdf-unavailable' }, 404)
+
+  const number = String(r.number ?? 'receipt')
+  return new Response(new Uint8Array(bytes), {
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${number.replace(/[^a-zA-Z0-9._-]/g, '_')}.pdf"`,
+      'Content-Length': String(bytes.byteLength),
+      // Surfaced so the client can show what it is handing over, and so the
+      // file can be checked against the value recorded at issuance.
+      'X-Pdf-Sha256': String(r.pdf_sha256 ?? ''),
+      'X-Verification-Code': String(r.verification_code ?? ''),
+      'Cache-Control': 'private, no-store',
+    },
+  })
 })
 
 txnRoutes.get('/transactions/:id', async (c) => {

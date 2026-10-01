@@ -4,6 +4,8 @@ export interface CatalogItem {
   name: string
   unit: string
   unitPrice: number
+  /** Archived entries drop out of the default catalogue. */
+  isActive?: boolean
   createdAt: string
 }
 

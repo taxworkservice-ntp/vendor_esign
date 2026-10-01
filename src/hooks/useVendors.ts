@@ -8,23 +8,55 @@ import { encryptId } from '../lib/id-crypto'
 import { normalizeTaxId } from '../lib/taxid'
 import { loadTxns } from '../lib/mock'
 import { isVendorPrefix, prefixRequired } from '../lib/vendor-name'
+import { matchesSearch, vendorSearchFields } from '../lib/search-match'
 import { useClientAuth } from '../lib/client-auth'
 
 const QK = ['vendors'] as const
 
 // Runs on the server when VITE_API_BASE is set, else the local mock store.
-async function fetchVendors(activeTenant: string): Promise<ClientVendor[]> {
-  if (hasServer) return (await apiGet<{ vendors: ClientVendor[] }>('/api/client/vendors')).vendors
-  return loadVendors(activeTenant)
+//
+// A supplier register is a small bounded list — the supplier count, not the
+// transaction count — so it is fetched whole and filtered here rather than
+// paged. That is also the only way to search the last 4 digits of a tax ID: the
+// stored number is encrypted at rest with no indexed column, so no amount of
+// server-side pushdown can reach it. Debouncing (in the page) is what keeps the
+// whole-list fetch from happening on every keystroke.
+async function fetchVendors(activeTenant: string, includeArchived = false): Promise<ClientVendor[]> {
+  if (hasServer) {
+    const q = includeArchived ? '?includeArchived=1' : ''
+    return (await apiGet<{ vendors: ClientVendor[] }>(`/api/client/vendors${q}`)).vendors
+  }
+  const all = loadVendors(activeTenant)
+  return includeArchived ? all : all.filter((v) => v.isActive !== false)
 }
 
-export function useVendors(search = '') {
+export type VendorSort = 'recent' | 'name' | 'outstanding' | 'activity'
+
+/** Thai collation, so "ก" and "ข" order correctly rather than by code unit. */
+export function sortVendors(vendors: ClientVendor[], sort: VendorSort): ClientVendor[] {
+  const byName = (a: ClientVendor, b: ClientVendor) => a.name.localeCompare(b.name, 'th')
+  const out = [...vendors]
+  switch (sort) {
+    case 'name':
+      return out.sort(byName)
+    case 'outstanding':
+      return out.sort((a, b) => (b.outstanding ?? 0) - (a.outstanding ?? 0) || byName(a, b))
+    case 'activity':
+      // Suppliers that never transacted sort last, not first.
+      return out.sort((a, b) => (b.lastActivity ?? '').localeCompare(a.lastActivity ?? '') || byName(a, b))
+    case 'recent':
+    default:
+      return out
+  }
+}
+
+export function useVendors(search = '', sort: VendorSort = 'recent', includeArchived = false) {
   const { activeTenant } = useClientAuth()
   return useQuery({
-    queryKey: [...QK, activeTenant, search],
+    queryKey: [...QK, activeTenant, search, sort, includeArchived],
     queryFn: async (): Promise<ClientVendor[]> => {
-      const all = await fetchVendors(activeTenant)
-      return all.filter((v) => !search || v.name.includes(search) || v.address.includes(search))
+      const all = await fetchVendors(activeTenant, includeArchived)
+      return sortVendors(all.filter((v) => matchesSearch(vendorSearchFields(v), search)), sort)
     },
   })
 }
@@ -34,7 +66,9 @@ export function useVendor(id?: string) {
   return useQuery({
     queryKey: [...QK, 'detail', activeTenant, id],
     enabled: !!id,
-    queryFn: async () => (await fetchVendors(activeTenant)).find((v) => v.id === id),
+    // includeArchived: a detail page must still resolve a supplier the register
+    // hides, or archiving would make the page unreachable.
+    queryFn: async () => (await fetchVendors(activeTenant, true)).find((v) => v.id === id),
   })
 }
 
@@ -189,6 +223,27 @@ export function useUpdateVendor(id?: string) {
       qc.invalidateQueries({ queryKey: ['vendor-id', id] })
       if (patch.idNumber !== undefined) qc.invalidateQueries({ queryKey: ['vendor-memory'] })
     },
+  })
+}
+
+// Archive / restore a supplier. Once a transaction references a vendor, DELETE
+// is refused (server 409 vendor-in-use, mock enforces the same), so without an
+// archive state the register accumulated dead suppliers permanently. Archiving
+// hides them from the default view while every past document stays intact.
+export function useSetVendorActive() {
+  const qc = useQueryClient()
+  const { activeTenant } = useClientAuth()
+  return useMutation({
+    mutationFn: async (v: { id: string; isActive: boolean }) => {
+      if (hasServer) {
+        await apiSend(`/api/client/vendors/${v.id}`, 'PATCH', { isActive: v.isActive })
+        return
+      }
+      const cur = loadVendors(activeTenant).find((x) => x.id === v.id)
+      if (!cur) throw new Error('ไม่พบผู้ขาย')
+      saveVendor({ ...cur, isActive: v.isActive })
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: QK }),
   })
 }
 

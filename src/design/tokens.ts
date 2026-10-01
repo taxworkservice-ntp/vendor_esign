@@ -22,6 +22,11 @@ export const colors = {
   primary: '#378ADD',
   'primary-soft': '#E6F1FB',
   'primary-deep': '#0C447C',
+  // Hover/pressed step for primary-deep action surfaces. Chosen to stay a
+  // visible saturated navy rather than collapsing toward the old near-black
+  // (ink-900), which would make the hover look like nothing happened.
+  // Measured: 11.8:1 with white text, 10.9:1 against the page background.
+  'primary-deeper': '#093963',
   success: '#27500A',
   'success-soft': '#EAF3DE',
   warning: '#633806',

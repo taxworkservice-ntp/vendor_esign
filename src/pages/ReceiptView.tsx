@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Download } from 'lucide-react'
+import { Download, FileText, ImageDown, Info } from 'lucide-react'
 import { useTransaction } from '../hooks/useTransactions'
-import { getAuth } from '../hooks/useVendor'
+import { useReceiptAuthorization } from '../hooks/useReceiptAuthorization'
 import { clientFor } from '../lib/mock-clients'
 import { mockReceiptNumber } from '../lib/receipt'
 import { downloadElementAsA4Pdf } from '../lib/receipt-pdf'
+import { SIGNATURE_COPY, signatureState } from '../lib/signature-state'
+import { apiDownload, hasServer, saveBlob } from '../lib/api-client'
 import { fmtTHB, fmtDateTH } from '../lib/format'
 import { amountToThaiWords } from '../lib/thai-words'
 import { lineTotal, normalizeLineItem } from '../lib/line-items'
@@ -48,7 +50,12 @@ export function ReceiptView() {
       </div>
     )
   }
-  const auth = getAuth(t.id)
+  // The vendor's SIGNED identity, not the client's record of them. The issued
+  // PDF is built from vendor_authorizations, so reading the client's row here
+  // was how the on-screen sheet and the issued document could disagree on a
+  // name. One hook, both paths, same shape.
+  const { data: auth, isLoading: authLoading } = useReceiptAuthorization(t?.id)
+  const sig = t ? signatureState(t, auth?.signaturePng, { loading: authLoading }) : signatureState({ status: 'draft' }, null)
   const issued = t.status === 'signed' || t.status === 'issued'
   const number = t.receiptNumber ?? (issued ? mockReceiptNumber(t.id, t.vendor.vendorNo ?? 0) : 'ยังไม่ออกเลข')
   const isVoid = t.status === 'void'
@@ -60,14 +67,35 @@ export function ReceiptView() {
     : [{ description: t.description, amount: t.grossAmount }]
   ).map(normalizeLineItem)
 
-  const download = async () => {
+  // The issued PDF is the statutory artifact: built server-side with the vendor
+  // signature embedded and a SHA-256 recorded at issuance. The html2canvas
+  // snapshot of this sheet is NOT that document — it is an image with no
+  // signature and no hash — so it is only offered before issuance and labelled
+  // so it cannot be mistaken for the receipt.
+  const [issuedFile, setIssuedFile] = useState<{ sha: string; code: string } | null>(null)
+
+  const downloadIssued = async () => {
+    setErr('')
+    setBusy(true)
+    try {
+      const { blob, filename, headers } = await apiDownload(`/api/client/transactions/${t.id}/receipt.pdf`)
+      saveBlob(blob, filename || `${number}.pdf`)
+      setIssuedFile({ sha: headers['x-pdf-sha256'] ?? '', code: headers['x-verification-code'] ?? '' })
+    } catch {
+      setErr('ดาวน์โหลดใบเสร็จฉบับออกจริงไม่สำเร็จ — กรุณาลองใหม่อีกครั้ง')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const downloadSnapshot = async () => {
     setErr('')
     if (!sheetRef.current) return
     setBusy(true)
     try {
-      await downloadElementAsA4Pdf(sheetRef.current, `${number}.pdf`)
+      await downloadElementAsA4Pdf(sheetRef.current, `${number}-preview.pdf`)
     } catch {
-      setErr('สร้าง PDF ไม่สำเร็จ — โปรดลองใหม่อีกครั้ง')
+      setErr('สร้างไฟล์ภาพหน้าจอไม่สำเร็จ — โปรดลองใหม่อีกครั้ง')
     } finally {
       setBusy(false)
     }
@@ -81,13 +109,41 @@ export function ReceiptView() {
           <span className="text-body text-ink-500">สำเนาใบเสร็จ · A4</span>
           {!issued && !isVoid && <span className="text-body font-medium text-amber-700">· รอออกเลขที่ใบเสร็จ</span>}
         </div>
-        <div className="flex gap-2">
-          <Button onClick={download} loading={busy} title="ดาวน์โหลด PDF (ตรงกับตัวอย่างนี้)">
-            <Download size={15} /> {busy ? 'กำลังสร้าง…' : 'ดาวน์โหลด PDF'}
-          </Button>
+        <div className="flex flex-wrap gap-2">
+          {t.status === 'issued' && hasServer ? (
+            <Button onClick={downloadIssued} loading={busy} title="ใบเสร็จฉบับออกจริง — มีลายเซ็นผู้ขายและ SHA-256 ที่บันทึกไว้">
+              <Download size={15} /> {busy ? 'กำลังดาวน์โหลด…' : 'ดาวน์โหลดใบเสร็จฉบับออกจริง'}
+            </Button>
+          ) : (
+            <Button
+              onClick={downloadSnapshot}
+              loading={busy}
+              title="ภาพหน้าจอของใบเสร็จ — ยังไม่มีลายเซ็นและไม่มีรหัสตรวจสอบ จึงใช้แทนใบเสร็จจริงไม่ได้"
+            >
+              <ImageDown size={15} /> {busy ? 'กำลังสร้าง…' : 'ส่งออกภาพหน้าจอ'}
+            </Button>
+          )}
         </div>
       </div>
       {err && <p className="no-print text-body font-medium text-red-600">{err}</p>}
+
+      {/* Proof the accountant hands over: verification code + digest of the
+          issued file. Only meaningful once the receipt has actually been issued. */}
+      {issuedFile && (issuedFile.code || issuedFile.sha) && (
+        <div className="no-print flex flex-wrap items-center gap-x-4 gap-y-1 rounded-control border border-card-border bg-ink-50 px-3 py-2 text-label text-ink-600">
+          <Info size={14} className="shrink-0 text-ink-400" aria-hidden />
+          {issuedFile.code && (
+            <span>
+              รหัสตรวจสอบ: <span className="font-mono font-semibold">{issuedFile.code}</span>
+            </span>
+          )}
+          {issuedFile.sha && (
+            <span className="min-w-0">
+              SHA-256: <span className="font-mono">{issuedFile.sha.slice(0, 16)}…</span>
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="print-area relative">
         <div ref={wrapRef} className="w-full">
@@ -192,15 +248,56 @@ export function ReceiptView() {
 
           {isVoid && <p className="mt-4 text-label text-ink-400">ยกเลิกเอกสาร: {t.voidReason}</p>}
 
-          {/* Signature centered */}
+          {/*
+            Signature block.
+
+            Previously this always drew the signature rule, the "ผู้มีอำนาจลงนาม"
+            caption and the vendor's name, and only the <img> was conditional —
+            so a receipt with no signature was indistinguishable from a properly
+            signed one, reading as a missing scan. Each state now says what is
+            actually true, and the rule + name are drawn ONLY when there is a
+            real signature behind them.
+          */}
           <div className="mt-auto flex justify-center pt-10">
-            <div className="w-[260px] text-center">
-              <div className="flex h-14 items-end justify-center">
-                {auth && <img src={auth.signaturePng} alt="ผู้มีอำนาจลงนาม" className="max-h-14 object-contain" />}
+            {sig.kind === 'unsigned' ? (
+              <div className="w-[260px] text-center">
+                <div className="flex h-14 items-center justify-center text-label text-ink-400">
+                  {SIGNATURE_COPY.unsigned.title}
+                </div>
+                <p className="text-label text-ink-400">{SIGNATURE_COPY.unsigned.detail}</p>
               </div>
-              <p className="border-t border-ink-300 pt-2 text-body font-semibold">ผู้มีอำนาจลงนาม</p>
-              <p className="text-label text-ink-400">{vendorDisplayName(vendorPrefix, vendorName)}</p>
-            </div>
+            ) : sig.kind === 'loading' ? (
+              <div className="w-[260px] text-center">
+                <div className="flex h-14 items-center justify-center gap-2 text-label text-ink-400">
+                  <span className="h-3.5 w-3.5 animate-pulse rounded-full bg-ink-100" aria-hidden />
+                  {SIGNATURE_COPY.loading.title}
+                </div>
+              </div>
+            ) : sig.kind === 'missing' ? (
+              <div className="w-[300px] text-center">
+                <div className="flex h-14 items-center justify-center">
+                  <FileText size={22} className="text-ink-300" aria-hidden />
+                </div>
+                <p className="text-body font-semibold text-amber-700">{SIGNATURE_COPY.missing.title}</p>
+                <p className="mt-0.5 text-label text-ink-500">{SIGNATURE_COPY.missing.detail}</p>
+                {t.status === 'issued' && hasServer && (
+                  <Button variant="secondary" className="no-print mt-2" onClick={downloadIssued} loading={busy}>
+                    <Download size={14} /> ดาวน์โหลดฉบับออกจริง
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="w-[260px] text-center">
+                <div className="flex h-14 items-end justify-center">
+                  <img src={sig.png} alt="ลายเซ็นผู้มีอำนายลงนาม" className="max-h-14 object-contain" />
+                </div>
+                <p className="border-t border-ink-300 pt-2 text-body font-semibold">ผู้มีอำนาจลงนาม</p>
+                <p className="text-label text-ink-400">{vendorDisplayName(vendorPrefix, vendorName)}</p>
+                {auth?.signedAt && (
+                  <p className="mt-0.5 text-micro text-ink-400">ลงนามเมื่อ {fmtDateTH(auth.signedAt.slice(0, 10))}</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

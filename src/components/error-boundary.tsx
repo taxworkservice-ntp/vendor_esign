@@ -23,7 +23,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
             <button
               type="button"
               onClick={() => location.reload()}
-              className="mt-4 inline-flex h-11 items-center justify-center rounded-control bg-ink-900 px-5 text-body font-semibold text-white transition hover:bg-ink-700"
+              className="mt-4 inline-flex h-11 items-center justify-center rounded-control bg-primary-deep px-5 text-body font-semibold text-white transition hover:bg-primary-deeper"
             >
               โหลดหน้าใหม่
             </button>

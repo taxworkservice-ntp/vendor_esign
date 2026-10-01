@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Download, Printer } from 'lucide-react'
-import { fetchWhtByIds } from '../lib/wht-source'
+import { fetchWhtByIds, fetchWhtByScope } from '../lib/wht-source'
+import { useClientAuth } from '../lib/client-auth'
 import { loadSettings } from '../lib/settings'
 import {
   fmtWhtDate,
@@ -211,30 +212,56 @@ function CleanPage({ record, profile }: { record: RecordWithVendor; profile: Wht
 
 export function WhtPrint() {
   const [params] = useSearchParams()
-  const ids = (params.get('ids') || '').split(',').filter(Boolean)
+  const ids = useMemo(() => (params.get('ids') || '').split(',').filter(Boolean), [params])
+  // Scope mode: month + form + status, the same filters the list shows. This is
+  // what "print everything for this month" uses. The old link put every record
+  // id in the URL, which silently broke past ~54 certificates once the string
+  // passed the browser's ~2000-character limit.
+  const scope = useMemo(() => {
+    const p = new URLSearchParams(params)
+    p.delete('ids')
+    p.delete('layout')
+    p.delete('page')
+    p.delete('size')
+    return p
+  }, [params])
+  const byScope = ids.length === 0
   const layout = params.get('layout') || 'pnd'
   const [records, setRecords] = useState<RecordWithVendor[]>([])
   const [profile, setProfile] = useState<WhtProfile | null>(null)
   const [busy, setBusy] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
+
+  const { activeTenant } = useClientAuth()
 
   useEffect(() => {
     let cancelled = false
+    setLoading(true)
+    setErr('')
     void (async () => {
-      const { records: recs, tenantId } = await fetchWhtByIds(ids)
-      if (cancelled) return
-      setRecords(recs)
-      if (tenantId) {
+      try {
+        const res = byScope
+          ? { records: await fetchWhtByScope(activeTenant, scope), tenantId: activeTenant }
+          : await fetchWhtByIds(ids)
+        if (cancelled) return
+        setRecords(res.records)
+        const tenantId = res.tenantId ?? activeTenant
+        if (records.length === 0 && res.records.length === 0) {
+          setErr('ไม่พบหนังสือรับรองตามเงื่อนไขที่เลือก')
+        }
         const s = loadSettings(tenantId)
         setProfile({ company_name_th: s.displayName, tax_id: s.taxId, address: s.address })
-      } else {
-        setErr('ไม่พบข้อมูลใบรับรอง')
+      } catch {
+        if (!cancelled) setErr('โหลดหนังสือรับรองไม่สำเร็จ — โปรดลองใหม่อีกครั้ง')
+      } finally {
+        if (!cancelled) setLoading(false)
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [params])
+  }, [ids, byScope, scope, activeTenant])
 
   const exportPdf = async () => {
     setErr('')
@@ -249,7 +276,7 @@ export function WhtPrint() {
         if (i > 0) pdf.addPage()
         pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 595.28, 841.89)
       }
-      pdf.save(`wht_${ids.length}.pdf`)
+      pdf.save(`wht_${records.length}.pdf`)
     } catch {
       setErr('สร้าง PDF ไม่สำเร็จ — โปรดลองใหม่อีกครั้ง')
     } finally {
@@ -269,6 +296,7 @@ export function WhtPrint() {
         </div>
       </div>
       {err && <p className="no-print px-4 py-3 text-sm font-medium text-red-600">{err}</p>}
+      {loading && <p className="no-print px-4 py-3 text-sm text-ink-500">กำลังโหลดหนังสือรับรอง…</p>}
       <div className="flex flex-col items-center gap-6 overflow-auto p-6">
         {profile &&
           records.map((r, i) =>

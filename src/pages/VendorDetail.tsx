@@ -1,22 +1,31 @@
-import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { useDeleteVendor, useForgetVendorId, useUpdateVendor, useVendor } from '../hooks/useVendors'
+import { useMemo, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Archive, ArchiveRestore, ChevronLeft, ReceiptText, Users } from 'lucide-react'
+import { useDeleteVendor, useForgetVendorId, useSetVendorActive, useUpdateVendor, useVendor } from '../hooks/useVendors'
+import { useTransactions } from '../hooks/useTransactions'
 import { displayTaxId } from '../lib/vendors-mock'
 import { VENDOR_PREFIXES, isVendorPrefix, prefixRequired, vendorDisplayName } from '../lib/vendor-name'
+import { emptyFilters } from '../lib/txn-filters'
+import { fmtDateTH, fmtTHB } from '../lib/format'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
 import { Button } from '../components/ui/button'
 import { FieldError, Input, Label } from '../components/ui/input'
 import { Select } from '../components/ui/select'
 import { ConfirmDialog } from '../components/ui/confirm-dialog'
+import { EmptyState } from '../components/ui/empty-state'
+import { ErrorState } from '../components/ui/error-state'
+import { TableSkeleton } from '../components/ui/table-skeleton'
+import { StatusBadge } from '../components/ui/badge'
 
 export function VendorDetail() {
   const { id } = useParams()
   const nav = useNavigate()
-  const { data: v } = useVendor(id)
+  const { data: v, isLoading, isError, error, refetch } = useVendor(id)
   const update = useUpdateVendor(id)
   const forget = useForgetVendorId()
   const del = useDeleteVendor()
+  const setActive = useSetVendorActive()
   const [prefix, setPrefix] = useState('')
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
@@ -29,8 +38,73 @@ export function VendorDetail() {
   const [deleteErr, setDeleteErr] = useState('')
   const [confirmForget, setConfirmForget] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmArchive, setConfirmArchive] = useState(false)
 
-  if (!v) return <p className="py-10 text-center text-body text-ink-500">กำลังโหลด…</p>
+  // This vendor's transactions, via the vendorId filter the list endpoint
+  // already pushes down. The page used to show no history at all, so seeing what
+  // you had paid a supplier meant leaving for the transaction list and searching
+  // by hand.
+  const historyFilters = useMemo(() => ({ ...emptyFilters(), vendorId: id ?? '' }), [id])
+  const { data: history } = useTransactions(historyFilters, 0, 5)
+  const recent = history?.rows ?? []
+  const archived = v?.isActive === false
+
+  // Loading, not-found and failure are three different things. The previous
+  // version collapsed all three into "กำลังโหลด…", so a bad URL looked like a slow
+  // page forever and a failed request was indistinguishable from a wait.
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-5">
+        <PageHeader title="กำลังโหลดข้อมูลผู้ขาย" sub="—" />
+        <Card>
+          <CardBody>
+            <TableSkeleton rows={5} cols={2} />
+          </CardBody>
+        </Card>
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-5">
+        <PageHeader title="โหลดข้อมูลผู้ขายไม่สำเร็จ" sub="—" />
+        <Card>
+          <ErrorState
+            title="ไม่สามารถโหลดข้อมูลผู้ขายได้"
+            description={error instanceof Error && error.message ? `รายละเอียด: ${error.message}` : undefined}
+            onRetry={() => void refetch()}
+          />
+        </Card>
+      </div>
+    )
+  }
+
+  if (!v) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-5">
+        <PageHeader title="ไม่พบผู้ขาย" sub="—" />
+        <Card>
+          <EmptyState
+            icon={Users}
+            title="ไม่พบผู้ขายรายนี้"
+            description={
+              id
+                ? `ไม่มีผู้ขายที่มีรหัส ${id} ในทะเบียนนี้ — อาจถูกลบไปแล้ว หรือลิงก์ไม่ถูกต้อง`
+                : 'ไม่พบรหัสผู้ขายในลิงก์'
+            }
+            action={
+              <Link to="/vendors">
+                <Button>
+                  <ChevronLeft size={16} /> กลับทะเบียนผู้ขาย
+                </Button>
+              </Link>
+            }
+          />
+        </Card>
+      </div>
+    )
+  }
 
   const startEdit = () => {
     setPrefix(v.prefix ?? '')
@@ -95,7 +169,21 @@ export function VendorDetail() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5">
+    <div className="mx-auto max-w-3xl space-y-5">
+      {archived && (
+        <div
+          className="flex flex-wrap items-center gap-3 rounded-control border border-card-border bg-ink-50 px-3.5 py-2.5 text-body"
+          role="status"
+        >
+          <Archive size={16} className="shrink-0 text-ink-500" aria-hidden />
+          <span className="min-w-0 flex-1 text-ink-600">
+            ผู้ขายรายนี้ถูก<strong>ปิดการใช้งาน</strong> — ไม่แสดงในทะเบียน แต่เอกสารเดิมทั้งหมดยังอยู่ครบ
+          </span>
+          <Button variant="secondary" className="h-9" onClick={() => setConfirmArchive(true)} loading={setActive.isPending}>
+            <ArchiveRestore size={14} /> เปิดการใช้งาน
+          </Button>
+        </div>
+      )}
       <PageHeader
         title={vendorDisplayName(v.prefix, v.name)}
         sub={`รหัสผู้ขาย ${String(v.vendorNo ?? 0).padStart(3, '0')} · ${displayTaxId(v)} · ผู้ขายรายย่อย (ไม่จด VAT)`}
@@ -202,6 +290,78 @@ export function VendorDetail() {
       </Card>
 
       {!editing && (
+        <>
+          {/* Money context, from the same aggregate the register shows. */}
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-card border border-card-border bg-card-border sm:grid-cols-3">
+            <div className="bg-white px-4 py-3">
+              <p className="text-label text-ink-500">ยอดค้างชำระ</p>
+              <p className="mt-0.5 text-title font-semibold tabular-nums">
+                {v.outstanding ? fmtTHB(v.outstanding) : '—'}
+              </p>
+              <p className="text-micro text-ink-400">ไม่รวมรายการที่ยกเลิก/เพิกถอน</p>
+            </div>
+            <div className="bg-white px-4 py-3">
+              <p className="text-label text-ink-500">จำนวนรายการทั้งหมด</p>
+              <p className="mt-0.5 text-title font-semibold tabular-nums">
+                {v.txnCount ? v.txnCount.toLocaleString('th-TH') : '—'}
+              </p>
+            </div>
+            <div className="bg-white px-4 py-3">
+              <p className="text-label text-ink-500">เคลื่อนไหวล่าสุด</p>
+              <p className="mt-0.5 text-title font-semibold tabular-nums">
+                {v.lastActivity ? fmtDateTH(v.lastActivity) : '—'}
+              </p>
+            </div>
+          </div>
+
+          <Card>
+            <CardBody className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="flex items-center gap-2 font-semibold">
+                  <ReceiptText size={16} className="text-ink-500" aria-hidden /> ธุรกรรมล่าสุด
+                </h2>
+                {history && history.total > recent.length && (
+                  <Link
+                    to={`/?vendor=${v.id}`}
+                    className="text-label font-semibold text-ink-500 underline-offset-2 hover:underline"
+                  >
+                    ดูทั้งหมด ({history.total})
+                  </Link>
+                )}
+              </div>
+
+              {recent.length === 0 ? (
+                <p className="rounded-control bg-ink-50 px-3.5 py-3 text-body text-ink-500">
+                  ยังไม่มีธุรกรรมกับผู้ขายรายนี้
+                </p>
+              ) : (
+                <ul className="divide-y divide-card-border">
+                  {recent.map((t) => (
+                    <li key={t.id}>
+                      <Link
+                        to={`/transactions/${t.id}`}
+                        className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-control px-1 py-2 transition hover:bg-ink-50"
+                      >
+                        <span className="font-mono text-label text-ink-400">{t.id}</span>
+                        <StatusBadge status={t.status} />
+                        <span className="min-w-0 flex-1 truncate text-body">
+                          {t.note?.trim() || t.lineItems[0]?.description || t.description}
+                        </span>
+                        <span className="whitespace-nowrap text-label tabular-nums text-ink-500">
+                          {fmtDateTH(t.transferDate)}
+                        </span>
+                        <span className="whitespace-nowrap font-semibold tabular-nums">{fmtTHB(t.netAmount)}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardBody>
+          </Card>
+        </>
+      )}
+
+      {!editing && (
         <Card>
           <CardBody className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -216,6 +376,26 @@ export function VendorDetail() {
         </Card>
       )}
 
+      <ConfirmDialog
+        open={confirmArchive}
+        title={archived ? 'ยืนยันการเปิดใช้งานผู้ขาย' : 'ยืนยันการปิดการใช้งานผู้ขาย'}
+        message={
+          archived
+            ? <>ผู้ขาย “<b>{vendorDisplayName(v.prefix, v.name)}</b>” จะกลับมาแสดงในทะเบียนอีกครั้ง</>
+            : <>ผู้ขาย “<b>{vendorDisplayName(v.prefix, v.name)}</b>” จะถูกซ่อนจากทะเบียน<br />เอกสารเดิมทั้งหมดยังอยู่ครบ และกู้คืนได้ภายหลัง</>
+        }
+        confirmLabel={archived ? 'เปิดการใช้งาน' : 'ปิดใช้งาน'}
+        busy={setActive.isPending}
+        onConfirm={async () => {
+          setConfirmArchive(false)
+          try {
+            await setActive.mutateAsync({ id: v.id, isActive: !archived })
+          } catch {
+            setDeleteErr('อัปเดตสถานะผู้ขายไม่สำเร็จ')
+          }
+        }}
+        onCancel={() => setConfirmArchive(false)}
+      />
       <ConfirmDialog
         open={confirmForget}
         title="ยืนยันการลบเลขบัตรที่บันทึกไว้"

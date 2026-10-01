@@ -1,9 +1,19 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { CreateTxnInput, PaymentTransaction } from '../lib/types'
 import { calcWht, isDuplicateSlipRef } from '../lib/config'
 import { itemsSummary, itemsTotal } from '../lib/line-items'
 import { normalizeTaxId, taxIdHash, taxIdLast4 } from '../lib/taxid'
-import { emptyFilters, filterTransactions, sortTransactions, type TransactionFilters } from '../lib/txn-filters'
+import {
+  emptyFilters,
+  emptyTotals,
+  filterTransactions,
+  monthsOf,
+  sortTransactions,
+  summarize,
+  type TransactionFilters,
+  type TxnTotals,
+} from '../lib/txn-filters'
+import { EXPORT_LIMIT, pagedQuery, queryFromFilters, queryToParams } from '../lib/txn-list-query'
 import { loadTxns, saveTxns } from '../lib/mock'
 import { loadVendors } from '../lib/vendors-mock'
 import { currentBeYear } from '../lib/settings'
@@ -15,6 +25,22 @@ import { useClientAuth } from '../lib/client-auth'
 
 const QK = ['transactions'] as const
 
+export interface TxnListResult {
+  rows: PaymentTransaction[]
+  /** Matching rows across the whole filtered set, not just this page. */
+  total: number
+  totals: TxnTotals
+}
+
+const EMPTY: TxnListResult = { rows: [], total: 0, totals: emptyTotals() }
+
+/** What issuance produced. The mock has no server-issued PDF, so only a number. */
+export interface IssueResult {
+  number?: string
+  verificationCode?: string
+  pdfSha256?: string
+}
+
 function read(): PaymentTransaction[] {
   return loadTxns()
 }
@@ -22,25 +48,80 @@ function write(txns: PaymentTransaction[]) {
   saveTxns(txns)
 }
 
-// Runs on the server when VITE_API_BASE is set, else the local mock store.
-// Month is enforced server-side (transfer_date range) AND client-side so the
-// mock path and the server path stay identical.
-async function fetchAll(activeTenant: string, month?: string): Promise<PaymentTransaction[]> {
+/**
+ * Runs on the server when VITE_API_BASE is set, else the local mock store.
+ *
+ * Both paths return the same shape and apply the same filter semantics: the
+ * mock through the pure functions in txn-filters.ts, the server through the
+ * whitelisted SQL builder. The mock still scopes by month itself so it cannot
+ * drift from the server's date handling.
+ */
+async function fetchList(activeTenant: string, filters: TransactionFilters, page: number, pageSize: number): Promise<TxnListResult> {
   if (hasServer) {
-    const q = month ? `?month=${encodeURIComponent(month)}` : ''
-    return (await apiGet<{ transactions: PaymentTransaction[] }>(`/api/client/transactions${q}`)).transactions
+    const q = queryToParams(pagedQuery(filters, page, pageSize))
+    const res = await apiGet<{ transactions: PaymentTransaction[]; total: number; totals: TxnTotals }>(
+      `/api/client/transactions?${q.toString()}`,
+    )
+    return { rows: res.transactions, total: res.total, totals: res.totals ?? emptyTotals() }
   }
-  return read().filter((t) => t.tenantId === activeTenant)
+
+  const all = read().filter((t) => t.tenantId === activeTenant)
+  const matched = sortTransactions(filterTransactions(all, filters), filters.sort)
+  // Totals are taken over the WHOLE filtered set before slicing, so the
+  // headline figures never describe just the page on screen.
+  const totals = summarize(matched)
+  const start = page * pageSize
+  return { rows: matched.slice(start, start + pageSize), total: matched.length, totals }
 }
 
-export function useTransactions(filters: TransactionFilters = emptyFilters()) {
+/** Paged list for the transaction screen. */
+export function useTransactions(filters: TransactionFilters = emptyFilters(), page = 0, pageSize = 50) {
   const { activeTenant } = useClientAuth()
   return useQuery({
-    queryKey: [...QK, activeTenant, filters],
+    queryKey: [...QK, 'list', activeTenant, queryFromFilters(filters), page, pageSize],
+    queryFn: () => fetchList(activeTenant, filters, page, pageSize),
+    // Keeps the previous page on screen while the next one loads, so paging
+    // does not collapse the table into a skeleton.
+    placeholderData: keepPreviousData,
+  })
+}
+
+/**
+ * Every row matching the filters, unpaged. Used by Metrics (which must count
+ * the whole period, not one page) and by CSV export (a deliberate bulk action).
+ */
+export function useAllTransactions(filters: TransactionFilters = emptyFilters(), enabled = true) {
+  const { activeTenant } = useClientAuth()
+  return useQuery({
+    queryKey: [...QK, 'all', activeTenant, queryFromFilters(filters)],
+    enabled,
     queryFn: async () => {
-      const all = await fetchAll(activeTenant, filters.month || undefined)
+      if (hasServer) {
+        const q = queryToParams({ ...queryFromFilters(filters), limit: EXPORT_LIMIT, offset: 0 })
+        const res = await apiGet<{ transactions: PaymentTransaction[] }>(`/api/client/transactions?${q.toString()}`)
+        return res.transactions
+      }
+      const all = read().filter((t) => t.tenantId === activeTenant)
       return sortTransactions(filterTransactions(all, filters), filters.sort)
     },
+  })
+}
+
+/** Distinct months holding transactions — feeds the global period dropdown. */
+export function useTransactionMonths() {
+  const { activeTenant } = useClientAuth()
+  return useQuery({
+    queryKey: [...QK, 'months', activeTenant],
+    queryFn: async (): Promise<string[]> => {
+      if (hasServer) {
+        const res = await apiGet<{ months: string[] }>('/api/client/transactions/months')
+        return res.months
+      }
+      return monthsOf(read().filter((t) => t.tenantId === activeTenant))
+    },
+    // The dropdown must not flicker between tenants; a stale month list is
+    // harmless because the bar pins the current month regardless.
+    staleTime: 60_000,
   })
 }
 
@@ -62,11 +143,22 @@ export function useTransaction(id?: string) {
   })
 }
 
+/** Slip references already in use, for duplicate detection on the create form. */
 export function useAllSlipRefs(): string[] {
   const { activeTenant } = useClientAuth()
   const q = useQuery({
     queryKey: [...QK, 'slips', activeTenant],
-    queryFn: async () => (await fetchAll(activeTenant)).map((t) => t.slipReference),
+    queryFn: async (): Promise<string[]> => {
+      if (hasServer) {
+        const res = await apiGet<{ refs: string[] }>('/api/client/transactions/slips')
+        return res.refs
+      }
+      return read()
+        .filter((t) => t.tenantId === activeTenant)
+        .map((t) => t.slipReference)
+        .filter(Boolean)
+    },
+    staleTime: 60_000,
   })
   return q.data ?? []
 }
@@ -121,6 +213,9 @@ export function useCreateTransaction() {
         inviteToken: `tok_${Math.random().toString(36).slice(2, 10)}`,
         taxIdHash: await taxIdHash(input.vendorTaxId),
         taxIdLast4: taxIdLast4(input.vendorTaxId),
+        // Derived from the timeline so attention logic has one source of truth
+        // on the mock path, exactly as the server reads vendor_requests.
+        sentAt: undefined,
         timeline: [{ at: now, label: 'สร้างรายการ', detail: 'ธุรกรรมฉบับร่าง' }],
         checks: [
           { key: 'slip', label: slipRef ? 'สลิปตรงยอดสุทธิ' : 'ยังไม่มีสลิป — รอแนบภายหลัง', state: slipRef ? 'pass' : 'warn' },
@@ -150,6 +245,10 @@ export function useTransactionActions() {
     write(fn(read()))
     refresh()
   }
+  // Stamping the send time keeps attention logic fed on the mock path; the
+  // server records it in vendor_requests.
+  const stampSent = (t: PaymentTransaction, at: string): PaymentTransaction => ({ ...t, sentAt: t.sentAt ?? at })
+
   return {
     send: async (id: string) => {
       if (hasServer) {
@@ -157,10 +256,14 @@ export function useTransactionActions() {
         refresh()
         return
       }
+      const at = new Date().toISOString()
       apply((all) =>
         all.map((t) =>
           t.id === id && t.status === 'draft'
-            ? { ...t, status: 'sent', inviteToken: t.inviteToken ?? `tok_${Math.random().toString(36).slice(2, 10)}`, timeline: [...t.timeline, { at: new Date().toISOString(), label: 'ส่งลิงก์ให้ผู้ขาย' }] }
+            ? stampSent(
+                { ...t, status: 'sent', inviteToken: t.inviteToken ?? `tok_${Math.random().toString(36).slice(2, 10)}`, timeline: [...t.timeline, { at, label: 'ส่งลิงก์ให้ผู้ขาย' }] },
+                at,
+              )
             : t,
         ),
       )
@@ -195,16 +298,26 @@ export function useTransactionActions() {
     },
     // Finalize: only a signed transaction can be issued. Assigns the receipt
     // number once (never recomputed) and advances the status to 'issued'.
-    issue: async (id: string) => {
+    // The server's response is kept: it carries the verification code and the
+    // PDF's SHA-256, which is what the accountant hands over. It used to be
+    // discarded, which left the issued artifact unreachable from the UI.
+    issue: async (id: string): Promise<IssueResult> => {
       if (hasServer) {
-        await apiSend(`/api/transactions/${id}/finalize`, 'POST')
+        const res = await apiSend<{ number?: string; verificationCode?: string; pdfSha256?: string }>(
+          `/api/transactions/${id}/finalize`,
+          'POST',
+        )
         refresh()
         qc.invalidateQueries({ queryKey: ['wht'] })
-        return
+        return {
+          number: res.number,
+          verificationCode: res.verificationCode,
+          pdfSha256: res.pdfSha256,
+        }
       }
       const all = read()
       const target = all.find((t) => t.id === id)
-      if (!target || target.status !== 'signed') return
+      if (!target || target.status !== 'signed') return {}
       const receiptNumber =
         target.receiptNumber ??
         nextReceiptNumber(
@@ -229,6 +342,8 @@ export function useTransactionActions() {
         generateWhtForTxn({ ...target, status: 'issued', receiptNumber })
         qc.invalidateQueries({ queryKey: ['wht'] })
       }
+      // The mock has no server-issued PDF, so there is nothing to point at.
+      return { number: receiptNumber }
     },
     // Slip is optional at creation and can be attached later. Reference stays
     // unique per tenant (case/space-insensitive), matching the create-time rule.
@@ -269,3 +384,5 @@ export function useTransactionActions() {
     refresh,
   }
 }
+
+export { EMPTY as EMPTY_TXN_LIST }

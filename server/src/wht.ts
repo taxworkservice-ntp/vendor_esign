@@ -2,7 +2,16 @@ import { Hono } from 'hono'
 import { sql, withTenant } from '../../src/server/db'
 import { guard } from './data'
 import { parseMonthParam } from './month'
-import type { WhtFormType, WhtRecord, WhtVendor } from '../../src/lib/wht'
+import { parseWhtListQuery } from '../../src/lib/wht-list-query'
+import {
+  whtByFormClause,
+  whtLimitClause,
+  whtOrderByClause,
+  whtTotalsClause,
+  whtWhereClause,
+} from './wht-sql'
+import type { WhtFormType, WhtVendor } from '../../src/lib/wht'
+import type { WhtRecordWithVendor } from '../../src/lib/wht'
 
 // ── Client WHT API (certificate templates render client-side; this is storage) ──
 // Session-guarded, workspace-scoped, RLS via withTenant. Mirrors the mock store
@@ -29,7 +38,7 @@ function toVendor(r: Record<string, unknown>): WhtVendor {
   }
 }
 
-function toRecord(r: Record<string, unknown>): WhtRecord {
+function toRecord(r: Record<string, unknown>): WhtRecordWithVendor {
   return {
     id: String(r.id),
     tenantId: String(r.user_id),
@@ -45,8 +54,19 @@ function toRecord(r: Record<string, unknown>): WhtRecord {
     status: r.status === 'done' ? 'done' : 'active',
     createdAt: new Date(String(r.created_at ?? Date.now())).toISOString(),
     sourceTransactionId: (r.source_transaction_id as string | null) ?? undefined,
+    // Joined in, so the list does not need a second full /wht/vendors fetch
+    // and a per-row linear scan just to render a name. The tax ID and address
+    // come along because a register export has to carry the payee details the
+    // return is filed against.
+    vendorName: r.vendor_name === null || r.vendor_name === undefined ? undefined : String(r.vendor_name),
+    vendorTaxId: r.vendor_tax_id === null || r.vendor_tax_id === undefined ? undefined : String(r.vendor_tax_id),
   }
 }
+
+const RECORD_SELECT = `
+  select r.*, v.name as vendor_name, v.tax_id as vendor_tax_id
+  from wht_records r
+  join wht_vendors v on v.id = r.vendor_id`
 
 whtRoutes.get('/wht/vendors', async (c) => {
   const g = await guard(c)
@@ -81,21 +101,62 @@ whtRoutes.post('/wht/vendors', async (c) => {
 whtRoutes.get('/wht/records', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  // An explicit `ids` list still wins — the print view uses it for a small
+  // hand-picked selection. A month/form/status scope is the normal path, and it
+  // is what makes "print every certificate for this month" possible without
+  // putting hundreds of uuids in a URL.
   const ids = (c.req.query('ids') ?? '').split(',').map((s) => s.trim()).filter(Boolean)
-  // Month scope filters on issue_date (certificate period), NOT transfer_date.
-  const range = parseMonthParam(c.req.query('month'))
-  if (range && 'error' in range) return c.json({ error: 'invalid-month' }, 400)
-  const rows = await withTenant(g.ws, 'owner', async () => {
+  const query = parseWhtListQuery(new URLSearchParams(c.req.query()))
+
+  const result = await withTenant(g.ws, 'client', async () => {
     const db = sql()
-    if (range && 'from' in range) {
-      return (await db`select * from wht_records where user_id = ${g.ws}
-        and issue_date >= ${range.from}::date and issue_date <= ${range.to}::date
-        order by issue_date desc`) as unknown as Record<string, unknown>[]
+    if (ids.length > 0) {
+      const rows = (await db.query(
+        `${RECORD_SELECT} where r.user_id = $1 and r.id = any($2::uuid[]) order by r.issue_date desc`,
+        [g.ws, ids],
+      )) as unknown as Record<string, unknown>[]
+      return { records: rows.map(toRecord), total: rows.length, totals: undefined, byForm: [] }
     }
-    return (await db`select * from wht_records where user_id = ${g.ws} order by issue_date desc`) as unknown as Record<string, unknown>[]
+
+    const where = whtWhereClause(query, g.ws)
+    const totalsSql = whtTotalsClause(query, g.ws)
+    const byFormSql = whtByFormClause(query, g.ws)
+    // Three round trips, not N+1: the page, the headline totals, the form split.
+    const [rows, totals, byForm] = await Promise.all([
+      db.query(`${RECORD_SELECT}\n  where ${where.text}\n  ${whtOrderByClause(query.sort)}\n  ${whtLimitClause(query)}`, where.params as never[]),
+      db.query(totalsSql.text, totalsSql.params as never[]),
+      db.query(byFormSql.text, byFormSql.params as never[]),
+    ])
+    const t = (totals as unknown as Record<string, unknown>[])[0]
+    return {
+      records: (rows as unknown as Record<string, unknown>[]).map(toRecord),
+      total: t ? Number(t.count ?? 0) : 0,
+      totals: t
+        ? {
+            count: Number(t.count ?? 0),
+            amount: Number(t.amount ?? 0),
+            whtAmount: Number(t.wht_amount ?? 0),
+            filedCount: Number(t.filed_count ?? 0),
+            activeCount: Number(t.active_count ?? 0),
+            vendors: Number(t.vendors ?? 0),
+          }
+        : undefined,
+      byForm: (byForm as unknown as { form_type: WhtFormType; count: number; amount: number; wht_amount: number }[]).map((r) => ({
+        formType: r.form_type,
+        count: Number(r.count),
+        amount: Number(r.amount),
+        whtAmount: Number(r.wht_amount),
+      })),
+    }
   })
-  const filtered = ids.length ? rows.filter((r) => ids.includes(String(r.id))) : rows
-  return c.json({ records: filtered.map(toRecord) })
+
+  // `summary` is what the page renders; `total` stays a bare count for callers
+  // that only need paging maths.
+  return c.json({
+    records: result.records,
+    total: result.total,
+    summary: result.totals ? { ...result.totals, byForm: result.byForm } : undefined,
+  })
 })
 
 whtRoutes.post('/wht/records', async (c) => {

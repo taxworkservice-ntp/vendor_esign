@@ -1,35 +1,95 @@
-import { apiGet, hasServer } from './api-client'
-import { loadWht, loadWhtByIds, type WhtBundle } from './wht-mock'
-import { filterWhtByMonth } from './wht'
-import type { WhtRecord, WhtVendor } from './wht'
+import { apiGet, apiSend, hasServer } from './api-client'
+import { loadWht, loadWhtByIds, saveWht, type WhtBundle } from './wht-mock'
+import { filterWhtByMonth, type WhtRecord, type WhtRecordWithVendor, type WhtVendor } from './wht'
+import { matchesSearch } from './search-match'
+import { emptyWhtSummary, sortWht, summarizeWht, type WhtSummary } from './wht-summary'
+import { parseWhtListQuery, type WhtListQuery } from './wht-list-query'
 
 // Runs on the server when VITE_API_BASE is set, else the local mock store.
-// Month is enforced server-side (issue_date range) AND client-side so both
-// paths stay identical.
-export async function fetchWht(tenantId: string, month?: string): Promise<WhtBundle> {
-  if (hasServer) {
-    const q = month ? `?month=${encodeURIComponent(month)}` : ''
-    const [v, r] = await Promise.all([
-      apiGet<{ vendors: WhtVendor[] }>('/api/client/wht/vendors'),
-      apiGet<{ records: WhtRecord[] }>(`/api/client/wht/records${q}`),
-    ])
-    return { vendors: v.vendors, records: r.records }
-  }
-  const bundle = loadWht(tenantId)
-  if (!month) return bundle
-  return { ...bundle, records: filterWhtByMonth(bundle.records, month) }
+//
+// Both paths return the same shape, and the summary describes the WHOLE filtered
+// set rather than the page on screen. The list previously had no totals at all,
+// and a headline that changed as you paged would be worse than none.
+
+export interface WhtListResult {
+  records: WhtRecordWithVendor[]
+  total: number
+  summary?: WhtSummary
 }
 
-export async function fetchWhtByIds(
-  ids: string[],
-): Promise<{ records: (WhtRecord & { vendor?: WhtVendor })[]; tenantId: string | null }> {
+export function whtSearchFields(r: WhtRecordWithVendor): (string | number | undefined)[] {
+  return [r.certificateNo, r.vendorName, r.formType, r.description, r.note, r.id]
+}
+
+/** The mock-side reference filter; the server's SQL builder is the other executor. */
+export function filterWht(records: WhtRecordWithVendor[], q: WhtListQuery): WhtRecordWithVendor[] {
+  let out = records
+  if (q.month) out = filterWhtByMonth(out, q.month)
+  if (q.formType) out = out.filter((r) => r.formType === q.formType)
+  if (q.status === 'active') out = out.filter((r) => r.status !== 'done')
+  if (q.status === 'done') out = out.filter((r) => r.status === 'done')
+  if (q.q) out = out.filter((r) => matchesSearch(whtSearchFields(r), q.q))
+  return out
+}
+
+function withVendorNames(bundle: WhtBundle): WhtRecordWithVendor[] {
+  const names = new Map<string, string>(bundle.vendors.map((v) => [v.id, v.name]))
+  return bundle.records.map((r) => ({ ...r, vendorName: names.get(r.vendorId) }))
+}
+
+export async function fetchWhtList(tenantId: string, q: WhtListQuery, params: URLSearchParams): Promise<WhtListResult> {
+  if (hasServer) {
+    const res = await apiGet<WhtListResult>(`/api/client/wht/records?${params.toString()}`)
+    return { records: res.records ?? [], total: res.total ?? res.records?.length ?? 0, summary: res.summary }
+  }
+
+  const matched = sortWht(filterWht(withVendorNames(loadWht(tenantId)), q), q.sort)
+  const start = q.limit === 0 ? 0 : q.offset
+  const end = q.limit === 0 ? matched.length : start + q.limit
+  return { records: matched.slice(start, end), total: matched.length, summary: summarizeWht(matched) }
+}
+
+/**
+ * Everything matching a scope, unpaged — what the print view renders. Takes the
+ * same query params as the list, so "print every certificate for this month" is a
+ * URL rather than hundreds of ids.
+ */
+export async function fetchWhtByScope(tenantId: string, params: URLSearchParams): Promise<WhtRecordWithVendor[]> {
+  const q = parseWhtListQuery(params)
+  if (hasServer) {
+    const p = new URLSearchParams(params)
+    p.set('limit', '0')
+    return (await apiGet<WhtListResult>(`/api/client/wht/records?${p.toString()}`)).records ?? []
+  }
+  return sortWht(filterWht(withVendorNames(loadWht(tenantId)), q), q.sort)
+}
+
+/** A small explicit selection — the print view's other mode. */
+export async function fetchWhtByIds(ids: string[]): Promise<{ records: WhtRecordWithVendor[]; tenantId: string | null }> {
   if (hasServer && ids.length) {
-    const [{ records }, { vendors }] = await Promise.all([
-      apiGet<{ records: WhtRecord[] }>(`/api/client/wht/records?ids=${encodeURIComponent(ids.join(','))}`),
-      apiGet<{ vendors: WhtVendor[] }>('/api/client/wht/vendors'),
-    ])
-    const withVendor = records.map((r) => ({ ...r, vendor: vendors.find((v) => v.id === r.vendorId) }))
-    return { records: withVendor, tenantId: withVendor[0]?.tenantId ?? null }
+    const res = await apiGet<{ records: WhtRecordWithVendor[] }>(
+      `/api/client/wht/records?ids=${encodeURIComponent(ids.join(','))}`,
+    )
+    return { records: res.records ?? [], tenantId: res.records?.[0]?.tenantId ?? null }
   }
   return loadWhtByIds(ids)
 }
+
+/** WHT vendors are only ever read; a certificate references them. */
+export async function fetchWhtVendors(tenantId: string): Promise<WhtVendor[]> {
+  if (hasServer) return (await apiGet<{ vendors: WhtVendor[] }>('/api/client/wht/vendors')).vendors
+  return loadWht(tenantId).vendors
+}
+
+/** Mark a certificate as filed, or return it to active. */
+export async function setWhtRecordStatus(tenantId: string, id: string, status: 'active' | 'done'): Promise<void> {
+  if (hasServer) {
+    await apiSend(`/api/client/wht/records/${id}`, 'PATCH', { status })
+    return
+  }
+  const bundle = loadWht(tenantId)
+  saveWht({ ...bundle, records: bundle.records.map((r) => (r.id === id ? { ...r, status } : r)) })
+}
+
+export { emptyWhtSummary, summarizeWht }
+export type { WhtRecordWithVendor }

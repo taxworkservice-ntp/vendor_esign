@@ -1,14 +1,17 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, Copy, ExternalLink, Link2, RotateCcw, ShieldAlert, UploadCloud } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Copy, ExternalLink, FileSearch, Link2, RotateCcw, ShieldAlert, UploadCloud } from 'lucide-react'
 import { useTransaction, useTransactionActions } from '../hooks/useTransactions'
 import { useSettings } from '../hooks/useSettings'
-import { getAuth } from '../hooks/useVendor'
+import { useReceiptAuthorization } from '../hooks/useReceiptAuthorization'
 import { Card, CardBody } from '../components/ui/card'
 import { StatusBadge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { FieldError, Input, Label, Textarea } from '../components/ui/input'
 import { ConfirmDialog } from '../components/ui/confirm-dialog'
+import { EmptyState } from '../components/ui/empty-state'
+import { ErrorState } from '../components/ui/error-state'
+import { TableSkeleton } from '../components/ui/table-skeleton'
 import { defaultSettings, renderInviteMessage } from '../lib/settings'
 import { itemsTotal, normalizeLineItem } from '../lib/line-items'
 import { vendorDisplayName } from '../lib/vendor-name'
@@ -17,7 +20,7 @@ import { fmtTHB, fmtDateTH } from '../lib/format'
 export function TransactionDetail() {
   const { id } = useParams()
   const nav = useNavigate()
-  const { data: t } = useTransaction(id)
+  const { data: t, isLoading, isError, error, refetch } = useTransaction(id)
   const acts = useTransactionActions()
   const { data: settings } = useSettings()
   const [voidReason, setVoidReason] = useState('')
@@ -32,17 +35,63 @@ export function TransactionDetail() {
   const [slipErr, setSlipErr] = useState('')
   const [slipBusy, setSlipBusy] = useState(false)
 
+  // Loading, failure and not-found are three different things. Collapsing them
+  // into "ไม่พบรายการ" told the user a record did not exist when in fact the
+  // request had failed or was still in flight.
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Link to="/" className="text-body font-semibold text-ink-500">← กลับรายการ</Link>
+        <Card>
+          <CardBody>
+            <TableSkeleton rows={6} cols={2} />
+          </CardBody>
+        </Card>
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="space-y-4">
+        <Link to="/" className="text-body font-semibold text-ink-500">← กลับรายการ</Link>
+        <Card>
+          <ErrorState
+            title="โหลดรายการไม่สำเร็จ"
+            description={error instanceof Error && error.message ? `รายละเอียด: ${error.message}` : undefined}
+            onRetry={() => void refetch()}
+          />
+        </Card>
+      </div>
+    )
+  }
+
   if (!t) {
     return (
       <div className="space-y-4">
         <Link to="/" className="text-body font-semibold text-ink-500">← กลับรายการ</Link>
-        <p>ไม่พบรายการ</p>
+        <Card>
+          <EmptyState
+            icon={FileSearch}
+            title="ไม่พบรายการ"
+            description={id ? `ไม่มีรายการที่มีรหัส ${id} — อาจถูกลบไปแล้ว หรือลิงก์ไม่ถูกต้อง` : 'ไม่พบรหัสรายการในลิงก์'}
+            action={
+              <Link to="/">
+                <Button>← กลับรายการทั้งหมด</Button>
+              </Link>
+            }
+          />
+        </Card>
       </div>
     )
   }
 
   const link = t.inviteToken ? `${location.origin}/v/${t.inviteToken}` : ''
-  const corrections = getAuth(t.id)?.corrections ?? []
+  // Corrections come from the authorization record. They used to be read from
+  // mock-only storage, so on the server path a vendor who corrected the client's
+  // spelling was never told — the diff is now derived server-side.
+  const { data: auth } = useReceiptAuthorization(t.id)
+  const corrections = auth?.corrections ?? []
   const cfg = settings ?? defaultSettings(t.tenantId)
   const defaultMessage = renderInviteMessage(cfg.inviteMessageTemplate, {
     vendor: t.vendor.name,

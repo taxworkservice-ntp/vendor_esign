@@ -5,6 +5,7 @@ import { Layout } from './components/layout'
 import { GlobalMonthProvider } from './hooks/useGlobalMonth'
 import { ErrorBoundary } from './components/error-boundary'
 import { Spinner } from './components/ui/spinner'
+import { ToastProvider } from './components/ui/toast'
 import { NotFound } from './pages/NotFound'
 import { useAuth } from './lib/auth'
 import { useClientAuth } from './lib/client-auth'
@@ -74,6 +75,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={qc}>
+        <ToastProvider>
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           {/* Vendor + public verify + receipt copy: no account, standalone */}
@@ -119,6 +121,7 @@ export default function App() {
           />
         </Routes>
       </BrowserRouter>
+        </ToastProvider>
     </QueryClientProvider>
     </ErrorBoundary>
   )

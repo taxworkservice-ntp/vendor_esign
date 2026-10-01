@@ -5,6 +5,53 @@
 
 export type WhtFormType = 'pnd1' | 'pnd1_special' | 'pnd2' | 'pnd3' | 'pnd2a' | 'pnd3a' | 'pnd53'
 
+/** Canonical order, used for the breakdown strip and the form filter. */
+export const WHT_FORM_TYPES: WhtFormType[] = ['pnd1', 'pnd1_special', 'pnd2', 'pnd2a', 'pnd3', 'pnd3a', 'pnd53']
+
+/**
+ * The government form names a bookkeeper actually refers to. The list used to
+ * render the raw code uppercased ("PND3"), which is not what appears on the
+ * return they reconcile against.
+ */
+export const WHT_FORM_LABELS: Record<WhtFormType, string> = {
+  pnd1: 'ภ.ง.ด.1',
+  pnd1_special: 'ภ.ง.ด.1 (พิเศษ)',
+  pnd2: 'ภ.ง.ด.2',
+  pnd2a: 'ภ.ง.ด.2/53',
+  pnd3: 'ภ.ง.ด.3',
+  pnd3a: 'ภ.ง.ด.3/54',
+  pnd53: 'ภ.ง.ด.53',
+}
+
+/** Longer descriptions, for the column header tooltip and the print view. */
+export const WHT_FORM_TITLES: Record<WhtFormType, string> = {
+  pnd1: 'หนังสือรับรองการหักภาษี ณ ที่จ่าย เงินได้ตามประเภทที่จ่าย',
+  pnd1_special: 'หนังสือรับรองการหักภาษี ณ ที่จ่าย แบบพิเศษ',
+  pnd2: 'หนังสือรับรองการหักภาษี ณ ที่จ่ายสำหรับผู้ถูกหักภาษีที่เป็นบุคคลธรรมดา',
+  pnd2a: 'หนังสือรับรองการหักภาษี ณ ที่จ่าย แบบรวม',
+  pnd3: 'หนังสือรับรองการหักภาษี ณ ที่จ่ายสำหรับผู้ถูกหักภาษีที่เป็นบุคคลธรรมดา',
+  pnd3a: 'หนังสือรับรองการหักภาษี ณ ที่จ่าย แบบรวม',
+  pnd53: 'หนังสือรับรองการหักภาษี ณ ที่จ่ายสำหรับผู้ถูกหักภาษีที่เป็นนิติบุคคล',
+}
+
+/**
+ * A certificate as the list renders it: the record plus the payee details
+ * joined in from wht_vendors. Lives here rather than in wht-source.ts so the
+ * server can type its mapper without importing a client-only module.
+ */
+export type WhtRecordWithVendor = WhtRecord & {
+  vendorName?: string
+  vendorTaxId?: string
+}
+
+export function whtFormLabel(t: string): string {
+  return WHT_FORM_LABELS[t as WhtFormType] ?? String(t).toUpperCase()
+}
+
+export function whtFormTitle(t: string): string {
+  return WHT_FORM_TITLES[t as WhtFormType] ?? ''
+}
+
 export interface WhtVendor {
   id: string
   tenantId: string

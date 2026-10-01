@@ -16,6 +16,7 @@
     "db:migrate": "node scripts/migrate.mjs",
     "db:verify": "node scripts/verify.mjs",
     "db:live": "node scripts/db-live-check.mjs",
+    "db:list": "tsx scripts/txn-list-check.ts",
     "db:seed": "node scripts/seed.mjs",
     "db:seed-admin": "node scripts/seed-admin.mjs",
     "pdf:preview": "tsx scripts/preview-receipt.ts"

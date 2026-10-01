@@ -15,6 +15,15 @@ export interface ClientVendor {
   lineUserId?: string
   phone?: string
   email?: string
+  /** Archived suppliers stay out of the default register. */
+  isActive?: boolean
+  // Money context, joined in by the list endpoint so the register can show what
+  // is owed without an N+1. Absent on a single-vendor read.
+  /** Sum of net for statuses that still represent money owed. */
+  outstanding?: number
+  txnCount?: number
+  /** Latest transferDate across this vendor's transactions. */
+  lastActivity?: string
   createdAt: string
 }
 

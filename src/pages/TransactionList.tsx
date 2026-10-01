@@ -1,184 +1,119 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, ChevronRight, Copy, ExternalLink, FileSearch, Plus, Search, SlidersHorizontal, X } from 'lucide-react'
-import { useTransactions } from '../hooks/useTransactions'
+import { Download, FileSearch, Plus, Rows3, Rows4 } from 'lucide-react'
+import { useAllTransactions, useTransactions } from '../hooks/useTransactions'
 import { useGlobalMonth } from '../hooks/useGlobalMonth'
 import { useAllVendors } from '../hooks/useVendors'
 import { useSettings } from '../hooks/useSettings'
+import { useDebounced } from '../hooks/useDebounced'
+import { useClientAuth } from '../lib/client-auth'
+import { readStoredMonth } from '../lib/global-month'
 import { defaultSettings } from '../lib/settings'
 import {
   activeFilterCount,
+  clampPage,
   defaultFilters,
+  describeActiveFilters,
   emptyFilters,
   filtersFromParams,
-  filtersToParams,
-  nextSort,
   presetRange,
-  sortDir,
-  sortField,
+  resolvePeriod,
+  STATUS_GROUP_LABELS,
+  type ActiveFilter,
   type PresetId,
-  type SortField,
   type SortKey,
   type StatusFilter,
   type TransactionFilters,
 } from '../lib/txn-filters'
+import { parseListQuery, queryFromFilters, queryToParams } from '../lib/txn-list-query'
+import { attentionFor } from '../lib/attention'
+import { downloadCsv, exportFilename, txnsToCsv } from '../lib/csv'
+import { inviteUrl } from '../lib/app-url'
 import { cn } from '../lib/cn'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
-import { StatusBadge } from '../components/ui/badge'
-import { Input } from '../components/ui/input'
-import { Select } from '../components/ui/select'
-import { FilterChip } from '../components/ui/filter-chip'
 import { EmptyState } from '../components/ui/empty-state'
+import { ErrorState } from '../components/ui/error-state'
 import { Button } from '../components/ui/button'
-import { VendorPicker } from '../components/vendor-picker'
-import { fmtTHB, fmtDateTH } from '../lib/format'
-import { vendorDisplayName } from '../lib/vendor-name'
+import { SummaryBar } from '../components/ui/summary-bar'
+import { Pagination } from '../components/ui/pagination'
+import { useToast } from '../components/ui/toast'
+import { TxnToolbar } from '../components/transactions/txn-toolbar'
+import { TxnFiltersPanel } from '../components/transactions/txn-filters-panel'
+import { TxnTable, TxnTableFrame } from '../components/transactions/txn-table'
+import { SelectAllMatching, TxnBulkBar } from '../components/transactions/txn-bulk-bar'
+import { CustomRangeNotice } from '../components/transactions/custom-range-notice'
 import type { PaymentTransaction } from '../lib/types'
 
-// Quick-filter status chips live in the toolbar; the month is a global
-// accounting period (header bar) shared with WHT + Metrics. The granular
-// status list and date presets live inside the "ตัวกรอง" panel.
+// Quick-filter status chips. The month is a global accounting period (header
+// bar) shared with WHT + Metrics; the granular status list and date presets
+// live in the "ตัวกรอง" panel.
 const STATUS_CHIPS: { v: StatusFilter; th: string }[] = [
   { v: 'all', th: 'ทั้งหมด' },
-  { v: 'active', th: 'กำลังดำเนินการ' },
-  { v: 'done', th: 'เสร็จสิ้น' },
-  { v: 'voided', th: 'ยกเลิกเอกสาร' },
+  { v: 'active', th: STATUS_GROUP_LABELS.active },
+  { v: 'done', th: STATUS_GROUP_LABELS.done },
+  { v: 'voided', th: STATUS_GROUP_LABELS.voided },
 ]
 
-const STATUS_OPTIONS: { v: StatusFilter; th: string }[] = [
-  { v: 'all', th: 'ทั้งหมด' },
-  { v: 'active', th: 'กำลังดำเนินการ (ฉบับร่าง/ส่ง/ลงนาม)' },
-  { v: 'done', th: 'เสร็จสิ้น (ออกใบเสร็จแล้ว)' },
-  { v: 'voided', th: 'ยกเลิกเอกสาร' },
-  { v: 'draft', th: '— ฉบับร่าง' },
-  { v: 'sent', th: '— ส่งลิงก์แล้ว' },
-  { v: 'opened', th: '— เปิดลิงก์แล้ว' },
-  { v: 'signed', th: '— ลงนามแล้ว' },
-  { v: 'issued', th: '— ออกใบเสร็จแล้ว' },
-  { v: 'expired', th: '— หมดอายุ' },
-  { v: 'void', th: '— ยกเลิกเอกสาร' },
-  { v: 'cancelled', th: '— เพิกถอนลิงก์' },
-]
+const DENSE_KEY = 'tw:txn-dense'
 
-const PRESETS: { id: PresetId; th: string }[] = [
-  { id: '7d', th: '7 วัน' },
-  { id: '30d', th: '30 วัน' },
-  { id: 'year', th: 'ปีนี้' },
-]
-
-const thBase = 'sticky top-0 z-10 border-b border-card-border bg-ink-50 px-3 py-2.5 text-label font-semibold uppercase tracking-wide text-ink-500'
-const tdCls = 'whitespace-nowrap border-b border-card-border px-3 py-2.5'
-
-function SortHeader({
-  field,
-  label,
-  sort,
-  onSort,
-  align = 'left',
-}: {
-  field: SortField
-  label: string
-  sort: SortKey
-  onSort: (key: SortKey) => void
-  align?: 'left' | 'right'
-}) {
-  const active = sortField(sort) === field
-  const dir = sortDir(sort)
-  const Icon = !active ? ArrowUpDown : dir === 'asc' ? ArrowUp : ArrowDown
-  return (
-    <th className={cn(thBase, align === 'right' && 'text-right')} aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
-      <button
-        type="button"
-        onClick={() => onSort(nextSort(sort, field))}
-        className={cn('inline-flex items-center gap-1 transition hover:text-ink-900', active && 'text-ink-900')}
-      >
-        {label}
-        <Icon size={13} className={active ? '' : 'text-ink-300'} />
-      </button>
-    </th>
-  )
-}
-
-function SkeletonRows({ rows }: { rows: number }) {
-  return (
-    <>
-      {Array.from({ length: rows }).map((_, i) => (
-        <tr key={i}>
-          <td className="border-b border-card-border px-3 py-3"><div className="h-3.5 w-24 animate-pulse rounded bg-ink-100" /></td>
-          <td className="border-b border-card-border px-3 py-3">
-            <div className="h-3.5 w-52 animate-pulse rounded bg-ink-100" />
-            <div className="mt-2 h-3 w-32 animate-pulse rounded bg-ink-100" />
-          </td>
-          <td className="border-b border-card-border px-3 py-3"><div className="h-3.5 w-20 animate-pulse rounded bg-ink-100" /></td>
-          <td className="border-b border-card-border px-3 py-3"><div className="h-3.5 w-28 animate-pulse rounded bg-ink-100" /></td>
-          <td className="border-b border-card-border px-3 py-3"><div className="ml-auto h-3.5 w-16 animate-pulse rounded bg-ink-100" /></td>
-          <td className="border-b border-card-border px-3 py-3"><div className="ml-auto h-3.5 w-14 animate-pulse rounded bg-ink-100" /></td>
-          <td className="border-b border-card-border px-3 py-3"><div className="ml-auto h-3.5 w-16 animate-pulse rounded bg-ink-100" /></td>
-          <td className="border-b border-card-border px-3 py-3"><div className="h-5 w-20 animate-pulse rounded-full bg-ink-100" /></td>
-          <td className="border-b border-card-border px-3 py-3" />
-        </tr>
-      ))}
-    </>
-  )
-}
-
-function RowActions({ t }: { t: PaymentTransaction }) {
-  const [copied, setCopied] = useState(false)
-  const link = t.inviteToken ? `${location.origin}/v/${t.inviteToken}` : ''
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(link)
-    } catch {
-      /* clipboard unavailable */
-    }
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1400)
+function readDense(): boolean {
+  try {
+    return localStorage.getItem(DENSE_KEY) === '1'
+  } catch {
+    return false
   }
-  return (
-    <div className="flex items-center justify-end gap-0.5">
-      {link && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); void copy() }}
-          title="คัดลอกลิงก์ผู้ขาย"
-          aria-label="คัดลอกลิงก์ผู้ขาย"
-          className="grid h-8 w-8 place-items-center rounded-control text-ink-500 transition hover:bg-ink-100 hover:text-ink-900"
-        >
-          {copied ? <Check size={15} className="text-emerald-600" /> : <Copy size={15} />}
-        </button>
-      )}
-      {t.receiptNumber ? (
-        <Link
-          to={`/receipts/${t.id}`}
-          onClick={(e) => e.stopPropagation()}
-          title="เปิดใบเสร็จ"
-          aria-label="เปิดใบเสร็จ"
-          className="grid h-8 w-8 place-items-center rounded-control text-ink-500 transition hover:bg-ink-100 hover:text-ink-900"
-        >
-          <ExternalLink size={15} />
-        </Link>
-      ) : (
-        <span className="grid h-8 w-8 place-items-center text-ink-300"><ChevronRight size={16} /></span>
-      )}
-    </div>
-  )
 }
 
 export function TransactionList() {
   const [params, setParams] = useSearchParams()
   const { month: globalMonth, setMonth: setGlobalMonth } = useGlobalMonth()
+  const { activeTenant } = useClientAuth()
+  const toast = useToast()
+  const nav = useNavigate()
+  const searchRef = useRef<HTMLInputElement>(null)
+
+  // Filters, paging and page size all come from the same URL. Reuse the shared
+  // validator so the page can never hold a paging state the API would reject
+  // (an unknown `size`, say) — one vocabulary, no second parser to drift.
+  const [url] = useState(() => parseListQuery(params))
+
   const [filters, setFilters] = useState<TransactionFilters>(() => {
     if (params.toString()) return filtersFromParams(params)
     return { ...defaultFilters(), month: globalMonth }
   })
+  const [page, setPage] = useState(() => Math.floor(url.offset / Math.max(1, url.limit)))
+  const [pageSize, setPageSize] = useState(() => url.limit)
   const [showPanel, setShowPanel] = useState(false)
-  const nav = useNavigate()
+  const [dense, setDense] = useState(readDense)
+  const [selected, setSelected] = useState<Set<string>>(() => new Set())
 
-  // URL sync — filters survive refresh and are shareable.
+  // Search is held separately so typing is instant; only the debounced copy
+  // reaches the query key, so we do not refetch on every keystroke.
+  const [search, setSearch] = useState(filters.search)
+  const debouncedSearch = useDebounced(search, 250)
+  const queryFilters = useMemo<TransactionFilters>(
+    () => (filters.search === debouncedSearch ? filters : { ...filters, search: debouncedSearch }),
+    [filters, debouncedSearch],
+  )
+
+  // ── URL sync ────────────────────────────────────────────────────────────
+  // Filters, sort, page and page size all survive refresh and are shareable.
+  // Paging rides on the shared `limit`/`offset` pair, so there is a single
+  // representation the API also understands.
+  //
+  // `month` is deliberately NOT mirrored back. The header period already owns
+  // it and persists it per tenant, so writing it here created a second source
+  // of truth: a stale ?month= from an earlier visit was re-adopted on the next
+  // mount and silently undid a newer pick made on another page. A month is
+  // written only when it DIVERGES from the stored period, which is exactly the
+  // case where a shared link has to carry it.
+  const storedMonth = readStoredMonth(activeTenant)
   useEffect(() => {
-    setParams(filtersToParams(filters), { replace: true })
-  }, [filters, setParams])
+    const p = queryToParams({ ...queryFromFilters(queryFilters), limit: pageSize, offset: page * pageSize })
+    if (queryFilters.month === storedMonth) p.delete('month')
+    setParams(p, { replace: true })
+  }, [queryFilters, page, pageSize, storedMonth, setParams])
 
   // A shared ?month= link adopts the month into the global period (invalid
   // values are ignored by the hook). Runs once on mount.
@@ -187,35 +122,272 @@ export function TransactionList() {
     if (adoptedUrlMonth) setGlobalMonth(adoptedUrlMonth)
   }, [adoptedUrlMonth, setGlobalMonth])
 
-  // Global period → local filter (single source of truth for the month).
+  // The header period is the single source of truth: it drives Transactions,
+  // WHT and Metrics together. resolvePeriod owns the rule so it stays testable
+  // outside React.
+  //
+  // The first pass honours whatever the URL said — a shared link may carry a
+  // custom range, and a bare re-render must not wipe it. Every later change to
+  // the global month is an explicit pick, which supersedes a local range:
+  // "show me October" cannot mean "October, except the range I set here".
+  const syncedPeriod = useRef(false)
   useEffect(() => {
-    setFilters((f) => (f.month === globalMonth ? f : { ...f, month: globalMonth }))
+    const explicitPick = syncedPeriod.current
+    // Set outside the state updater: updaters must stay pure, and React may
+    // invoke them more than once.
+    syncedPeriod.current = true
+    setFilters((f) => {
+      const next = resolvePeriod(f, globalMonth, { explicitPick })
+      return next.month === f.month && next.from === f.from && next.to === f.to ? f : { ...f, ...next }
+    })
   }, [globalMonth])
+
+  // Any change to what is being filtered sends the user back to page 1 and
+  // drops the selection: rows selected under the old filter are no longer part
+  // of the result set, so a bulk action would be acting on something invisible.
+  // Paging is deliberately NOT a reset — selection is expected to span pages,
+  // which is what "select all N matching" relies on.
+  const filterSignature = JSON.stringify(queryFromFilters(filters))
+  useEffect(() => {
+    setPage(0)
+  }, [filterSignature]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const { data, isLoading, isFetching, isError, error, refetch } = useTransactions(queryFilters, page, pageSize)
+  const rows = data?.rows ?? []
+  const totals = data?.totals
+  const total = data?.total ?? 0
+
+  useEffect(() => {
+    setSelected(new Set())
+  }, [filterSignature])
+
+  // The server clamps what it returns; mirror that so the UI never sits on a
+  // page that does not exist (e.g. after deleting the last row on page 3).
+  useEffect(() => {
+    const safe = clampPage(page, total, pageSize)
+    if (safe !== page) setPage(safe)
+  }, [page, total, pageSize])
 
   const { data: settings } = useSettings()
   const cfg = settings ?? defaultSettings()
-  const { data, isLoading } = useTransactions(filters)
   const vendors = useAllVendors()
 
-  const set = (patch: Partial<TransactionFilters>) => setFilters((f) => ({ ...f, ...patch }))
-  // Custom ranges are mutually exclusive with the global month: picking one
-  // clears the period everywhere (Transactions + WHT + Metrics).
-  const clearGlobalMonth = () => setGlobalMonth('')
-  const applyPreset = (id: PresetId) => {
-    const r = presetRange(id)
-    set({ from: r.from, to: r.to, month: '' })
-    clearGlobalMonth()
-  }
-  const setRange = (patch: Partial<TransactionFilters>) => {
-    set({ ...patch, month: '' })
-    clearGlobalMonth()
-  }
-  const activeCount = activeFilterCount(filters)
+  // The full filtered set is only fetched when something actually needs it:
+  // a cross-page bulk action, "select all matching", or a CSV export. Selecting
+  // a single row counts, because the selection may span pages the user cannot
+  // see — resolving a selection against the current page alone would silently
+  // drop rows the user believes they picked.
+  const [needAll, setNeedAll] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const wantFullSet = needAll || exporting || selected.size > 0
+  const { data: allRows, isFetching: allFetching } = useAllTransactions(queryFilters, wantFullSet)
 
-  const rows = data ?? []
-  const sumGross = rows.reduce((s, t) => s + t.grossAmount, 0)
-  const sumWht = rows.reduce((s, t) => s + t.whtAmount, 0)
-  const sumNet = rows.reduce((s, t) => s + t.netAmount, 0)
+  const attentionCount = useMemo(() => rows.filter((t) => attentionFor(t)).length, [rows])
+  // The pill is page-scoped, so it is redundant (and would double-count) when
+  // the attention filter is already narrowing the list — there the filtered
+  // count IS the queue size.
+  const attentionOnPage = queryFilters.attention ? 0 : attentionCount
+
+  const activeFilters = useMemo(
+    () =>
+      describeActiveFilters(queryFilters, {
+        vendorName: (id) => vendors.find((v) => v.id === id)?.name ?? id,
+      }),
+    [queryFilters, vendors],
+  )
+
+  const set = useCallback((patch: Partial<TransactionFilters>) => {
+    setFilters((f) => ({ ...f, ...patch }))
+  }, [])
+
+  // A custom range is a LIST-LOCAL override. It deliberately leaves the header
+  // period alone: narrowing this list must not silently re-point WHT and
+  // Metrics at "all time". The list shows an explicit notice while decoupled
+  // (see CustomRangeNotice) so the difference is never a mystery.
+  const setRange = useCallback(
+    (patch: Partial<TransactionFilters>) => {
+      set({ ...patch, month: '' })
+    },
+    [set],
+  )
+  const applyPreset = useCallback(
+    (id: PresetId) => {
+      set({ ...presetRange(id), month: '' })
+    },
+    [set],
+  )
+
+  // Hand the view back to the header period.
+  const useHeaderPeriod = useCallback(() => {
+    setFilters((f) => {
+      const next = resolvePeriod(f, globalMonth)
+      return { ...f, ...next }
+    })
+  }, [globalMonth])
+
+  const clearFilter = useCallback(
+    (key: ActiveFilter['key']) => {
+      if (key === 'search') setSearch('')
+      if (key === 'from' || key === 'to') {
+        // Clearing the range hands the view back to the header period.
+        setFilters((f) => {
+          const cleared = { ...f, from: '', to: '', month: '' }
+          return { ...cleared, ...resolvePeriod(cleared, globalMonth) }
+        })
+        return
+      }
+      set({ [key]: '' } as Partial<TransactionFilters>)
+    },
+    [set, globalMonth],
+  )
+
+  // "Clear all filters" resets the LIST and returns it to the header period —
+  // it does not clear the app-wide period, which belongs to the header control.
+  const clearAll = useCallback(() => {
+    setSearch('')
+    setFilters({ ...emptyFilters(), month: globalMonth })
+  }, [globalMonth])
+
+  const open = useCallback((id: string) => nav(`/transactions/${id}`), [nav])
+
+  const toggle = useCallback((id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const togglePage = useCallback(() => {
+    setSelected((prev) => {
+      const ids = rows.map((r) => r.id)
+      const allOn = ids.every((id) => prev.has(id))
+      const next = new Set(prev)
+      ids.forEach((id) => (allOn ? next.delete(id) : next.add(id)))
+      return next
+    })
+  }, [rows])
+
+  // Selection can span pages, so bulk actions resolve ids against the full set.
+  // While that set is still in flight the selection is only partially
+  // resolvable, so the actions wait rather than quietly acting on the page.
+  const fullSetReady = !!allRows
+  const selectedRows = useCallback((): PaymentTransaction[] => {
+    if (!allRows) return []
+    return allRows.filter((t) => selected.has(t.id))
+  }, [allRows, selected])
+
+  const loadAllForSelection = useCallback(() => {
+    setNeedAll(true)
+  }, [])
+
+  // Once the full set has loaded, a cross-page "select all" can be applied.
+  useEffect(() => {
+    if (needAll && allRows) {
+      setSelected(new Set(allRows.map((t) => t.id)))
+      setNeedAll(false)
+    }
+  }, [needAll, allRows])
+
+  const copyLinks = useCallback(async () => {
+    if (!fullSetReady) {
+      toast.show('กำลังโหลดรายการที่เลือก…', 'info')
+      return
+    }
+    const links = selectedRows()
+      .map((t) => inviteUrl(t.inviteToken))
+      .filter(Boolean)
+    if (links.length === 0) {
+      toast.show('ไม่มีรายการที่มีลิงก์ผู้ขาย', 'error')
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(links.join('\n'))
+      toast.show(`คัดลอกลิงก์ ${links.length} รายการแล้ว`)
+    } catch {
+      toast.show('คัดลอกไม่สำเร็จ — กรุณาคัดลอกด้วยตนเอง', 'error')
+    }
+  }, [fullSetReady, selectedRows, toast])
+
+  const saveCsv = useCallback(
+    (pool: PaymentTransaction[]) => {
+      downloadCsv(exportFilename(), txnsToCsv(pool))
+      toast.show(`ส่งออก ${pool.length} รายการแล้ว`)
+    },
+    [toast],
+  )
+
+  const exportSelected = useCallback(() => {
+    if (!fullSetReady) {
+      toast.show('กำลังโหลดรายการที่เลือก…', 'info')
+      return
+    }
+    const pool = selectedRows()
+    if (pool.length === 0) {
+      toast.show('กรุณาเลือกรายการก่อนส่งออก', 'error')
+      return
+    }
+    saveCsv(pool)
+  }, [fullSetReady, selectedRows, saveCsv, toast])
+
+  // Exporting the whole filtered set needs every row, which is not loaded for
+  // the page. Ask for it once; the effect below writes the file when it lands,
+  // so the click never hangs with no feedback.
+  const exportAll = useCallback(() => {
+    if (allRows) {
+      saveCsv(allRows)
+      return
+    }
+    setExporting(true)
+    toast.show('กำลังเตรียมข้อมูลเพื่อส่งออก…', 'info')
+  }, [allRows, saveCsv, toast])
+
+  useEffect(() => {
+    if (!exporting || !allRows) return
+    saveCsv(allRows)
+    setExporting(false)
+  }, [exporting, allRows, saveCsv])
+
+  const toggleDense = useCallback(() => {
+    setDense((d) => {
+      const next = !d
+      try {
+        localStorage.setItem(DENSE_KEY, next ? '1' : '0')
+      } catch {
+        /* persistence is best-effort */
+      }
+      return next
+    })
+  }, [])
+
+  // Keyboard shortcuts: "/" focuses search, "f" toggles the filter panel.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null
+      const typing = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)
+      if (typing || e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key === '/') {
+        e.preventDefault()
+        searchRef.current?.focus()
+      } else if (e.key === 'f') {
+        e.preventDefault()
+        setShowPanel((v) => !v)
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
+
+  const selectedLinkCount = useMemo(
+    () => (allRows ?? rows).filter((t) => selected.has(t.id) && t.inviteToken).length,
+    [allRows, rows, selected],
+  )
+  // Offer "select all matching" only while some matching row is NOT selected.
+  const canSelectAll = total > rows.length && selected.size < total
+
+  const filtered = activeFilterCount(queryFilters) > 0 || !!queryFilters.search.trim()
+  const isEmpty = !isLoading && !isError && rows.length === 0
 
   return (
     <div className="space-y-5">
@@ -223,234 +395,166 @@ export function TransactionList() {
         title="รายการธุรกรรมผู้ขาย"
         sub="สร้างรายการ · ส่งลิงก์ทาง LINE · ติดตามสถานะจนออกใบเสร็จ"
         actions={
-          <Link to="/transactions/new">
-            <Button>
-              <Plus size={17} /> สร้างรายการใหม่
+          <>
+            <Button
+              variant="secondary"
+              onClick={exportAll}
+              loading={allFetching}
+              title="ส่งออก CSV ทุกรายการที่ตรงเงื่อนไข (ต้องมี UTF-8 BOM เพื่อให้ Excel อ่านภาษาไทยได้)"
+            >
+              <Download size={16} aria-hidden /> ส่งออก CSV
             </Button>
-          </Link>
+            <button
+              type="button"
+              onClick={toggleDense}
+              aria-pressed={dense}
+              title={dense ? 'เปลี่ยนเป็นแถวสูง (อ่านง่ายขึ้น)' : 'เปลี่ยนเป็นแถวกระชับ (เห็นข้อมูลมากขึ้น)'}
+              aria-label="สลับความหนาแน่นของตาราง"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-control border border-card-border bg-white text-ink-600 transition hover:bg-ink-100"
+            >
+              {dense ? <Rows3 size={17} aria-hidden /> : <Rows4 size={17} aria-hidden />}
+            </button>
+            <Link to="/transactions/new">
+              <Button>
+                <Plus size={17} aria-hidden /> สร้างรายการใหม่
+              </Button>
+            </Link>
+          </>
         }
       />
 
       <Card>
-        <CardBody className="space-y-3">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <div className="relative flex-1">
-              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-400" />
-              <Input
-                className={cn('pl-10', filters.search && 'pr-10')}
-                placeholder="ค้นหาชื่อผู้ขาย / รายละเอียด / เลขรายการ / สลิป…"
-                value={filters.search}
-                onChange={(e) => set({ search: e.target.value })}
-              />
-              {filters.search && (
-                <button
-                  type="button"
-                  onClick={() => set({ search: '' })}
-                  aria-label="ล้างคำค้นหา"
-                  className="absolute right-2.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-control text-ink-400 transition hover:bg-ink-100 hover:text-ink-700"
-                >
-                  <X size={15} />
-                </button>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setShowPanel((v) => !v)}
-                className={cn(
-                  'inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-body font-semibold transition',
-                  showPanel || activeCount > 0 ? 'bg-ink-900 text-white' : 'bg-ink-100 text-ink-700 hover:bg-ink-300/50',
-                )}
-              >
-                <SlidersHorizontal size={14} /> ตัวกรอง
-                {activeCount > 0 && <span className="rounded-full bg-white/25 px-1.5 text-label">{activeCount}</span>}
-              </button>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1.5 border-t border-card-border pt-3">
-            <span className="mr-1 text-label font-semibold text-ink-500">สถานะ</span>
-            {STATUS_CHIPS.map((f) => (
-              <FilterChip key={f.v} active={filters.status === f.v} onClick={() => set({ status: f.v })}>
-                {f.th}
-              </FilterChip>
-            ))}
-          </div>
-
+        <CardBody>
+          <TxnToolbar
+            filters={queryFilters}
+            search={search}
+            onSearch={setSearch}
+            onPatch={set}
+            onTogglePanel={() => setShowPanel((v) => !v)}
+            panelOpen={showPanel}
+            active={activeFilters}
+            searchRef={searchRef}
+            chips={STATUS_CHIPS}
+            onClearFilter={clearFilter}
+          />
           {showPanel && (
-            <div className="grid gap-4 border-t border-card-border pt-4 md:grid-cols-2 xl:grid-cols-4">
-              <div>
-                <p className="mb-1.5 text-label font-semibold text-ink-500">สถานะ (ละเอียด)</p>
-                <Select value={filters.status} onChange={(e) => set({ status: e.target.value as StatusFilter })}>
-                  {STATUS_OPTIONS.map((o) => (
-                    <option key={o.v} value={o.v}>
-                      {o.th}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              <div className="xl:col-span-2">
-                <p className="mb-1.5 text-label font-semibold text-ink-500">ช่วงวันที่โอน</p>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {PRESETS.map((p) => (
-                    <FilterChip key={p.id} onClick={() => applyPreset(p.id)}>
-                      {p.th}
-                    </FilterChip>
-                  ))}
-                  <Input type="date" value={filters.from} onChange={(e) => setRange({ from: e.target.value })} className="h-9 w-auto text-body" />
-                  <span className="text-ink-400">–</span>
-                  <Input type="date" value={filters.to} onChange={(e) => setRange({ to: e.target.value })} className="h-9 w-auto text-body" />
-                </div>
-              </div>
-
-              <div>
-                <p className="mb-1.5 text-label font-semibold text-ink-500">ประเภทการจ่าย</p>
-                <Select value={filters.paymentType} onChange={(e) => set({ paymentType: e.target.value })}>
-                  <option value="">ทั้งหมด</option>
-                  {cfg.paymentTypes.map((p) => (
-                    <option key={p} value={p}>{p}</option>
-                  ))}
-                </Select>
-              </div>
-
-              <div>
-                <p className="mb-1.5 text-label font-semibold text-ink-500">สลิป</p>
-                <div className="flex gap-1.5">
-                  {([['all', 'ทั้งหมด'], ['with', 'มีสลิป'], ['without', 'ยังไม่แนบ']] as const).map(([v, th]) => (
-                    <FilterChip key={v} active={filters.slip === v} onClick={() => set({ slip: v })} className="flex-1 justify-center">
-                      {th}
-                    </FilterChip>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <p className="mb-1.5 text-label font-semibold text-ink-500">ยอดสุทธิ (บาท)</p>
-                <div className="flex items-center gap-1.5">
-                  <Input inputMode="decimal" placeholder="ต่ำสุด" value={filters.minNet} onChange={(e) => set({ minNet: e.target.value })} className="h-10 tabular-nums" />
-                  <span className="text-ink-400">–</span>
-                  <Input inputMode="decimal" placeholder="สูงสุด" value={filters.maxNet} onChange={(e) => set({ maxNet: e.target.value })} className="h-10 tabular-nums" />
-                </div>
-              </div>
-
-              <div className="xl:col-span-2">
-                <p className="mb-1.5 text-label font-semibold text-ink-500">ผู้ขาย</p>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1">
-                    <VendorPicker
-                      vendors={vendors}
-                      value={filters.vendorId || undefined}
-                      onChange={(id) => set({ vendorId: id })}
-                      allowAdd={false}
-                      compact
-                    />
-                  </div>
-                  {filters.vendorId && (
-                    <button onClick={() => set({ vendorId: '' })} className="rounded-control px-2.5 py-2 text-body font-semibold text-ink-600 hover:bg-ink-100">
-                      ล้าง
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-end xl:col-span-2">
-                <button
-                  onClick={() => { setFilters(emptyFilters()); clearGlobalMonth() }}
-                  className="inline-flex items-center gap-1.5 rounded-control px-3 py-2 text-body font-semibold text-ink-600 hover:bg-ink-100"
-                >
-                  <X size={14} /> ล้างตัวกรองทั้งหมด
-                </button>
-              </div>
-            </div>
+            <TxnFiltersPanel
+              id="txn-filter-panel"
+              filters={filters}
+              paymentTypes={cfg.paymentTypes}
+              vendors={vendors}
+              onPatch={set}
+              onRange={setRange}
+              onPreset={applyPreset}
+              onClearAll={clearAll}
+            />
           )}
         </CardBody>
       </Card>
 
+      {/* A decoupled view says so, instead of leaving the header looking ignored. */}
+      <CustomRangeNotice
+        filters={queryFilters}
+        globalMonth={globalMonth}
+        onUsePeriod={useHeaderPeriod}
+        onClearRange={() => clearFilter('from')}
+      />
+
+      {/* Totals describe the whole filtered set, above the table — the previous
+          layout buried them in a tfoot inside a scrolling region. */}
+      {totals && (
+        <SummaryBar totals={totals} attentionOnPage={attentionOnPage} loading={isLoading} />
+      )}
+
       <Card className="overflow-hidden">
-        <div className="max-h-[70vh] overflow-auto">
-          <table className="w-full min-w-[1060px] border-separate border-spacing-0 text-body">
-            <thead>
-              <tr>
-                <th className={thBase}>ผู้ขาย</th>
-                <th className={thBase}>รายการ</th>
-                <SortHeader field="date" label="วันที่โอน" sort={filters.sort} onSort={(k) => set({ sort: k })} />
-                <th className={thBase}>เลขที่ใบเสร็จ</th>
-                <SortHeader field="gross" label="ยอดรวม (บาท)" sort={filters.sort} onSort={(k) => set({ sort: k })} align="right" />
-                <SortHeader field="wht" label="หัก ณ ที่จ่าย" sort={filters.sort} onSort={(k) => set({ sort: k })} align="right" />
-                <SortHeader field="net" label="สุทธิ (บาท)" sort={filters.sort} onSort={(k) => set({ sort: k })} align="right" />
-                <th className={thBase}>สถานะ</th>
-                <th className={cn(thBase, 'w-10')}><span className="sr-only">เปิด</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              {!isLoading &&
-                rows.map((t) => (
-                  <tr
-                    key={t.id}
-                    onClick={() => nav(`/transactions/${t.id}`)}
-                    className="cursor-pointer transition hover:bg-ink-50 focus-within:bg-ink-50"
-                  >
-                    <td className="max-w-[180px] border-b border-card-border px-3 py-2.5">
-                      <p className="truncate font-semibold">{vendorDisplayName(t.vendor.prefix, t.vendor.name)}</p>
-                    </td>
-                    <td className="max-w-[340px] border-b border-card-border px-3 py-2.5">
-                      <div className="flex items-center gap-1.5">
-                        <Link
-                          to={`/transactions/${t.id}`}
-                          className="min-w-0 flex-1 truncate font-medium leading-snug hover:underline"
-                        >
-                          {t.note?.trim() || t.lineItems[0]?.description || t.description}
-                        </Link>
-                        {t.lineItems.length > 1 && (
-                          <span className="shrink-0 rounded-full bg-ink-100 px-1.5 py-0.5 text-micro font-semibold text-ink-600">
-                            {t.lineItems.length} รายการ
-                          </span>
-                        )}
-                      </div>
-                      <p className="truncate text-label text-ink-500">
-                        <span className="font-mono">{t.id}</span>
-                        {t.slipReference && <> · <span className="font-mono">{t.slipReference}</span></>}
-                      </p>
-                    </td>
-                    <td className={tdCls}>{fmtDateTH(t.transferDate)}</td>
-                    <td className={cn(tdCls, 'font-mono text-label')}>
-                      {t.receiptNumber ?? <span className="font-sans text-ink-400">—</span>}
-                    </td>
-                    <td className={cn(tdCls, 'text-right tabular-nums')}>{fmtTHB(t.grossAmount)}</td>
-                    <td className={cn(tdCls, 'text-right tabular-nums')}>
-                      {fmtTHB(t.whtAmount)}
-                      <span className="ml-1.5 text-label text-ink-400">{t.whtRate}%</span>
-                    </td>
-                    <td className={cn(tdCls, 'text-right font-semibold tabular-nums')}>{fmtTHB(t.netAmount)}</td>
-                    <td className={tdCls}><StatusBadge status={t.status} /></td>
-                    <td className="border-b border-card-border px-2 py-2.5">
-                      <RowActions t={t} />
-                    </td>
-                  </tr>
-                ))}
-              {isLoading && <SkeletonRows rows={6} />}
-            </tbody>
-            {!isLoading && rows.length > 0 && (
-              <tfoot>
-                <tr className="bg-ink-50 font-semibold [&>td]:border-t [&>td]:border-card-border">
-                  <td className="px-3 py-2.5" colSpan={4}>รวม {rows.length} รายการ</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{fmtTHB(sumGross)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{fmtTHB(sumWht)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{fmtTHB(sumNet)}</td>
-                  <td colSpan={2} />
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-        {!isLoading && rows.length === 0 && (
-          <EmptyState
-            icon={FileSearch}
-            title="ไม่พบรายการตามเงื่อนไข"
-            description="โปรดล้างตัวกรอง หรือสร้างรายการใหม่"
+        {isError ? (
+          <ErrorState
+            title="โหลดรายการธุรกรรมไม่สำเร็จ"
+            description={
+              error instanceof Error && error.message
+                ? `รายละเอียด: ${error.message}`
+                : 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง'
+            }
+            onRetry={() => void refetch()}
           />
+        ) : (
+          <>
+            <TxnTableFrame fetching={isFetching && !isLoading}>
+              <TxnTable
+                rows={rows}
+                sort={queryFilters.sort}
+                onSort={(k: SortKey) => set({ sort: k })}
+                selected={selected}
+                onToggle={toggle}
+                onTogglePage={togglePage}
+                onOpen={open}
+                loading={isLoading}
+                dense={dense}
+              />
+            </TxnTableFrame>
+
+            {isEmpty &&
+              (filtered ? (
+                <EmptyState
+                  icon={FileSearch}
+                  title="ไม่พบรายการตามเงื่อนไข"
+                  description="ลองปรับหรือล้างตัวกรองเพื่อดูรายการเพิ่มเติม"
+                  action={
+                    <Button variant="secondary" onClick={clearAll}>
+                      ล้างตัวกรองทั้งหมด
+                    </Button>
+                  }
+                />
+              ) : (
+                <EmptyState
+                  icon={FileSearch}
+                  title="ยังไม่มีรายการในรอบนี้"
+                  description="สร้างรายการแรกเพื่อเริ่มออกใบเสร็จรับเงินให้ผู้ขายรายย่อย"
+                  action={
+                    <Link to="/transactions/new">
+                      <Button>
+                        <Plus size={17} aria-hidden /> สร้างรายการใหม่
+                      </Button>
+                    </Link>
+                  }
+                />
+              ))}
+
+            {selected.size > 0 && canSelectAll && (
+              <SelectAllMatching
+                total={total}
+                onSelectAll={() => {
+                  loadAllForSelection()
+                  toast.show('กำลังเลือกทุกรายการที่ตรงเงื่อนไข…', 'info')
+                }}
+              />
+            )}
+
+            <TxnBulkBar
+              count={selected.size}
+              linkCount={selectedLinkCount}
+              onCopyLinks={() => void copyLinks()}
+              onExport={exportSelected}
+              onClear={() => setSelected(new Set())}
+            />
+
+            {!isLoading && (
+              <Pagination
+                page={page}
+                pageSize={pageSize}
+                total={total}
+                busy={isFetching}
+                onPage={setPage}
+                onPageSize={(size) => {
+                  setPageSize(size)
+                  setPage(0)
+                }}
+              />
+            )}
+          </>
         )}
       </Card>
     </div>
   )
 }
+

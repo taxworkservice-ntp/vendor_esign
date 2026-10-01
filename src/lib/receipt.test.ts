@@ -56,4 +56,28 @@ describe('receipt helpers', () => {
     const m = computeMetrics(txns)
     expect(m).toEqual({ created: 3, linksOpened: 1, signed: 2, expired: 1, medianHoursToSign: 60 })
   })
+
+  it('reads the exact labels the server timeline emits', () => {
+    // server/src/transactions.ts builds these labels by hand. A rename there
+    // silently zeroes linksOpened and medianHoursToSign here, so pin them.
+    const labels = ['สร้างรายการ', 'ส่งลิงก์ให้ผู้ขาย', 'ผู้ขายเปิดลิงก์', 'ผู้ขายลงนามรับเงินและมอบอำนาจ', 'ออกใบเสร็จ', 'เพิกถอนลิงก์', 'ยกเลิกเอกสาร']
+    const t = txn('X', 'issued', [
+      ['2026-09-20T09:00:00+07:00', 'สร้างรายการ'],
+      ['2026-09-21T09:00:00+07:00', 'ส่งลิงก์ให้ผู้ขาย'],
+      ['2026-09-21T10:00:00+07:00', 'ผู้ขายเปิดลิงก์'],
+      ['2026-09-21T19:00:00+07:00', 'ผู้ขายลงนามรับเงินและมอบอำนาจ'],
+      ['2026-09-21T20:00:00+07:00', 'ออกใบเสร็จ'],
+    ])
+    expect(t.timeline.map((e) => e.label).every((l) => labels.includes(l))).toBe(true)
+    const m = computeMetrics([t])
+    expect(m.linksOpened).toBe(1)
+    expect(m.signed).toBe(1)
+    expect(m.medianHoursToSign).toBe(10)
+  })
+
+  it('ignores a timeline with unparseable timestamps rather than producing NaN', () => {
+    const m = computeMetrics([txn('D', 'issued', [['not-a-date', 'ผู้ขายเปิดลิงก์']])])
+    expect(m.linksOpened).toBe(0)
+    expect(m.medianHoursToSign).toBeNull()
+  })
 })

@@ -27,7 +27,18 @@ export function sql() {
 // Per-request tenant isolation for RLS: call at the start of every server txn.
 // app.user_id is the WORKSPACE key (host RLS reads it via app_user_id(), which
 // becomes auth.uid() on the Supabase move). actorId is the audit actor only.
+//
+// `role` only reaches the database as the `app.role` GUC, and NO POLICY READS IT
+// except app_is_bookkeeper() and app_is_super_admin() — which test for the
+// literals 'bookkeeper' and 'super_admin'. The client portal therefore always
+// passes 'client'; the values below are recorded for the audit trail, not for
+// authorization. Passing 'bookkeeper' does not grant cross-tenant access today,
+// because no call site does so. See docs/API.md "Roles and tenancy".
 export type AppRole = 'client' | 'client_user' | 'client_admin' | 'owner' | 'manager' | 'officer' | 'bookkeeper' | 'super_admin'
+
+/** The only role the client portal should pass. */
+export const PORTAL_ROLE: AppRole = 'client'
+
 export async function withTenant<T>(tenantId: string, role: string, fn: () => Promise<T>, actorId?: string): Promise<T> {
   const db = sql()
   await db`select set_config('app.user_id', ${tenantId}, true),

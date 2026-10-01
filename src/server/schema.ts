@@ -75,6 +75,16 @@ export const vendorPayables = pgTable('vendor_payables', {
   slipFilePath: text('slip_file_path'),
   slipReference: text('slip_reference').notNull(),
   status: text('status').notNull(),
+  // Added after this mirror was first written: 003 (tax-ID gate — hash only,
+  // the full ID is never stored), 008 (void reason), 001 (audit columns).
+  // server/src/transactions.ts selects all of these by name, so an incomplete
+  // mirror here silently misdescribes the table.
+  taxIdHash: text('tax_id_hash'),
+  taxIdLast4: text('tax_id_last4'),
+  voidReason: text('void_reason'),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 })
 
 export const vendorReceipts = pgTable('vendor_receipts', {

@@ -52,6 +52,12 @@ export interface PaymentTransaction {
   receiptNumber?: string // assigned once: RCT-{VENDORNO}-{BE_YEAR}-{SEQ}
   createdAt: string
   timeline: { at: string; label: string; detail?: string }[]
+  // Invite lifecycle timestamps. Populated identically by the mock (from the
+  // timeline) and by the server (from vendor_requests) so aging logic has one
+  // source of truth instead of parsing Thai labels.
+  sentAt?: string
+  openedAt?: string
+  expiresAt?: string
   voidReason?: string
   inviteToken?: string
   // Tax ID gate: hash-only. Full ID is never stored (mock or server).

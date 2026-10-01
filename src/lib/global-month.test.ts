@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { formatMonthTH, isValidMonth, monthPresets, monthRange, monthStorageKey, readStoredMonth, resolveMonth, shiftMonth, writeStoredMonth } from './global-month'
+import { formatMonthTH, isValidMonth, monthHasData, monthPresets, monthRange, monthStorageKey, readStoredMonth, resolveMonth, shiftMonth, writeStoredMonth } from './global-month'
 
 class LS {
   private m = new Map<string, string>()
@@ -88,21 +88,37 @@ describe('global-month', () => {
     expect(() => shiftMonth('bogus', 1)).toThrow('invalid-month')
   })
 
-  it('pins the current month first, then data months newest-first', () => {
-    // Current month has no data: still pinned so the user can navigate back.
-    expect(monthPresets(['2026-09', '2026-07'], '2026-10')).toEqual(['2026-10', '2026-09', '2026-07'])
-    // Current month has data: no duplicate.
-    expect(monthPresets(['2026-10', '2026-09'], '2026-10')).toEqual(['2026-10', '2026-09'])
-    // Unsorted input with duplicates still comes out clean.
-    expect(monthPresets(['2026-07', '2026-09', '2026-07'], '2026-10')).toEqual(['2026-10', '2026-09', '2026-07'])
+  it('offers a rolling window so an empty month is still selectable', () => {
+    // The regression this replaces: only data-bearing months were listed, so a
+    // legitimate empty period could not be chosen and the control looked dead.
+    const out = monthPresets(['2026-09'], '2026-10', 3)
+    expect(out).toEqual(['2026-10', '2026-09', '2026-08', '2026-07'])
+    // The current month is always present — it is "home".
+    expect(monthPresets([], '2026-10', 2)).toEqual(['2026-10', '2026-09', '2026-08'])
+  })
+
+  it('extends beyond the window for a workspace with old history', () => {
+    const out = monthPresets(['2023-01'], '2026-10', 3)
+    expect(out).toContain('2023-01')
+    expect(out[0]).toBe('2026-10')
   })
 
   it('excludes future and malformed months from presets', () => {
-    expect(monthPresets(['2026-11', '2026-09', 'bogus', ''], '2026-10')).toEqual(['2026-10', '2026-09'])
+    const out = monthPresets(['2026-11', 'bogus', ''], '2026-10', 1)
+    expect(out).toEqual(['2026-10', '2026-09'])
+    expect(out.every(isValidMonth)).toBe(true)
   })
 
-  it('falls back to recent calendar months when there is no data', () => {
-    expect(monthPresets([], '2026-10')).toEqual(['2026-10', '2026-09', '2026-08'])
-    expect(monthPresets(['2026-11'], '2026-10')).toEqual(['2026-10', '2026-09', '2026-08'])
+  it('never offers a future month, even with a wide window', () => {
+    const out = monthPresets(['2026-11', '2027-01'], '2026-10', 12)
+    expect(out).not.toContain('2026-11')
+    expect(out).not.toContain('2027-01')
+    expect(out[0]).toBe('2026-10')
+  })
+
+  it('marks which periods actually hold transactions', () => {
+    const data = ['2026-09']
+    expect(monthHasData('2026-09', data)).toBe(true)
+    expect(monthHasData('2026-08', data)).toBe(false)
   })
 })

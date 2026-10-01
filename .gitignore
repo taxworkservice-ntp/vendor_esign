@@ -6,5 +6,7 @@ dist
 storage/
 backups/
 
-# embedded postgres (db:live)
+# embedded postgres (db:live, db:list)
 .pgdata-live/
+.pgdata-list/
+.pgdata-txnlist/

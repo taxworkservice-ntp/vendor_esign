@@ -2,9 +2,8 @@ import { useMemo } from 'react'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { useGlobalMonth } from '../hooks/useGlobalMonth'
-import { useTransactions } from '../hooks/useTransactions'
-import { formatMonthTH, monthPresets } from '../lib/global-month'
-import { emptyFilters, monthsOf } from '../lib/txn-filters'
+import { useTransactionMonths } from '../hooks/useTransactions'
+import { formatMonthTH, monthHasData, monthPresets } from '../lib/global-month'
 import { Select } from './ui/select'
 
 // Global accounting-period bar. Rendered under the portal header for client
@@ -16,16 +15,16 @@ import { Select } from './ui/select'
 // month-end-close workflow); the dropdown lists only months that actually
 // have transactions (newest first, Thai labels) plus "all time". Stepping
 // forward stops at the current month — future periods are unreachable.
-// (At pilot scale the month list derives from the cached all-transactions
-// query; graduate to a dedicated distinct-months endpoint if data grows.)
+// The month list comes from a dedicated distinct-months query, so the bar does
+// not depend on the list page's current page of rows.
 export function GlobalMonthBar() {
   const loc = useLocation()
   const { month, setMonth, clearMonth, step, canStepNext, isAllTime, thisMonth } = useGlobalMonth()
-  const { data: allTxns } = useTransactions(emptyFilters())
+  const { data: dataMonths } = useTransactionMonths()
 
   const presets = useMemo(
-    () => monthPresets(monthsOf(allTxns ?? []), thisMonth),
-    [allTxns, thisMonth],
+    () => monthPresets(dataMonths ?? [], thisMonth),
+    [dataMonths, thisMonth],
   )
 
   if (loc.pathname.startsWith('/admin')) return null
@@ -67,6 +66,7 @@ export function GlobalMonthBar() {
             {options.map((m) => (
               <option key={m} value={m}>
                 {m === thisMonth ? `เดือนนี้ · ${formatMonthTH(m)}` : formatMonthTH(m)}
+                {monthHasData(m, dataMonths ?? []) ? '' : ' · ว่าง'}
               </option>
             ))}
             <option value="">ทั้งหมด</option>

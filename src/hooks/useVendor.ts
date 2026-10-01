@@ -4,6 +4,7 @@ import { loadTxns, saveTxns } from '../lib/mock'
 import { normalizeTaxId, taxIdHash } from '../lib/taxid'
 import { currentBeYear } from '../lib/settings'
 import { nextReceiptNumber } from '../lib/receipt-number'
+import { putSignature } from '../lib/sig-store'
 
 export interface VendorCorrection {
   field: 'prefix' | 'name' | 'address'
@@ -11,29 +12,26 @@ export interface VendorCorrection {
   to: string
 }
 
-export interface VendorAuth {
+/** The non-image half of a vendor authorization — safe for localStorage. */
+export interface VendorAuthMeta {
   vendorPrefix: string
   vendorName: string
   vendorAddress: string
   vendorIdLast4: string
-  signaturePng: string // mock only — real backend stores a file, never localStorage
   verificationMethod: 'stub-deferred'
   consentVersion: 'v1'
   signedAt: string
   corrections: VendorCorrection[] // vendor edits to prefilled info, reported to client
 }
 
+export interface VendorAuth extends VendorAuthMeta {
+  signaturePng: string
+}
+
 const AUTH_KEY = 'taxwork-pilot-auth-v1'
 const QK = ['transactions'] as const
 
-// In-memory signature store (module scope). Real backend: private Storage bucket.
-const signatures = new Map<string, string>()
-
-export function getSignature(txnId: string): string | undefined {
-  return signatures.get(txnId)
-}
-
-type StoredAuth = Omit<VendorAuth, 'signaturePng'>
+type StoredAuth = VendorAuthMeta
 
 function readAuth(): Record<string, StoredAuth> {
   try {
@@ -46,19 +44,21 @@ function writeAuth(all: Record<string, StoredAuth>) {
   try {
     localStorage.setItem(AUTH_KEY, JSON.stringify({ ...all }))
   } catch {
-    /* quota — signatures stay in memory only */
+    /* quota */
   }
 }
-function withoutPng(a: VendorAuth): StoredAuth {
-  const { signaturePng: _drop, ...rest } = a
-  return rest
-}
 
-export function getAuth(txnId: string): VendorAuth | undefined {
-  const meta = readAuth()[txnId]
-  const png = signatures.get(txnId)
-  if (!meta || !png) return undefined
-  return { ...meta, signaturePng: png }
+/**
+ * The authorization metadata, without the signature image.
+ *
+ * The PNG lives in IndexedDB (lib/sig-store.ts) rather than here: a base64
+ * image in localStorage is large and opaque to quota accounting. It also used
+ * to live in a module-scope Map, which meant the accountant's tab — a
+ * different JS runtime — could never see it and the receipt rendered with an
+ * empty signature box.
+ */
+export function getAuthMeta(txnId: string): VendorAuthMeta | undefined {
+  return readAuth()[txnId]
 }
 
 export function useVendorTxn(token?: string) {
@@ -137,8 +137,10 @@ export function useVendorActions() {
       refresh()
     },
     submit(id: string, auth: VendorAuth) {
-      signatures.set(id, auth.signaturePng)
-      writeAuth({ ...readAuth(), [id]: withoutPng(auth) })
+      // Fire-and-forget: the PNG is already in hand, and blocking the status
+      // flip on an IndexedDB write would only add latency to the vendor.
+      void putSignature(id, auth.signaturePng)
+      writeAuth({ ...readAuth(), [id]: auth })
       touch(id, (t, all) => {
         // Assign the receipt number as soon as the vendor signs, so the receipt
         // (and the vendor's copy) always shows a number. Finalization keeps it.

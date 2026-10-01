@@ -105,16 +105,35 @@ export function shiftMonth(month: string, delta: number): string {
   return `${y}-${pad(mo)}`
 }
 
-// Dropdown presets: the current month is ALWAYS pinned first (it is "home"
-// — without it the user can get stranded in a past month with no way back
-// via the list), followed by months that have data, newest first.
-// Future-dated and malformed entries are excluded. With no usable data,
-// falls back to the last 3 calendar months so the control never empties.
-export function monthPresets(dataMonths: string[], thisMonth: string): string[] {
-  const withData = [...new Set(dataMonths)].filter((m) => isValidMonth(m) && m <= thisMonth)
-  if (withData.length > 0) {
-    const list = withData.includes(thisMonth) ? withData : [thisMonth, ...withData]
-    return [...list].sort().reverse()
-  }
-  return [0, -1, -2].map((d) => shiftMonth(thisMonth, d))
+// How far back the period picker reaches when the workspace has no history
+// deep enough to fill it. Two years keeps the common case short while still
+// letting a bookkeeper reach a period from years ago.
+const DEFAULT_WINDOW = 24
+
+/**
+ * Months offered by the period picker, newest first.
+ *
+ * The picker must be able to reach EVERY reachable period, not just the ones
+ * that happen to contain transactions: offering only data-bearing months made a
+ * legitimate empty month unselectable, so picking a period appeared to do
+ * nothing. `dataMonths` is now used only to extend the list beyond the window
+ * (so an old workspace is still fully reachable) and to mark which entries hold
+ * data.
+ *
+ * The current month is always included — it is "home", and without it a user in
+ * a past month can get stranded. Future months are never offered.
+ */
+export function monthPresets(dataMonths: string[], thisMonth: string, window = DEFAULT_WINDOW): string[] {
+  const data = [...new Set(dataMonths)].filter((m) => isValidMonth(m) && m <= thisMonth)
+
+  const recent: string[] = []
+  for (let i = 0; i <= window; i++) recent.push(shiftMonth(thisMonth, -i))
+
+  const list = new Set<string>([...recent, ...data])
+  return [...list].sort().reverse()
+}
+
+/** True when a period in the picker actually contains transactions. */
+export function monthHasData(month: string, dataMonths: string[]): boolean {
+  return dataMonths.includes(month)
 }

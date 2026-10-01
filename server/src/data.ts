@@ -14,6 +14,28 @@ export const dataRoutes = new Hono()
 
 type Guarded = { error: 401 | 403 } | { u: SessionUser; ws: string }
 
+/**
+ * Session guard for the client portal (port 8787).
+ *
+ * Tenancy, and nothing else:
+ *
+ *  - The portal is **tenant-scoped only**. Every authenticated member of a
+ *    workspace has full read/write over its vendors, transactions and WHT.
+ *    There is deliberately no per-member permission check here: role-based
+ *    access control lives in the admin app (port 8788, `admin.ts`), which owns
+ *    member management and enforces owner | manager | client_admin.
+ *  - `u.memberships[0].tenantId` assumes **one workspace per login**. A user
+ *    with memberships in more than one workspace always lands in the first, and
+ *    there is no switcher. Fine for the current one-workspace-per-client
+ *    deployment, but it is an assumption rather than a capability.
+ *  - Row-level security is the real boundary. `withTenant` sets
+ *    `app.user_id`, and every policy reduces to `user_id = app_user_id()`.
+ *    The `app_is_bookkeeper() OR app_is_super_admin()` clause in those policies
+ *    is currently UNREACHABLE: those functions test `app.role`, and no caller
+ *    ever passes 'bookkeeper' or 'super_admin' to withTenant. Cross-tenant
+ *    access therefore does not exist today, despite what the policy text
+ *    implies. See docs/API.md "Roles and tenancy".
+ */
 export async function guard(c: { req: { header: (n: string) => string | undefined } }): Promise<Guarded> {
   const u = await requireClient(c)
   const ws = u?.memberships[0]?.tenantId
@@ -63,6 +85,7 @@ function toVendor(r: Record<string, unknown>) {
     phone: (r.phone as string | null) ?? undefined,
     email: (r.email as string | null) ?? undefined,
     isVatRegistered: Boolean(r.is_vat_registered),
+    isActive: r.is_active === undefined ? true : Boolean(r.is_active),
     createdAt: new Date(String(r.created_at ?? Date.now())).toISOString(),
   }
 }
@@ -70,12 +93,41 @@ function toVendor(r: Record<string, unknown>) {
 dataRoutes.get('/vendors', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
-  const rows = await withTenant(g.ws, 'owner', async () => {
+  const includeArchived = c.req.query('includeArchived') === '1'
+  // Money context per vendor, in the same query rather than N follow-ups.
+  //
+  // `outstanding` deliberately excludes cancelled and void, matching the
+  // transaction list's NON_PAYABLE rule — otherwise the same number would mean
+  // two different things on two screens. `last_activity` and `txn_count` are
+  // what a bookkeeper scans a supplier register for.
+  const rows = await withTenant(g.ws, 'client', async () => {
     const db = sql()
-    return (await db`select id, user_id, vendor_no, prefix, name, address, id_number_encrypted, line_user_id, phone, email, is_vat_registered, created_at
-      from vendor_payees where user_id = ${g.ws} order by created_at desc`) as unknown as Record<string, unknown>[]
+    return (await db.query(
+      `select v.id, v.user_id, v.vendor_no, v.prefix, v.name, v.address, v.id_number_encrypted,
+              v.line_user_id, v.phone, v.email, v.is_vat_registered, v.is_active, v.created_at,
+              coalesce(t.outstanding, 0)::numeric as outstanding,
+              coalesce(t.txn_count, 0)::int as txn_count,
+              to_char(t.last_activity, 'YYYY-MM-DD') as last_activity
+       from vendor_payees v
+       left join lateral (
+         select sum(p.net_amount) as outstanding, count(*) as txn_count, max(p.transfer_date) as last_activity
+         from vendor_payables p
+         where p.user_id = v.user_id and p.vendor_id = v.id
+           and p.status not in ('cancelled', 'void')
+       ) t on true
+       where v.user_id = $1 ${includeArchived ? '' : 'and v.is_active'}
+       order by v.created_at desc`,
+      [g.ws],
+    )) as unknown as Record<string, unknown>[]
   })
-  return c.json({ vendors: rows.map(toVendor) })
+  return c.json({
+    vendors: rows.map((r) => ({
+      ...toVendor(r),
+      outstanding: Number(r.outstanding ?? 0),
+      txnCount: Number(r.txn_count ?? 0),
+      lastActivity: (r.last_activity as string | null) ?? undefined,
+    })),
+  })
 })
 
 dataRoutes.post('/vendors', async (c) => {
@@ -125,7 +177,7 @@ dataRoutes.patch('/vendors/:id', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
   const b = (await c.req.json().catch(() => null)) as
-    | { prefix?: string; name?: string; address?: string; lineUserId?: string; phone?: string; email?: string; isVatRegistered?: boolean; idNumber?: string }
+    | { prefix?: string; name?: string; address?: string; lineUserId?: string; phone?: string; email?: string; isVatRegistered?: boolean; idNumber?: string; isActive?: boolean }
     | null
   const nextName = (b?.name ?? '').trim()
   if (b?.name !== undefined && nextName.length < 2) return c.json({ error: 'invalid-body' }, 400)
@@ -144,6 +196,7 @@ dataRoutes.patch('/vendors/:id', async (c) => {
       phone = coalesce(${b?.phone ?? null}, phone),
       email = coalesce(${b?.email ?? null}, email),
       is_vat_registered = coalesce(${b?.isVatRegistered ?? null}, is_vat_registered),
+      is_active = coalesce(${b?.isActive === undefined ? null : Boolean(b.isActive)}, is_active),
       updated_at = now()
       where id = ${c.req.param('id')} and user_id = ${g.ws}`
   })
@@ -171,21 +224,31 @@ dataRoutes.delete('/vendors/:id', async (c) => {
 
 // ── Items catalog ──
 
+// The catalogue had no `is_active` in the API even though the column has existed
+// since 008 — nothing read it, so there was no way to retire an entry that is
+// no longer offered without deleting it. Archived entries drop out of the
+// default list and come back with includeArchived=1.
+const toItem = (r: Record<string, unknown>) => ({
+  id: String(r.id), tenantId: String(r.user_id), name: String(r.name),
+  unit: String(r.unit ?? 'รายการ'), unitPrice: Number(r.unit_price ?? 0),
+  isActive: r.is_active === undefined ? true : Boolean(r.is_active),
+  createdAt: new Date(String(r.created_at ?? Date.now())).toISOString(),
+})
+
 dataRoutes.get('/items', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
-  const rows = await withTenant(g.ws, 'owner', async () => {
+  const includeArchived = c.req.query('includeArchived') === '1'
+  const rows = await withTenant(g.ws, 'client', async () => {
     const db = sql()
-    return (await db`select id, user_id, name, unit, unit_price, created_at
-      from items where user_id = ${g.ws} order by created_at desc`) as unknown as Record<string, unknown>[]
+    return (await db.query(
+      `select id, user_id, name, unit, unit_price, is_active, created_at
+       from items where user_id = $1 ${includeArchived ? '' : 'and is_active'}
+       order by created_at desc`,
+      [g.ws],
+    )) as unknown as Record<string, unknown>[]
   })
-  return c.json({
-    items: rows.map((r) => ({
-      id: String(r.id), tenantId: String(r.user_id), name: String(r.name),
-      unit: String(r.unit ?? 'รายการ'), unitPrice: Number(r.unit_price ?? 0),
-      createdAt: new Date(String(r.created_at ?? Date.now())).toISOString(),
-    })),
-  })
+  return c.json({ items: rows.map(toItem) })
 })
 
 dataRoutes.post('/items', async (c) => {
@@ -194,29 +257,54 @@ dataRoutes.post('/items', async (c) => {
   const b = (await c.req.json().catch(() => null)) as { name?: string; unit?: string; unitPrice?: number } | null
   const name = (b?.name ?? '').trim()
   if (name.length < 2) return c.json({ error: 'invalid-body' }, 400)
-  const row = await withTenant(g.ws, 'owner', async () => {
+  // The catalogue has a unique index on (user_id, lower(name)) — see migration
+  // 015. A duplicate service in the catalogue becomes the default line item in
+  // new transactions, so this is a real data-quality problem, not a nicety.
+  // Report it as a conflict with a message the UI can show verbatim.
+  const dup = await withTenant(g.ws, 'client', async () => {
+    const db = sql()
+    const rows = (await db.query(
+      `select name from items where user_id = $1 and lower(name) = lower($2) limit 1`,
+      [g.ws, name],
+    )) as unknown as { name: string }[]
+    return rows[0]?.name
+  })
+  if (dup) return c.json({ error: 'duplicate-item', existing: dup }, 409)
+  const row = await withTenant(g.ws, 'client', async () => {
     const db = sql()
     const ins = (await db`insert into items (user_id, name, unit, unit_price)
       values (${g.ws}, ${name}, ${(b?.unit ?? 'รายการ').trim() || 'รายการ'}, ${Math.max(0, Number(b?.unitPrice) || 0)})
-      returning id, user_id, name, unit, unit_price, created_at`) as unknown as Record<string, unknown>[]
+      returning id, user_id, name, unit, unit_price, is_active, created_at`) as unknown as Record<string, unknown>[]
     return ins[0]
   })
-  return c.json({
-    ok: true,
-    item: { id: String(row.id), tenantId: String(row.user_id), name: String(row.name), unit: String(row.unit), unitPrice: Number(row.unit_price), createdAt: new Date(String(row.created_at)).toISOString() },
-  })
+  return c.json({ ok: true, item: toItem(row) })
 })
 
 dataRoutes.patch('/items/:id', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
-  const b = (await c.req.json().catch(() => null)) as { name?: string; unit?: string; unitPrice?: number } | null
-  await withTenant(g.ws, 'owner', async () => {
+  const b = (await c.req.json().catch(() => null)) as { name?: string; unit?: string; unitPrice?: number; isActive?: boolean } | null
+  // Renaming can collide with an existing entry, same rule as create.
+  if (b?.name) {
+    const nextName = b.name.trim()
+    if (nextName.length < 2) return c.json({ error: 'invalid-body' }, 400)
+    const dup = await withTenant(g.ws, 'client', async () => {
+      const db = sql()
+      const rows = (await db.query(
+        `select name from items where user_id = $1 and lower(name) = lower($2) and id <> $3::uuid limit 1`,
+        [g.ws, nextName, c.req.param('id')],
+      )) as unknown as { name: string }[]
+      return rows[0]?.name
+    })
+    if (dup) return c.json({ error: 'duplicate-item', existing: dup }, 409)
+  }
+  await withTenant(g.ws, 'client', async () => {
     const db = sql()
     await db`update items set
       name = coalesce(${b?.name ?? null}, name),
       unit = coalesce(${b?.unit ?? null}, unit),
       unit_price = coalesce(${b?.unitPrice ?? null}, unit_price),
+      is_active = coalesce(${b?.isActive === undefined ? null : Boolean(b.isActive)}, is_active),
       updated_at = now()
       where id = ${c.req.param('id')} and user_id = ${g.ws}`
   })
