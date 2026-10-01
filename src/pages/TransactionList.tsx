@@ -2,20 +2,18 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, ChevronRight, Copy, ExternalLink, FileSearch, Plus, Search, SlidersHorizontal, X } from 'lucide-react'
 import { useTransactions } from '../hooks/useTransactions'
+import { useGlobalMonth } from '../hooks/useGlobalMonth'
 import { useAllVendors } from '../hooks/useVendors'
 import { useSettings } from '../hooks/useSettings'
 import { defaultSettings } from '../lib/settings'
 import {
   activeFilterCount,
-  currentMonth,
   defaultFilters,
   emptyFilters,
   filtersFromParams,
   filtersToParams,
-  monthsOf,
   nextSort,
   presetRange,
-  previousMonth,
   sortDir,
   sortField,
   type PresetId,
@@ -38,7 +36,8 @@ import { fmtTHB, fmtDateTH } from '../lib/format'
 import { vendorDisplayName } from '../lib/vendor-name'
 import type { PaymentTransaction } from '../lib/types'
 
-// Quick-filter chips (status group + month) live in the toolbar; the granular
+// Quick-filter status chips live in the toolbar; the month is a global
+// accounting period (header bar) shared with WHT + Metrics. The granular
 // status list and date presets live inside the "ตัวกรอง" panel.
 const STATUS_CHIPS: { v: StatusFilter; th: string }[] = [
   { v: 'all', th: 'ทั้งหมด' },
@@ -168,9 +167,11 @@ function RowActions({ t }: { t: PaymentTransaction }) {
 
 export function TransactionList() {
   const [params, setParams] = useSearchParams()
-  const [filters, setFilters] = useState<TransactionFilters>(() =>
-    params.toString() ? filtersFromParams(params) : defaultFilters(),
-  )
+  const { month: globalMonth, setMonth: setGlobalMonth } = useGlobalMonth()
+  const [filters, setFilters] = useState<TransactionFilters>(() => {
+    if (params.toString()) return filtersFromParams(params)
+    return { ...defaultFilters(), month: globalMonth }
+  })
   const [showPanel, setShowPanel] = useState(false)
   const nav = useNavigate()
 
@@ -179,22 +180,37 @@ export function TransactionList() {
     setParams(filtersToParams(filters), { replace: true })
   }, [filters, setParams])
 
+  // A shared ?month= link adopts the month into the global period (invalid
+  // values are ignored by the hook). Runs once on mount.
+  const adoptedUrlMonth = useMemo(() => params.get('month'), []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (adoptedUrlMonth) setGlobalMonth(adoptedUrlMonth)
+  }, [adoptedUrlMonth, setGlobalMonth])
+
+  // Global period → local filter (single source of truth for the month).
+  useEffect(() => {
+    setFilters((f) => (f.month === globalMonth ? f : { ...f, month: globalMonth }))
+  }, [globalMonth])
+
   const { data: settings } = useSettings()
   const cfg = settings ?? defaultSettings()
   const { data, isLoading } = useTransactions(filters)
-  const { data: allData } = useTransactions(emptyFilters())
   const vendors = useAllVendors()
 
-  const months = useMemo(() => monthsOf(allData ?? []), [allData])
   const set = (patch: Partial<TransactionFilters>) => setFilters((f) => ({ ...f, ...patch }))
+  // Custom ranges are mutually exclusive with the global month: picking one
+  // clears the period everywhere (Transactions + WHT + Metrics).
+  const clearGlobalMonth = () => setGlobalMonth('')
   const applyPreset = (id: PresetId) => {
     const r = presetRange(id)
     set({ from: r.from, to: r.to, month: '' })
+    clearGlobalMonth()
+  }
+  const setRange = (patch: Partial<TransactionFilters>) => {
+    set({ ...patch, month: '' })
+    clearGlobalMonth()
   }
   const activeCount = activeFilterCount(filters)
-  const thisMonth = currentMonth()
-  const prevMonth = previousMonth()
-  const toggleMonth = (m: string) => set({ month: filters.month === m ? '' : m, from: '', to: '' })
 
   const rows = data ?? []
   const sumGross = rows.reduce((s, t) => s + t.grossAmount, 0)
@@ -258,14 +274,6 @@ export function TransactionList() {
                 {f.th}
               </FilterChip>
             ))}
-            <span className="mx-1 h-5 w-px bg-card-border" aria-hidden />
-            <span className="mr-1 text-label font-semibold text-ink-500">เดือน</span>
-            <FilterChip active={filters.month === thisMonth} onClick={() => toggleMonth(thisMonth)}>
-              เดือนนี้
-            </FilterChip>
-            <FilterChip active={filters.month === prevMonth} onClick={() => toggleMonth(prevMonth)}>
-              เดือนก่อน
-            </FilterChip>
           </div>
 
           {showPanel && (
@@ -289,9 +297,9 @@ export function TransactionList() {
                       {p.th}
                     </FilterChip>
                   ))}
-                  <Input type="date" value={filters.from} onChange={(e) => set({ from: e.target.value, month: '' })} className="h-9 w-auto text-body" />
+                  <Input type="date" value={filters.from} onChange={(e) => setRange({ from: e.target.value })} className="h-9 w-auto text-body" />
                   <span className="text-ink-400">–</span>
-                  <Input type="date" value={filters.to} onChange={(e) => set({ to: e.target.value, month: '' })} className="h-9 w-auto text-body" />
+                  <Input type="date" value={filters.to} onChange={(e) => setRange({ to: e.target.value })} className="h-9 w-auto text-body" />
                 </div>
               </div>
 
@@ -347,7 +355,7 @@ export function TransactionList() {
 
               <div className="flex items-end xl:col-span-2">
                 <button
-                  onClick={() => setFilters(emptyFilters())}
+                  onClick={() => { setFilters(emptyFilters()); clearGlobalMonth() }}
                   className="inline-flex items-center gap-1.5 rounded-control px-3 py-2 text-body font-semibold text-ink-600 hover:bg-ink-100"
                 >
                   <X size={14} /> ล้างตัวกรองทั้งหมด

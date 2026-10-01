@@ -23,8 +23,13 @@ function write(txns: PaymentTransaction[]) {
 }
 
 // Runs on the server when VITE_API_BASE is set, else the local mock store.
-async function fetchAll(activeTenant: string): Promise<PaymentTransaction[]> {
-  if (hasServer) return (await apiGet<{ transactions: PaymentTransaction[] }>('/api/client/transactions')).transactions
+// Month is enforced server-side (transfer_date range) AND client-side so the
+// mock path and the server path stay identical.
+async function fetchAll(activeTenant: string, month?: string): Promise<PaymentTransaction[]> {
+  if (hasServer) {
+    const q = month ? `?month=${encodeURIComponent(month)}` : ''
+    return (await apiGet<{ transactions: PaymentTransaction[] }>(`/api/client/transactions${q}`)).transactions
+  }
   return read().filter((t) => t.tenantId === activeTenant)
 }
 
@@ -33,7 +38,7 @@ export function useTransactions(filters: TransactionFilters = emptyFilters()) {
   return useQuery({
     queryKey: [...QK, activeTenant, filters],
     queryFn: async () => {
-      const all = await fetchAll(activeTenant)
+      const all = await fetchAll(activeTenant, filters.month || undefined)
       return sortTransactions(filterTransactions(all, filters), filters.sort)
     },
   })

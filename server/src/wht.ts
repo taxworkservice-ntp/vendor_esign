@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { sql, withTenant } from '../../src/server/db'
 import { guard } from './data'
+import { parseMonthParam } from './month'
 import type { WhtFormType, WhtRecord, WhtVendor } from '../../src/lib/wht'
 
 // ── Client WHT API (certificate templates render client-side; this is storage) ──
@@ -81,8 +82,16 @@ whtRoutes.get('/wht/records', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
   const ids = (c.req.query('ids') ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+  // Month scope filters on issue_date (certificate period), NOT transfer_date.
+  const range = parseMonthParam(c.req.query('month'))
+  if (range && 'error' in range) return c.json({ error: 'invalid-month' }, 400)
   const rows = await withTenant(g.ws, 'owner', async () => {
     const db = sql()
+    if (range && 'from' in range) {
+      return (await db`select * from wht_records where user_id = ${g.ws}
+        and issue_date >= ${range.from}::date and issue_date <= ${range.to}::date
+        order by issue_date desc`) as unknown as Record<string, unknown>[]
+    }
     return (await db`select * from wht_records where user_id = ${g.ws} order by issue_date desc`) as unknown as Record<string, unknown>[]
   })
   const filtered = ids.length ? rows.filter((r) => ids.includes(String(r.id))) : rows

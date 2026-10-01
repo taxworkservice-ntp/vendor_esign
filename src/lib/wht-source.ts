@@ -1,17 +1,23 @@
 import { apiGet, hasServer } from './api-client'
 import { loadWht, loadWhtByIds, type WhtBundle } from './wht-mock'
+import { filterWhtByMonth } from './wht'
 import type { WhtRecord, WhtVendor } from './wht'
 
 // Runs on the server when VITE_API_BASE is set, else the local mock store.
-export async function fetchWht(tenantId: string): Promise<WhtBundle> {
+// Month is enforced server-side (issue_date range) AND client-side so both
+// paths stay identical.
+export async function fetchWht(tenantId: string, month?: string): Promise<WhtBundle> {
   if (hasServer) {
+    const q = month ? `?month=${encodeURIComponent(month)}` : ''
     const [v, r] = await Promise.all([
       apiGet<{ vendors: WhtVendor[] }>('/api/client/wht/vendors'),
-      apiGet<{ records: WhtRecord[] }>('/api/client/wht/records'),
+      apiGet<{ records: WhtRecord[] }>(`/api/client/wht/records${q}`),
     ])
     return { vendors: v.vendors, records: r.records }
   }
-  return loadWht(tenantId)
+  const bundle = loadWht(tenantId)
+  if (!month) return bundle
+  return { ...bundle, records: filterWhtByMonth(bundle.records, month) }
 }
 
 export async function fetchWhtByIds(

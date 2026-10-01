@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { randomBytes } from 'node:crypto'
 import { sql, withTenant } from '../../src/server/db'
 import { guard } from './data'
+import { parseMonthParam } from './month'
 import { sha256hex } from './auth'
 import { calcWht } from '../../src/lib/wht-calc'
 import { itemsSummary, itemsTotal, normalizeLineItem } from '../../src/lib/line-items'
@@ -72,8 +73,18 @@ function toTxn(r: Record<string, unknown>): PaymentTransaction {
 txnRoutes.get('/transactions', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  // Month scope filters on transfer_date (transaction period). Invalid values
+  // are rejected with 400 — never silently widened to all time.
+  const range = parseMonthParam(c.req.query('month'))
+  if (range && 'error' in range) return c.json({ error: 'invalid-month' }, 400)
   const rows = await withTenant(g.ws, 'owner', async () => {
     const db = sql()
+    if (range && 'from' in range) {
+      return (await db.query(
+        `${SELECT} where p.user_id = $1 and p.transfer_date >= $2 and p.transfer_date <= $3 order by p.created_at desc`,
+        [g.ws, range.from, range.to],
+      )) as unknown as Record<string, unknown>[]
+    }
     return (await db.query(`${SELECT} where p.user_id = $1 order by p.created_at desc`, [g.ws])) as unknown as Record<string, unknown>[]
   })
   return c.json({ transactions: rows.map(toTxn) })

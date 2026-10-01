@@ -2,11 +2,11 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchWht, fetchWhtByIds } from '../lib/wht-source'
 import { useClientAuth } from '../lib/client-auth'
 
-export function useWht() {
+export function useWht(month?: string) {
   const { activeTenant } = useClientAuth()
   return useQuery({
-    queryKey: ['wht', activeTenant],
-    queryFn: () => fetchWht(activeTenant),
+    queryKey: ['wht', activeTenant, month ?? ''],
+    queryFn: () => fetchWht(activeTenant, month || undefined),
   })
 }
 

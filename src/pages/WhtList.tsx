@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom'
 import { Download, ReceiptText } from 'lucide-react'
 import { useWht } from '../hooks/useWht'
+import { useGlobalMonth } from '../hooks/useGlobalMonth'
+import { formatMonthTH } from '../lib/global-month'
 import { fmtWhtDate, fmtWhtNum } from '../lib/wht'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
@@ -10,15 +12,18 @@ import { EmptyState } from '../components/ui/empty-state'
 const thCls = 'px-3 py-2 text-left text-label font-semibold uppercase tracking-wide text-ink-500'
 
 export function WhtList() {
-  const { data } = useWht()
+  // Global period scopes certificates by issueDate (not transferDate).
+  const { month } = useGlobalMonth()
+  const { data } = useWht(month)
   const records = data?.records ?? []
   const vendors = data?.vendors ?? []
   const vendorName = (id: string) => vendors.find((v) => v.id === id)?.name ?? '—'
   const ids = (list: string[]) => list.join(',')
+  const period = month ? `รอบ ${formatMonthTH(month)} · ตามวันที่ออกหนังสือรับรอง` : 'ทั้งหมด · ไม่จำกัดเดือน'
 
   return (
     <div className="space-y-5">
-      <PageHeader title="ภาษีหัก ณ ที่จ่าย (WHT)" sub="หนังสือรับรองการหักภาษี ณ ที่จ่าย — แบบฟอร์มราชการ (แบบ ภ.ง.ด.)" />
+      <PageHeader title="ภาษีหัก ณ ที่จ่าย (WHT)" sub={`หนังสือรับรองการหักภาษี ณ ที่จ่าย — แบบฟอร์มราชการ (แบบ ภ.ง.ด.) · ${period}`} />
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">

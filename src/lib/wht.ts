@@ -60,6 +60,14 @@ export function calcWhtAmount(amount: number, ratePct: number): number {
   return round2(amount * (ratePct / 100))
 }
 
+// Global-month scope for WHT lists: filter on issueDate (YYYY-MM-DD), NOT
+// transferDate. A receipt transferred Sept 30 but issued Oct 2 belongs to
+// October here. '' (all time) returns the input unchanged.
+export function filterWhtByMonth<T extends { issueDate: string }>(records: T[], month: string): T[] {
+  if (!month) return records
+  return records.filter((r) => r.issueDate.startsWith(month))
+}
+
 // ── Formatting helpers (verbatim from the host print page) ──
 
 export function fmtWhtDate(iso: string): string {
