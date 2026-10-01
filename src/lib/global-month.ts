@@ -105,9 +105,16 @@ export function shiftMonth(month: string, delta: number): string {
   return `${y}-${pad(mo)}`
 }
 
-// Dropdown presets: this month + the previous `count - 1` months, newest
-// first. Fixed calendar list — never depends on which months have data.
-export function recentMonths(count = 12, today: Date = new Date()): string[] {
-  const base = currentMonth(today)
-  return Array.from({ length: count }, (_, i) => shiftMonth(base, -i))
+// Dropdown presets: the current month is ALWAYS pinned first (it is "home"
+// — without it the user can get stranded in a past month with no way back
+// via the list), followed by months that have data, newest first.
+// Future-dated and malformed entries are excluded. With no usable data,
+// falls back to the last 3 calendar months so the control never empties.
+export function monthPresets(dataMonths: string[], thisMonth: string): string[] {
+  const withData = [...new Set(dataMonths)].filter((m) => isValidMonth(m) && m <= thisMonth)
+  if (withData.length > 0) {
+    const list = withData.includes(thisMonth) ? withData : [thisMonth, ...withData]
+    return [...list].sort().reverse()
+  }
+  return [0, -1, -2].map((d) => shiftMonth(thisMonth, d))
 }

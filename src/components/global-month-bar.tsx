@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { useGlobalMonth } from '../hooks/useGlobalMonth'
 import { useTransactions } from '../hooks/useTransactions'
-import { formatMonthTH, recentMonths } from '../lib/global-month'
+import { formatMonthTH, monthPresets } from '../lib/global-month'
 import { emptyFilters, monthsOf } from '../lib/txn-filters'
 import { Select } from './ui/select'
 
@@ -23,12 +23,10 @@ export function GlobalMonthBar() {
   const { month, setMonth, clearMonth, step, canStepNext, isAllTime, thisMonth } = useGlobalMonth()
   const { data: allTxns } = useTransactions(emptyFilters())
 
-  const presets = useMemo(() => {
-    const withData = monthsOf(allTxns ?? []).filter((m) => m <= thisMonth)
-    if (withData.length > 0) return withData
-    // No data yet (or still loading): recent calendar months, never future.
-    return recentMonths(3).filter((m) => m <= thisMonth)
-  }, [allTxns, thisMonth])
+  const presets = useMemo(
+    () => monthPresets(monthsOf(allTxns ?? []), thisMonth),
+    [allTxns, thisMonth],
+  )
 
   if (loc.pathname.startsWith('/admin')) return null
 

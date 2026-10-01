@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { formatMonthTH, isValidMonth, monthRange, monthStorageKey, readStoredMonth, recentMonths, resolveMonth, shiftMonth, writeStoredMonth } from './global-month'
+import { formatMonthTH, isValidMonth, monthPresets, monthRange, monthStorageKey, readStoredMonth, resolveMonth, shiftMonth, writeStoredMonth } from './global-month'
 
 class LS {
   private m = new Map<string, string>()
@@ -88,13 +88,21 @@ describe('global-month', () => {
     expect(() => shiftMonth('bogus', 1)).toThrow('invalid-month')
   })
 
-  it('lists recent months newest-first', () => {
-    const today = new Date(2026, 8, 29) // 2026-09-29
-    const list = recentMonths(12, today)
-    expect(list).toHaveLength(12)
-    expect(list[0]).toBe('2026-09')
-    expect(list[1]).toBe('2026-08')
-    expect(list[11]).toBe('2025-10')
-    expect(recentMonths(3, today)).toEqual(['2026-09', '2026-08', '2026-07'])
+  it('pins the current month first, then data months newest-first', () => {
+    // Current month has no data: still pinned so the user can navigate back.
+    expect(monthPresets(['2026-09', '2026-07'], '2026-10')).toEqual(['2026-10', '2026-09', '2026-07'])
+    // Current month has data: no duplicate.
+    expect(monthPresets(['2026-10', '2026-09'], '2026-10')).toEqual(['2026-10', '2026-09'])
+    // Unsorted input with duplicates still comes out clean.
+    expect(monthPresets(['2026-07', '2026-09', '2026-07'], '2026-10')).toEqual(['2026-10', '2026-09', '2026-07'])
+  })
+
+  it('excludes future and malformed months from presets', () => {
+    expect(monthPresets(['2026-11', '2026-09', 'bogus', ''], '2026-10')).toEqual(['2026-10', '2026-09'])
+  })
+
+  it('falls back to recent calendar months when there is no data', () => {
+    expect(monthPresets([], '2026-10')).toEqual(['2026-10', '2026-09', '2026-08'])
+    expect(monthPresets(['2026-11'], '2026-10')).toEqual(['2026-10', '2026-09', '2026-08'])
   })
 })
