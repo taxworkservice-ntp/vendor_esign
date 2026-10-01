@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { currentMonth, defaultFilters, emptyFilters, filterTransactions, monthOffset, monthsOf, nextSort, presetRange, previousMonth, sortDir, sortField, sortTransactions, type TransactionFilters } from './txn-filters'
+import { currentMonth, defaultFilters, emptyFilters, filterTransactions, monthOffset, monthsOf, nextSort, presetRange, previousMonth, sortDir, sortField, sortTransactions, todayISO, type TransactionFilters } from './txn-filters'
 import type { PaymentTransaction, TxnStatus } from './types'
 
 function txn(id: string, transferDate: string, net: number, o?: Partial<PaymentTransaction>): PaymentTransaction {
@@ -79,6 +79,12 @@ describe('defaults', () => {
     expect(previousMonth(new Date(2026, 8, 29))).toBe('2026-08')
     expect(previousMonth(new Date(2026, 0, 15))).toBe('2025-12')
     expect(monthOffset(1, new Date(2026, 11, 31))).toBe('2027-01')
+  })
+
+  it('returns today as local YYYY-MM-DD (wall calendar, not UTC)', () => {
+    expect(todayISO(new Date(2026, 8, 29))).toBe('2026-09-29')
+    expect(todayISO(new Date(2026, 0, 5))).toBe('2026-01-05')
+    expect(todayISO()).toMatch(/^\d{4}-(0[1-9]|1[0-2])-\d{2}$/)
   })
 })
 

@@ -17,6 +17,7 @@ import { PageHeader } from '../components/ui/page-header'
 import { Button } from '../components/ui/button'
 import { FieldError, Input, Label } from '../components/ui/input'
 import { Select } from '../components/ui/select'
+import { todayISO } from '../lib/txn-filters'
 import { ConfirmDialog } from '../components/ui/confirm-dialog'
 import { fmtTHB, fmtDateTH } from '../lib/format'
 import { cn } from '../lib/cn'
@@ -79,7 +80,7 @@ export function TransactionNew() {
   const [note, setNote] = useState('')
   const [whtRate, setWhtRate] = useState(0)
   const [whtMode, setWhtMode] = useState<WhtMode>('deduct')
-  const [transferDate, setTransferDate] = useState('2026-09-28')
+  const [transferDate, setTransferDate] = useState(() => todayISO())
   const [slipRef, setSlipRef] = useState('')
   const [slipName, setSlipName] = useState('')
   const [vendorTaxId, setVendorTaxId] = useState('')

@@ -84,6 +84,12 @@ export type PresetId = '7d' | '30d' | 'month' | 'year'
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
+// Today's date as local YYYY-MM-DD (wall calendar, not UTC — toISOString()
+// would shift the day near midnight in +07:00). Used for new-form defaults.
+export function todayISO(today: Date = new Date()): string {
+  return iso(today)
+}
+
 export function presetRange(id: PresetId, today: Date = new Date()): { from: string; to: string } {
   const to = iso(today)
   if (id === '7d') {
