@@ -2,6 +2,7 @@ import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReceiptText } from 'lucide-react'
 import { Layout } from './components/layout'
+import { GlobalMonthProvider } from './hooks/useGlobalMonth'
 import { ErrorBoundary } from './components/error-boundary'
 import { Spinner } from './components/ui/spinner'
 import { NotFound } from './pages/NotFound'
@@ -89,6 +90,7 @@ export default function App() {
           <Route
             path="/*"
             element={
+              <GlobalMonthProvider>
               <Layout>
                 <Routes>
                   <Route path="/receipts/:id" element={<RequireClient><ReceiptView /></RequireClient>} />
@@ -112,6 +114,7 @@ export default function App() {
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Layout>
+              </GlobalMonthProvider>
             }
           />
         </Routes>

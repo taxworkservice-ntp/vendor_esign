@@ -2,7 +2,9 @@ import { useMemo } from 'react'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { useGlobalMonth } from '../hooks/useGlobalMonth'
+import { useTransactions } from '../hooks/useTransactions'
 import { formatMonthTH, recentMonths } from '../lib/global-month'
+import { emptyFilters, monthsOf } from '../lib/txn-filters'
 import { Select } from './ui/select'
 
 // Global accounting-period bar. Rendered under the portal header for client
@@ -11,22 +13,31 @@ import { Select } from './ui/select'
 // custom date ranges on the list page clear it (mutual exclusion).
 //
 // Professional period control: ‹ › steppers walk months one at a time (the
-// month-end-close workflow); the dropdown holds this month pinned plus the
-// previous 11 months plus "all time". Stepping forward clamps at next month;
-// stepping back is unbounded.
+// month-end-close workflow); the dropdown lists only months that actually
+// have transactions (newest first, Thai labels) plus "all time". Stepping
+// forward stops at the current month — future periods are unreachable.
+// (At pilot scale the month list derives from the cached all-transactions
+// query; graduate to a dedicated distinct-months endpoint if data grows.)
 export function GlobalMonthBar() {
   const loc = useLocation()
   const { month, setMonth, clearMonth, step, canStepNext, isAllTime, thisMonth } = useGlobalMonth()
-  const presets = useMemo(() => recentMonths(12), [])
+  const { data: allTxns } = useTransactions(emptyFilters())
+
+  const presets = useMemo(() => {
+    const withData = monthsOf(allTxns ?? []).filter((m) => m <= thisMonth)
+    if (withData.length > 0) return withData
+    // No data yet (or still loading): recent calendar months, never future.
+    return recentMonths(3).filter((m) => m <= thisMonth)
+  }, [allTxns, thisMonth])
 
   if (loc.pathname.startsWith('/admin')) return null
 
-  // A stored month older than the preset window (or from a shared link) must
+  // A stored month outside the preset window (or from a shared link) must
   // still display — include it so the select never shows a blank value.
-  const options = useMemo(
-    () => (month && !presets.includes(month) ? [month, ...presets] : presets),
-    [month, presets],
-  )
+  const options = useMemo(() => {
+    const list = month && !presets.includes(month) ? [month, ...presets] : presets
+    return [...list].sort().reverse()
+  }, [month, presets])
 
   const stepBtn =
     'grid h-9 w-9 shrink-0 place-items-center rounded-control border border-card-border bg-white text-ink-600 transition hover:bg-ink-100 hover:text-ink-900 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white disabled:hover:text-ink-600'

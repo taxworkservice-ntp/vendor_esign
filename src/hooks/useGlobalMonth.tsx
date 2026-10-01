@@ -1,16 +1,31 @@
-import { useCallback, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { useClientAuth } from '../lib/client-auth'
 import { currentMonth, monthOffset } from '../lib/txn-filters'
 import { isValidMonth, readStoredMonth, resolveMonth, shiftMonth, writeStoredMonth } from '../lib/global-month'
 
-// Forward clamp for stepping: one month ahead at most (lets the books be
-// pre-positioned without wandering into far-future periods).
-const MAX_AHEAD = 1
+// Global accounting-period state. ONE instance per app via GlobalMonthProvider
+// (a module-level hook would fork per call site and pages would never update).
+// Tenant-scoped localStorage persistence; an explicit ?month= in the URL wins
+// once (shareable links) and is then adopted as the stored pick.
+// '' = all time (deliberate, persisted).
+// Stepping forward stops at the current month — no future periods.
 
-// Global accounting-period state. Tenant-scoped localStorage persistence;
-// an explicit ?month= in the URL wins once (shareable links) and is then
-// adopted as the stored pick. '' = all time (deliberate, persisted).
-export function useGlobalMonth() {
+const MAX_AHEAD = 0
+
+export interface GlobalMonth {
+  month: string
+  setMonth: (m: string) => void
+  clearMonth: () => void
+  step: (delta: number) => void
+  canStepNext: boolean
+  isAllTime: boolean
+  isCurrentMonth: boolean
+  thisMonth: string
+}
+
+const Ctx = createContext<GlobalMonth | null>(null)
+
+function useGlobalMonthState(): GlobalMonth {
   const { activeTenant } = useClientAuth()
   const [month, setMonthState] = useState<string>(() => {
     let urlMonth: string | null = null
@@ -57,7 +72,7 @@ export function useGlobalMonth() {
 
   const maxMonth = monthOffset(MAX_AHEAD)
   // From "all time", stepping starts at the current month (most likely
-  // intent); forward is clamped so › never passes the month after current.
+  // intent); forward is clamped so › never enters a future period.
   const step = useCallback(
     (delta: number) => {
       const eff = month || currentMonth()
@@ -77,4 +92,15 @@ export function useGlobalMonth() {
     isCurrentMonth: month === currentMonth(),
     thisMonth: currentMonth(),
   }
+}
+
+export function GlobalMonthProvider({ children }: { children: React.ReactNode }) {
+  const value = useGlobalMonthState()
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>
+}
+
+export function useGlobalMonth(): GlobalMonth {
+  const v = useContext(Ctx)
+  if (!v) throw new Error('useGlobalMonth outside GlobalMonthProvider')
+  return v
 }
