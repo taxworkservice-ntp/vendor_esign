@@ -81,8 +81,13 @@ export function Pagination({
                 aria-current={p === page ? 'page' : undefined}
                 aria-label={`หน้า ${p + 1}`}
                 className={cn(
-                  'h-8 min-w-8 rounded-control px-2 text-label font-semibold tabular-nums transition',
-                  p === page ? 'bg-ink-900 text-white' : 'text-ink-600 hover:bg-ink-100 hover:text-ink-900',
+                  'h-8 min-w-8 rounded-control px-2 text-label tabular-nums transition',
+                  // The current page is the one selection in this control worth a
+                  // filled state, so it gets the solid accent (5.75:1 with white)
+                  // rather than the near-black it used to use.
+                  p === page
+                    ? 'bg-primary font-semibold text-white'
+                    : 'font-medium text-ink-600 hover:bg-ink-100 hover:text-ink-900',
                 )}
               >
                 {p + 1}

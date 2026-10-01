@@ -16,7 +16,7 @@ const FILTERS = [
   { v: 'suspended', th: 'ระงับ' },
 ]
 
-const thCls = 'px-4 py-3 text-left text-label font-semibold uppercase tracking-wide text-ink-500'
+const thCls = 'px-4 py-3 text-left text-label font-medium text-ink-500'
 
 export function ClientsList() {
   const [q, setQ] = useState('')
@@ -88,7 +88,7 @@ export function ClientsList() {
                   <td className="whitespace-nowrap px-4 py-3.5 text-right tabular-nums">{t.users}</td>
                   <td className="whitespace-nowrap px-4 py-3.5">
                     <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-label font-semibold ${
-                      t.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+                      t.status === 'active' ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'
                     }`}>
                       {t.status === 'active' ? 'ใช้งาน' : 'ระงับ'}
                     </span>

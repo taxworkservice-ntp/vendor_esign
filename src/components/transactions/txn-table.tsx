@@ -10,7 +10,7 @@ import type { PaymentTransaction } from '../../lib/types'
 // Table shell: sortable header, select-all, and the loading skeleton.
 
 const thBase =
-  'sticky top-0 z-10 border-b border-card-border bg-ink-50 px-3 py-2.5 text-label font-semibold uppercase tracking-wide text-ink-500'
+  'sticky top-0 z-10 border-b border-card-border bg-ink-50 px-3 py-2.5 text-label font-medium text-ink-500'
 
 function SortHeader({
   field,

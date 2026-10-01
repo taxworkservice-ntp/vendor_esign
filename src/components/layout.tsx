@@ -89,11 +89,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
     setConfirmLogout(null)
   }
 
+  // Active route reads as chosen through a tinted surface, an accent label and a
+  // 2px accent rail on the leading edge — not a near-black block. The rail is
+  // what actually carries the state when the sidebar is collapsed to icons,
+  // where there is no room for a fill.
   const sideLink = ({ isActive }: { isActive: boolean }) =>
     cn(
-      'flex items-center gap-3 rounded-control px-3 py-2.5 text-body font-semibold transition',
+      'relative flex items-center gap-3 rounded-control py-2.5 pl-3.5 pr-3 text-body transition',
       collapsed && 'justify-center px-0',
-      isActive ? 'bg-ink-900 text-white' : 'text-ink-600 hover:bg-ink-100 hover:text-ink-900',
+      isActive
+        ? 'bg-primary-soft font-semibold text-primary-text'
+        : 'font-medium text-ink-600 hover:bg-ink-100 hover:text-ink-900',
+      isActive && !collapsed && 'before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-primary',
     )
 
   const navList = (onNavigate?: () => void) => (
@@ -115,7 +122,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {showAdmin && (
         <>
           {!collapsed && (
-            <p className="px-3 pb-1 pt-4 text-label font-semibold uppercase tracking-wide text-ink-400">
+            <p className="px-3 pb-1 pt-4 text-label font-medium text-ink-400">
               ผู้ดูแลระบบ
             </p>
           )}
@@ -137,7 +144,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const brandBlock = (
     <Link to="/" className={cn('flex min-w-0 items-center gap-2.5', collapsed && 'justify-center')}>
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-control bg-ink-900 text-white">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-control bg-primary text-white">
         <ReceiptText size={17} aria-hidden />
       </span>
       {!collapsed && (
@@ -173,7 +180,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             aria-label={collapsed ? 'ขยายแถบนำทาง' : 'ย่อแถบนำทางเหลือเฉพาะไอคอน'}
             title={collapsed ? 'ขยายแถบนำทาง' : 'ย่อแถบนำทาง'}
             className={cn(
-              'flex w-full items-center gap-3 rounded-control px-3 py-2.5 text-body font-semibold text-ink-500 transition hover:bg-ink-100 hover:text-ink-900',
+              'flex w-full items-center gap-3 rounded-control px-3 py-2.5 text-body font-medium text-ink-500 transition hover:bg-ink-100 hover:text-ink-900',
               collapsed && 'justify-center px-0',
             )}
           >
@@ -242,7 +249,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Content column */}
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 border-b border-card-border/70 bg-white/90 backdrop-blur">
-          <div className="mx-auto flex h-14 max-w-screen-2xl items-center gap-2 px-4 sm:px-6">
+          <div className="flex h-14 items-center gap-2 px-4 sm:px-6">
             <button
               type="button"
               onClick={() => setMenuOpen(true)}
@@ -253,7 +260,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Menu size={20} aria-hidden />
             </button>
             <Link to="/" className="flex min-w-0 items-center gap-2 lg:hidden">
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-control bg-ink-900 text-white">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-control bg-primary text-white">
                 <ReceiptText size={16} aria-hidden />
               </span>
               <span className="truncate text-body font-semibold">Taxwork</span>
@@ -283,7 +290,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <button
                 onClick={() => setConfirmLogout('admin')}
                 title={`ผู้ดูแลระบบ: ${adminEmail}`}
-                className="hidden shrink-0 rounded-control px-3 py-2 text-body font-semibold text-ink-500 transition hover:text-ink-900 md:block"
+                className="hidden shrink-0 rounded-control px-3 py-2 text-body font-medium text-ink-500 transition hover:text-ink-900 md:block"
               >
                 ออกจากระบบ (ผู้ดูแลระบบ)
               </button>
@@ -292,14 +299,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <button
                 onClick={() => setConfirmLogout('client')}
                 title={clientEmail}
-                className="hidden shrink-0 items-center gap-1.5 rounded-control px-3 py-2 text-body font-semibold text-ink-500 transition hover:text-ink-900 sm:inline-flex"
+                className="hidden shrink-0 items-center gap-1.5 rounded-control px-3 py-2 text-body font-medium text-ink-500 transition hover:text-ink-900 sm:inline-flex"
               >
                 <LogOut size={16} aria-hidden /> ออกจากระบบ
               </button>
             ) : (
               <NavLink
                 to="/login"
-                className="hidden shrink-0 items-center gap-1.5 rounded-control px-3 py-2 text-body font-semibold text-ink-500 transition hover:text-ink-900 sm:inline-flex"
+                className="hidden shrink-0 items-center gap-1.5 rounded-control px-3 py-2 text-body font-medium text-ink-500 transition hover:text-ink-900 sm:inline-flex"
               >
                 <LogIn size={16} aria-hidden /> เข้าสู่ระบบ
               </NavLink>
@@ -309,12 +316,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         <GlobalMonthBar />
 
-        <main className="mx-auto w-full max-w-screen-2xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
-          {children}
-        </main>
+        {/* Full width, no max-w. This was capped at `max-w-screen-2xl` (1536px),
+            which threw away ~380px on a 1920 monitor — the widest tables in the app
+            (the transaction register, min 1120px) and the 4- and 5-up stat grids are
+            exactly the content that benefits. No narrow page regresses: each keeps
+            its own per-page max-w (TransactionNew 6xl, Settings 4xl, VendorDetail
+            3xl, VendorNew 2xl), so a form field is still a sane size to type into.
+
+            Header, month bar and footer use the same padding and no cap, so the
+            content column's left edge lines up with the chrome. */}
+        <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8">{children}</main>
 
         <footer className="border-t border-card-border/70">
-          <p className="mx-auto max-w-screen-2xl px-4 py-5 text-label text-ink-400 sm:px-6">
+          <p className="px-4 py-5 text-label text-ink-400 sm:px-6">
             ระบบออกใบเสร็จรับเงินสำหรับผู้ขายรายย่อย · เอกสารไม่สามารถแก้ไขหรือลบได้ แต่สามารถยกเลิกได้ · เลขที่ใบเสร็จจะออกเมื่อผู้ขายลงนามและลูกค้าดำเนินการออกใบเสร็จ
           </p>
         </footer>

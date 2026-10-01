@@ -41,8 +41,10 @@ export function GlobalMonthBar() {
 
   return (
     <div className="no-print border-b border-card-border/70 bg-ink-50/60">
-      <div className="mx-auto flex max-w-screen-2xl flex-wrap items-center gap-x-2 gap-y-2 px-4 py-2 sm:px-6">
-        <label htmlFor="global-month" className="text-label font-semibold text-ink-500">
+      {/* No max-w: matches main, which was widened to the full viewport so wide
+          tables and stat grids get the space. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-4 py-2 sm:px-6">
+        <label htmlFor="global-month" className="text-label font-medium text-ink-500">
           รอบเดือน
         </label>
         <div className="flex items-center gap-1.5">

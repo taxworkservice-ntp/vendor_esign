@@ -13,7 +13,7 @@ function Section({ step, title, desc, children }: { step: string; title: string;
     <Card>
       <CardBody className="space-y-4">
         <div className="flex items-start gap-3">
-          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-control bg-ink-900 text-body font-semibold text-white">{step}</span>
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-control bg-primary text-body font-semibold text-white">{step}</span>
           <div className="min-w-0">
             <h2 className="font-semibold leading-tight">{title}</h2>
             {desc && <p className="mt-0.5 text-body text-ink-500">{desc}</p>}
@@ -117,7 +117,7 @@ export function Settings() {
               <span key={p} className="inline-flex items-center gap-1 rounded-full bg-ink-100 px-3 py-1.5 text-body font-semibold text-ink-700">
                 {p}
                 {!readOnly && (
-                  <button type="button" onClick={() => set({ paymentTypes: form.paymentTypes.filter((x) => x !== p) })} className="text-ink-400 hover:text-red-600">
+                  <button type="button" onClick={() => set({ paymentTypes: form.paymentTypes.filter((x) => x !== p) })} className="text-ink-400 hover:text-danger">
                     <Trash2 size={13} />
                   </button>
                 )}
@@ -151,7 +151,7 @@ export function Settings() {
                   className="w-24 text-right tabular-nums"
                 />
                 {!readOnly && (
-                  <button type="button" onClick={() => set({ whtRates: form.whtRates.filter((_, idx) => idx !== i) })} className="grid h-9 w-9 place-items-center rounded-control text-ink-400 hover:bg-ink-100 hover:text-red-600">
+                  <button type="button" onClick={() => set({ whtRates: form.whtRates.filter((_, idx) => idx !== i) })} className="grid h-9 w-9 place-items-center rounded-control text-ink-400 hover:bg-ink-100 hover:text-danger">
                     <Trash2 size={15} />
                   </button>
                 )}
@@ -219,7 +219,7 @@ export function Settings() {
         </div>
       </Section>
 
-      {msg && <p className={`text-body font-medium ${msg === 'บันทึกแล้ว' ? 'text-emerald-600' : 'text-red-600'}`}>{msg}</p>}
+      {msg && <p className={`text-body font-medium ${msg === 'บันทึกแล้ว' ? 'text-success' : 'text-danger'}`}>{msg}</p>}
       {!readOnly && (
         <div className="flex justify-end">
           <Button onClick={submit} loading={save.isPending} disabled={!ready}>

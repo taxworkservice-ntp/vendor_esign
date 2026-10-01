@@ -35,7 +35,7 @@ export function TxnBulkBar({
           onClick={onCopyLinks}
           disabled={linkCount === 0}
           title={linkCount === 0 ? 'ไม่มีรายการที่มีลิงก์ผู้ขายอยู่' : undefined}
-          className="inline-flex h-8 items-center gap-1.5 rounded-control bg-primary-deep px-3 text-body font-semibold text-white transition hover:bg-primary-deeper disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex h-8 items-center gap-1.5 rounded-control bg-primary px-3 text-body font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Copy size={14} aria-hidden /> คัดลอกลิงก์ ({linkCount})
         </button>

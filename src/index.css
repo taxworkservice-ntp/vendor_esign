@@ -27,22 +27,34 @@ body {
   @apply bg-paper text-ink-900 antialiased;
 }
 
+/* Selection and focus were still painted in the retired cool navy (#1a2332) after
+   the warm-neutral migration — that sweep only ever read .tsx files, so this
+   stylesheet and index.html kept the old brand. Focus is now the accent, which is
+   the one colour that must not be confused with a surface or with content. */
 ::selection {
-  background: #1a2332;
-  color: #fff;
+  background: #e7f0ff;
+  color: #37352f;
 }
 
+/* The accent is duplicated as a literal here rather than pulled from tokens.ts
+   because this file cannot use @apply for an outline shorthand — Tailwind would
+   not emit the colour without also regenerating the whole utility. Must track
+   `primary` in src/design/tokens.ts: #0075de, AA-safe as a non-text indicator
+   against white (4.57:1) and against paper (4.22:1, above the 3:1 that WCAG 2.1
+   SC 1.4.11 requires for focus indicators). */
 :focus-visible {
-  outline: 2px solid #1a2332;
+  outline: 2px solid #0075de;
   outline-offset: 2px;
   border-radius: 6px;
 }
 
 /* Native selects get a consistent chevron so they match the text inputs on
-   every OS instead of the platform control. */
+   every OS instead of the platform control. Stroke is ink-500 (#6b6a67), the same
+   grey as the select's own text — the old #94a3b8 was a Tailwind slate that no
+   longer exists in the palette and read lighter than the label beside it. */
 .ui-select {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b6a67' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.65rem center;
   background-size: 1rem;

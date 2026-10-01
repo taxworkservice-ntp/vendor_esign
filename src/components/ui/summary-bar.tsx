@@ -40,12 +40,12 @@ export function SummaryBar({
       {cells.map(({ label, value, icon: Icon, emphasis }) => (
         <div
           key={label}
-          className={emphasis ? 'bg-ink-900 px-4 py-3 text-white' : 'bg-white px-4 py-3'}
+          className={emphasis ? 'bg-primary px-4 py-3 text-white' : 'bg-white px-4 py-3'}
         >
           <p
             className={
               emphasis
-                ? 'flex items-center gap-1.5 text-label font-medium text-white/70'
+                ? 'flex items-center gap-1.5 text-label font-medium text-white/85'
                 : 'flex items-center gap-1.5 text-label text-ink-500'
             }
           >

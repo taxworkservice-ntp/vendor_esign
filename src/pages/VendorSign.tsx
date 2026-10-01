@@ -18,7 +18,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-paper">
       <div className="mx-auto w-full max-w-xl px-4 py-6">
         <div className="mb-4 flex items-center gap-2.5">
-          <span className="grid h-9 w-9 place-items-center rounded-control bg-ink-900 text-white">
+          <span className="grid h-9 w-9 place-items-center rounded-control bg-primary text-white">
             <ReceiptText size={18} />
           </span>
           <div className="leading-tight">
@@ -165,7 +165,7 @@ export function VendorSign() {
       <Shell>
         <Card>
           <CardBody className="space-y-4">
-            <p className="mx-auto grid h-12 w-12 place-items-center rounded-card bg-ink-900 text-white">
+            <p className="mx-auto grid h-12 w-12 place-items-center rounded-card bg-primary text-white">
               <Lock size={22} />
             </p>
             <div className="text-center">
@@ -225,22 +225,22 @@ export function VendorSign() {
     <Shell>
       <div className="space-y-4">
         {!t.taxIdHash ? (
-          <p className="flex gap-2 rounded-control bg-amber-50 p-3 text-body font-medium text-amber-800">
+          <p className="flex gap-2 rounded-control bg-warning-soft p-3 text-body font-medium text-warning">
             <ShieldAlert size={16} className="mt-0.5 shrink-0" />
             รายการก่อนหน้า: ลิงก์นี้ไม่ได้ตั้งการล็อกด้วยเลขบัตรประชาชน — โปรดตรวจสอบให้แน่ใจก่อนลงนาม
           </p>
         ) : (
-          <p className="flex gap-2 rounded-control bg-emerald-50 p-3 text-body font-medium text-emerald-800">
+          <p className="flex gap-2 rounded-control bg-success-soft p-3 text-body font-medium text-success">
             <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
             ยืนยันตัวตนแล้ว {t.taxIdLast4 ? `(${maskTaxId(t.taxIdLast4)})` : ''} — ลิงก์นี้เปิดได้เฉพาะท่าน
           </p>
         )}
-        <Card className="border-emerald-200">
+        <Card className="border-success/30">
           <CardBody>
-            <p className="flex items-center gap-1.5 text-body font-semibold text-ink-500">
+            <p className="flex items-center gap-1.5 text-body font-medium text-ink-500">
               <Lock size={13} /> ข้อมูลจากลูกค้าผู้จ่าย — ระบบล็อกไว้ ไม่สามารถแก้ไขได้
             </p>
-            {t.note && <p className="mt-2 text-body font-semibold text-ink-500">{t.note}</p>}
+            {t.note && <p className="mt-2 text-body font-medium text-ink-500">{t.note}</p>}
             <div className="mt-2 divide-y divide-ink-100">
               {(t.lineItems?.some((it) => it.description || it.amount)
                 ? t.lineItems
@@ -299,16 +299,16 @@ export function VendorSign() {
               {tried && address.trim().length < 6 && <FieldError msg="กรุณากรอกที่อยู่ให้ครบ" />}
             </div>
             {gatePassed && t.taxIdLast4 ? (
-              <div className="rounded-control bg-emerald-50 p-3.5 text-body">
+              <div className="rounded-control bg-success-soft p-3.5 text-body">
                 <Label>เลขบัตรประชาชน</Label>
-                <p className="font-mono font-semibold">{maskTaxId(t.taxIdLast4)} <span className="font-sans text-body font-medium text-emerald-700">ยืนยันแล้ว ไม่ต้องกรอกซ้ำ</span></p>
+                <p className="font-mono font-semibold">{maskTaxId(t.taxIdLast4)} <span className="font-sans text-body font-medium text-success">ยืนยันแล้ว ไม่ต้องกรอกซ้ำ</span></p>
               </div>
             ) : (
               <div>
                 <Label hint={`${tid.length}/13 หลัก — เก็บเฉพาะตัวเลข`}>เลขบัตรประชาชน</Label>
                 <Input value={tid} onChange={(e) => setTid(e.target.value.replace(/\D/g, '').slice(0, 13))} placeholder="x-xxxx-xxxxx-xx-x" inputMode="numeric" />
                 {tried && !idOk && <FieldError msg="กรุณากรอกให้ครบ 13 หลัก" />}
-                {idOk && <p className="mt-1.5 flex items-center gap-1 text-body font-medium text-emerald-600"><CheckCircle2 size={14} /> ครบ 13 หลัก</p>}
+                {idOk && <p className="mt-1.5 flex items-center gap-1 text-body font-medium text-success"><CheckCircle2 size={14} /> ครบ 13 หลัก</p>}
               </div>
             )}
           </CardBody>
@@ -336,12 +336,12 @@ export function VendorSign() {
         <Card>
           <CardBody className="space-y-3">
             <h2 className="font-semibold">3 · ยืนยันและส่ง</h2>
-            <p className="flex gap-2 rounded-control bg-amber-50 p-3 text-body font-medium text-amber-800">
+            <p className="flex gap-2 rounded-control bg-warning-soft p-3 text-body font-medium text-warning">
               <ShieldAlert size={16} className="mt-0.5 shrink-0" />
               การยืนยันตัวตนผ่าน LINE จะเปิดใช้งานในภายหลัง — ในขณะนี้ใช้การให้ความยินยอมและลายเซ็นในการยืนยัน
             </p>
             <label className="flex gap-3 rounded-control bg-ink-50 p-4 text-body leading-relaxed active:bg-ink-100">
-              <input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-slate-900" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+              <input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-ink-900" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
               <span>
                 ข้าพเจ้าได้รับเงินจำนวนดังกล่าวแล้ว และมอบอำนาจให้ <b>{loadSettings(t.tenantId).clientCode}</b> ออกใบเสร็จรับเงิน
                ในนามของข้าพเจ้า <b>เฉพาะธุรกรรมนี้เท่านั้น</b>

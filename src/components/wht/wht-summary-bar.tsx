@@ -40,16 +40,16 @@ export function WhtSummaryBar({ summary, loading }: { summary?: WhtSummary; load
             <caption className="sr-only">สรุปยอดแยกตามแบบยื่นภาษี</caption>
             <thead>
               <tr className="border-b border-card-border bg-ink-50/80">
-                <th scope="col" className="px-3 py-2 text-left text-label font-semibold uppercase tracking-wide text-ink-500">
+                <th scope="col" className="px-3 py-2 text-left text-label font-medium text-ink-500">
                   แบบยื่น
                 </th>
-                <th scope="col" className="px-3 py-2 text-right text-label font-semibold uppercase tracking-wide text-ink-500">
+                <th scope="col" className="px-3 py-2 text-right text-label font-medium text-ink-500">
                   จำนวน
                 </th>
-                <th scope="col" className="px-3 py-2 text-right text-label font-semibold uppercase tracking-wide text-ink-500">
+                <th scope="col" className="px-3 py-2 text-right text-label font-medium text-ink-500">
                   ยอดเงิน (ฐานภาษี)
                 </th>
-                <th scope="col" className="px-3 py-2 text-right text-label font-semibold uppercase tracking-wide text-ink-500">
+                <th scope="col" className="px-3 py-2 text-right text-label font-medium text-ink-500">
                   ภาษีที่หักไว้
                 </th>
               </tr>
@@ -97,10 +97,10 @@ function Cell({
   emphasis?: boolean
 }) {
   return (
-    <div className={emphasis ? 'bg-ink-900 px-4 py-3 text-white' : 'bg-white px-4 py-3'}>
-      <p className={emphasis ? 'text-label font-medium text-white/70' : 'text-label text-ink-500'}>{label}</p>
+    <div className={emphasis ? 'bg-primary px-4 py-3 text-white' : 'bg-white px-4 py-3'}>
+      <p className={emphasis ? 'text-label font-medium text-white/85' : 'text-label text-ink-500'}>{label}</p>
       <p className="mt-0.5 text-title font-semibold tabular-nums">{value}</p>
-      {hint && <p className={emphasis ? 'text-micro text-white/60' : 'text-micro text-ink-400'}>{hint}</p>}
+      {hint && <p className={emphasis ? 'text-micro text-white/75' : 'text-micro text-ink-400'}>{hint}</p>}
     </div>
   )
 }

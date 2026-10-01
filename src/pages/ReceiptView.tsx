@@ -27,6 +27,15 @@ export function ReceiptView() {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [zoom, setZoom] = useState(1)
+  // The issued PDF is the statutory artifact: built server-side with the vendor
+  // signature embedded and a SHA-256 recorded at issuance. The html2canvas
+  // snapshot of this sheet is NOT that document — it is an image with no
+  // signature and no hash — so it is only offered before issuance and labelled
+  // so it cannot be mistaken for the receipt.
+  //
+  // Also above the not-found return: it used to sit below it, so the not-found
+  // render called one hook fewer than every other render.
+  const [issuedFile, setIssuedFile] = useState<{ sha: string; code: string } | null>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
 
@@ -42,6 +51,16 @@ export function ReceiptView() {
     return () => ro.disconnect()
   }, [])
 
+  // The vendor's SIGNED identity, not the client's record of them. The issued
+  // PDF is built from vendor_authorizations, so reading the client's row here
+  // was how the on-screen sheet and the issued document could disagree on a
+  // name. One hook, both paths, same shape.
+  //
+  // Above the not-found return for the same reason as TransactionDetail: a hook
+  // below an early return makes the first render call fewer hooks than the
+  // second, and React tears the page down. Disabled while `t` is undefined.
+  const { data: auth, isLoading: authLoading } = useReceiptAuthorization(t?.id)
+
   if (!t) {
     return (
       <div className="space-y-3">
@@ -50,12 +69,7 @@ export function ReceiptView() {
       </div>
     )
   }
-  // The vendor's SIGNED identity, not the client's record of them. The issued
-  // PDF is built from vendor_authorizations, so reading the client's row here
-  // was how the on-screen sheet and the issued document could disagree on a
-  // name. One hook, both paths, same shape.
-  const { data: auth, isLoading: authLoading } = useReceiptAuthorization(t?.id)
-  const sig = t ? signatureState(t, auth?.signaturePng, { loading: authLoading }) : signatureState({ status: 'draft' }, null)
+  const sig = signatureState(t, auth?.signaturePng, { loading: authLoading })
   const issued = t.status === 'signed' || t.status === 'issued'
   const number = t.receiptNumber ?? (issued ? mockReceiptNumber(t.id, t.vendor.vendorNo ?? 0) : 'ยังไม่ออกเลข')
   const isVoid = t.status === 'void'
@@ -66,13 +80,6 @@ export function ReceiptView() {
     ? t.lineItems
     : [{ description: t.description, amount: t.grossAmount }]
   ).map(normalizeLineItem)
-
-  // The issued PDF is the statutory artifact: built server-side with the vendor
-  // signature embedded and a SHA-256 recorded at issuance. The html2canvas
-  // snapshot of this sheet is NOT that document — it is an image with no
-  // signature and no hash — so it is only offered before issuance and labelled
-  // so it cannot be mistaken for the receipt.
-  const [issuedFile, setIssuedFile] = useState<{ sha: string; code: string } | null>(null)
 
   const downloadIssued = async () => {
     setErr('')
@@ -95,7 +102,7 @@ export function ReceiptView() {
     try {
       await downloadElementAsA4Pdf(sheetRef.current, `${number}-preview.pdf`)
     } catch {
-      setErr('สร้างไฟล์ภาพหน้าจอไม่สำเร็จ — โปรดลองใหม่อีกครั้ง')
+      setErr('ดาวน์โหลดใบเสร็จไม่สำเร็จ — โปรดลองใหม่อีกครั้ง')
     } finally {
       setBusy(false)
     }
@@ -107,7 +114,7 @@ export function ReceiptView() {
         <div className="flex items-center gap-2">
           <StatusBadge status={t.status} />
           <span className="text-body text-ink-500">สำเนาใบเสร็จ · A4</span>
-          {!issued && !isVoid && <span className="text-body font-medium text-amber-700">· รอออกเลขที่ใบเสร็จ</span>}
+          {!issued && !isVoid && <span className="text-body font-medium text-warning">· รอออกเลขที่ใบเสร็จ</span>}
         </div>
         <div className="flex flex-wrap gap-2">
           {t.status === 'issued' && hasServer ? (
@@ -120,12 +127,12 @@ export function ReceiptView() {
               loading={busy}
               title="ภาพหน้าจอของใบเสร็จ — ยังไม่มีลายเซ็นและไม่มีรหัสตรวจสอบ จึงใช้แทนใบเสร็จจริงไม่ได้"
             >
-              <ImageDown size={15} /> {busy ? 'กำลังสร้าง…' : 'ส่งออกภาพหน้าจอ'}
+              <ImageDown size={15} /> {busy ? 'กำลังดาวน์โหลด…' : 'ดาวน์โหลดใบเสร็จ'}
             </Button>
           )}
         </div>
       </div>
-      {err && <p className="no-print text-body font-medium text-red-600">{err}</p>}
+      {err && <p className="no-print text-body font-medium text-danger">{err}</p>}
 
       {/* Proof the accountant hands over: verification code + digest of the
           issued file. Only meaningful once the receipt has actually been issued. */}
@@ -148,10 +155,10 @@ export function ReceiptView() {
       <div className="print-area relative">
         <div ref={wrapRef} className="w-full">
           <div ref={sheetRef} style={{ zoom }} className="receipt-sheet relative flex flex-col overflow-hidden rounded-card border border-card-border bg-white font-[Sarabun] shadow-card">
-          <div className="absolute inset-x-0 top-0 h-1.5 bg-teal-700" />
+          <div className="absolute inset-x-0 top-0 h-1.5 bg-primary" />
           {isVoid && (
             <div className="pointer-events-none absolute inset-0 grid place-items-center">
-              <span className="rotate-[-18deg] rounded-control border-4 border-red-600 px-8 py-2 text-4xl font-semibold text-red-600/70">VOID</span>
+              <span className="rotate-[-18deg] rounded-control border-4 border-danger px-8 py-2 text-4xl font-semibold text-danger/70">VOID</span>
             </div>
           )}
 
@@ -278,7 +285,7 @@ export function ReceiptView() {
                 <div className="flex h-14 items-center justify-center">
                   <FileText size={22} className="text-ink-300" aria-hidden />
                 </div>
-                <p className="text-body font-semibold text-amber-700">{SIGNATURE_COPY.missing.title}</p>
+                <p className="text-body font-semibold text-warning">{SIGNATURE_COPY.missing.title}</p>
                 <p className="mt-0.5 text-label text-ink-500">{SIGNATURE_COPY.missing.detail}</p>
                 {t.status === 'issued' && hasServer && (
                   <Button variant="secondary" className="no-print mt-2" onClick={downloadIssued} loading={busy}>

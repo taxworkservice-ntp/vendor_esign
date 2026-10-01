@@ -50,7 +50,7 @@ function Section({
     <Card>
       <CardBody className="space-y-4">
         <div className="flex items-start gap-3">
-          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-control bg-ink-900 text-body font-semibold text-white">
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-control bg-primary text-body font-semibold text-white">
             {step}
           </span>
           <div className="min-w-0">
@@ -284,29 +284,29 @@ export function TransactionNew() {
               <div className="mt-1.5 text-body">
                 {selectedVendor?.taxId ? (
                   taxMatch ? (
-                    <p className="flex items-center gap-1.5 font-medium text-emerald-600">
+                    <p className="flex items-center gap-1.5 font-medium text-success">
                       <ShieldCheck size={14} /> ตรงกับทะเบียนผู้ขาย ({selectedVendor.name})
                     </p>
                   ) : (
-                    <p className="flex items-center gap-1.5 font-medium text-red-600">
+                    <p className="flex items-center gap-1.5 font-medium text-danger">
                       <ShieldAlert size={14} /> เลขบัตรไม่ตรงกับทะเบียนผู้ขาย — ตรวจสอบอีกครั้ง
                     </p>
                   )
                 ) : (
-                  <p className={taxDigits === 13 ? 'font-medium text-emerald-600' : 'text-ink-400'}>
+                  <p className={taxDigits === 13 ? 'font-medium text-success' : 'text-ink-400'}>
                     {taxDigits === 13 ? 'ครบ 13 หลัก — ใช้เป็นรหัสล็อกหน้าลงนามได้' : `• กรอกแล้ว ${taxDigits}/13 หลัก`}
                   </p>
                 )}
               </div>
               {recalledId.data && !selectedVendor?.taxId && recalledId.data === vendorTaxId && (
-                <div className="mt-1.5 flex items-center justify-between gap-2 rounded-control bg-teal-50 px-3 py-2 text-body text-teal-800">
+                <div className="mt-1.5 flex items-center justify-between gap-2 rounded-control bg-primary-soft px-3 py-2 text-body text-primary-text">
                   <span className="flex items-center gap-1.5 font-medium">
                     <Sparkles size={13} /> เรียกเลขบัตรประชาชนที่บันทึกไว้ (เข้ารหัส) ของ {selectedVendor?.name}
                   </span>
                   <button
                     type="button"
                     onClick={() => { setVendorTaxId(''); idFilledRef.current = vendorId; markTouched() }}
-                    className="inline-flex items-center gap-1 rounded-control px-2 py-1 font-semibold hover:bg-teal-100"
+                    className="inline-flex items-center gap-1 rounded-control px-2 py-1 font-semibold hover:bg-primary/10"
                   >
                     <X size={13} /> ล้าง
                   </button>
@@ -319,18 +319,18 @@ export function TransactionNew() {
             {/* Memory: auto-fill chip / suggestions */}
             <div aria-live="polite" className="space-y-2">
               {appliedVendor === vendorId && rows.some((r) => r.description) && (
-                <div className="flex items-center justify-between gap-2 rounded-control bg-teal-50 px-3.5 py-2.5 text-body text-teal-800">
+                <div className="flex items-center justify-between gap-2 rounded-control bg-primary-soft px-3.5 py-2.5 text-body text-primary-text">
                   <span className="flex items-center gap-1.5 font-medium">
                     <Sparkles size={14} /> คัดลอกจากรายการล่าสุดของ {selectedVendor?.name}
                   </span>
-                  <button type="button" onClick={clearAuto} className="inline-flex items-center gap-1 rounded-control px-2 py-1 font-semibold hover:bg-teal-100">
+                  <button type="button" onClick={clearAuto} className="inline-flex items-center gap-1 rounded-control px-2 py-1 font-semibold hover:bg-primary/10">
                     <X size={13} /> ล้าง
                   </button>
                 </div>
               )}
               {showSuggest && catalog.length > 0 && (
                 <div className="rounded-control bg-ink-50 px-3.5 py-3">
-                  <p className="flex items-center gap-1.5 text-body font-semibold text-ink-500">
+                  <p className="flex items-center gap-1.5 text-body font-medium text-ink-500">
                     <Sparkles size={14} /> รายการที่ใช้เป็นประจำของ {selectedVendor?.name} — เลือกเพื่อเพิ่มรายการ
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
@@ -339,7 +339,7 @@ export function TransactionNew() {
                         key={it.description}
                         type="button"
                         onClick={() => addCatalogRow({ description: it.description, amount: it.lastAmount })}
-                        className="rounded-full bg-white px-3 py-1.5 text-body font-medium shadow-sm ring-1 ring-card-border hover:ring-ink-900"
+                        className="rounded-full bg-white px-3 py-1.5 text-body font-medium ring-1 ring-card-border transition hover:ring-primary/40 hover:text-primary-text"
                         title={`ใช้ ${it.timesUsed} ครั้ง`}
                         aria-label={`เพิ่ม ${it.description} จำนวน ${it.lastAmount} บาท`}
                       >
@@ -362,7 +362,7 @@ export function TransactionNew() {
 
             <div className="overflow-x-auto rounded-control border border-card-border">
               <div className="min-w-[820px]">
-                <div className="flex items-center gap-2 border-b border-card-border bg-ink-50/80 px-3 py-2 text-label font-semibold uppercase tracking-wide text-ink-500">
+                <div className="flex items-center gap-2 border-b border-card-border bg-ink-50/80 px-3 py-2 text-label font-medium text-ink-500">
                   <span className="w-6 shrink-0 text-right">#</span>
                   <span className="min-w-[160px] flex-1">รายละเอียด</span>
                   <span className="w-14 shrink-0 text-right">จำนวน</span>
@@ -421,7 +421,7 @@ export function TransactionNew() {
                           type="button"
                           onClick={() => setRows((rs) => (rs.length > 1 ? rs.filter((_, idx) => idx !== i) : rs))}
                           disabled={rows.length === 1}
-                          className="grid h-8 w-8 shrink-0 place-items-center rounded-control text-ink-400 hover:bg-ink-100 hover:text-red-600 disabled:opacity-30"
+                          className="grid h-8 w-8 shrink-0 place-items-center rounded-control text-ink-400 hover:bg-ink-100 hover:text-danger disabled:opacity-30"
                           title="ลบบรรทัด"
                         >
                           <Trash2 size={16} />
@@ -439,7 +439,7 @@ export function TransactionNew() {
                     >
                       <Plus size={15} /> เพิ่มบรรทัด
                     </button>
-                    <Link to="/items" className="text-body font-semibold text-ink-500 underline hover:text-ink-900">
+                    <Link to="/items" className="text-body font-medium text-ink-500 underline hover:text-ink-900">
                       รายการสินค้า/บริการ
                     </Link>
                   </div>
@@ -478,8 +478,13 @@ export function TransactionNew() {
                     type="button"
                     onClick={() => { markTouched(); setWhtMode(v) }}
                     className={cn(
-                      'rounded-control px-3 py-2 text-body font-semibold transition',
-                      whtMode === v ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-500 hover:text-ink-900',
+                      'rounded-control px-3 py-2 text-body transition',
+                      // The selected segment lifts off the track, so it takes the
+                      // accent-tinted treatment used elsewhere for selection rather
+                      // than the near-black fill these used to have.
+                      whtMode === v
+                        ? 'bg-primary-soft font-semibold text-primary-text'
+                        : 'font-medium text-ink-500 hover:text-ink-900',
                     )}
                   >
                     {th}
@@ -543,7 +548,7 @@ export function TransactionNew() {
                 </>
               )}
               {gross >= cfg.stampDutyWarningThreshold && (
-                <p className="mt-3 flex gap-2 rounded-control bg-amber-50 p-3 text-body font-medium text-amber-800">
+                <p className="mt-3 flex gap-2 rounded-control bg-warning-soft p-3 text-body font-medium text-warning">
                   <TriangleAlert size={16} className="mt-0.5 shrink-0" />
                   ยอดเกิน {fmtTHB(cfg.stampDutyWarningThreshold)} — โปรดตรวจสอบอากรแสตมป์กับนักบัญชีก่อนออกเอกสาร
                 </p>
@@ -557,7 +562,7 @@ export function TransactionNew() {
               <Label>เลขที่อ้างอิงสลิป</Label>
               <Input value={slipRef} onChange={(e) => setSlipRef(e.target.value)} placeholder="เช่น TRF-881201" className="font-mono" invalid={touched && !!errors.slipRef} />
               {touched && <FieldError msg={errors.slipRef} />}
-              {slipRef && !dup && <p className="mt-1.5 text-body text-emerald-600">เลขที่อ้างอิงนี้ยังไม่ถูกใช้ในระบบ</p>}
+              {slipRef && !dup && <p className="mt-1.5 text-body text-success">เลขที่อ้างอิงนี้ยังไม่ถูกใช้ในระบบ</p>}
             </div>
             <div>
               <Label>สลิปโอนเงิน</Label>
@@ -614,7 +619,7 @@ export function TransactionNew() {
             </div>
 
             <div className="divide-y divide-ink-100 rounded-control border border-card-border">
-              <div className="flex items-baseline gap-2 bg-ink-50/70 px-3 py-1.5 text-label font-semibold uppercase tracking-wide text-ink-500">
+              <div className="flex items-baseline gap-2 bg-ink-50/70 px-3 py-1.5 text-label font-medium text-ink-500">
                 <span className="min-w-0 flex-1">รายละเอียด</span>
                 <span className="w-10 shrink-0 text-right">จำนวน</span>
                 <span className="w-16 shrink-0 text-right">หน่วย</span>

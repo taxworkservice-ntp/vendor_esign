@@ -285,7 +285,13 @@ export function WhtPrint() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100">
+    // Self-capped: this page used to inherit `max-w-screen-2xl` from the shell's
+    // <main>, which was widened to the full viewport. The forms below are a fixed
+    // 1512x2138px (Pnd) government layout pinned with absolute coordinates, so the
+    // page must stay centred in a bounded column rather than float in whatever
+    // space a 4K monitor happens to give it. Restoring the same 1536px ceiling
+    // keeps this page pixel-identical to before.
+    <div className="mx-auto min-h-screen max-w-screen-2xl bg-slate-100">
       <div className="no-print sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2.5">
         <Link to="/wht" className="text-sm font-semibold text-ink-600">← กลับรายการ WHT</Link>
         <div className="flex gap-2">
@@ -295,7 +301,7 @@ export function WhtPrint() {
           <Button variant="secondary" onClick={() => window.print()}><Printer size={15} /> พิมพ์</Button>
         </div>
       </div>
-      {err && <p className="no-print px-4 py-3 text-sm font-medium text-red-600">{err}</p>}
+      {err && <p className="no-print px-4 py-3 text-sm font-medium text-danger">{err}</p>}
       {loading && <p className="no-print px-4 py-3 text-sm text-ink-500">กำลังโหลดหนังสือรับรอง…</p>}
       <div className="flex flex-col items-center gap-6 overflow-auto p-6">
         {profile &&

@@ -39,7 +39,7 @@ export function FilterSummary({
           <button
             type="button"
             onClick={() => filters.forEach((f) => onClear(f.key))}
-            className="rounded-full px-2.5 py-1 text-label font-semibold text-ink-500 transition hover:bg-ink-100 hover:text-ink-900"
+            className="rounded-full px-2.5 py-1 text-label font-medium text-ink-500 transition hover:bg-ink-100 hover:text-ink-900"
           >
             ล้างทั้งหมด
           </button>

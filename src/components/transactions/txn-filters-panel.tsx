@@ -11,7 +11,7 @@ import { VendorPicker } from '../vendor-picker'
 // mixed h-9 (dates) and h-10 (amounts) against the h-11 default elsewhere,
 // which made the panel look broken next to the toolbar.
 
-const FIELD = 'mb-1.5 text-label font-semibold text-ink-500'
+const FIELD = 'mb-1.5 text-label font-medium text-ink-500'
 const NUM = 'h-10 tabular-nums'
 
 const PRESETS: { id: PresetId; th: string }[] = [

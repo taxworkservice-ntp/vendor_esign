@@ -28,7 +28,7 @@ import { cn } from '../lib/cn'
 // archive flag, so an entry can be retired without being deleted.
 
 const thCls =
-  'sticky top-0 z-10 border-b border-card-border bg-ink-50 px-3 py-2.5 text-left text-label font-semibold uppercase tracking-wide text-ink-500'
+  'sticky top-0 z-10 border-b border-card-border bg-ink-50 px-3 py-2.5 text-left text-label font-medium text-ink-500'
 
 const SORTS: { v: ItemSort; th: string }[] = [
   { v: 'recent', th: 'เพิ่มล่าสุด' },
@@ -127,7 +127,7 @@ export function ItemsList() {
           <CardBody className="space-y-4">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <span className="grid h-7 w-7 place-items-center rounded-control bg-ink-900 text-white">
+                <span className="grid h-7 w-7 place-items-center rounded-control bg-primary text-white">
                   {editing ? <Pencil size={14} aria-hidden /> : <Plus size={16} aria-hidden />}
                 </span>
                 <h2 className="font-semibold">{editing ? 'แก้ไขรายการ' : 'เพิ่มรายการใหม่'}</h2>
@@ -260,7 +260,7 @@ export function ItemsList() {
               <button
                 type="button"
                 onClick={() => setSearch('')}
-                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold text-ink-500 transition hover:bg-ink-100 hover:text-ink-900"
+                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium text-ink-500 transition hover:bg-ink-100 hover:text-ink-900"
               >
                 <RotateCcw size={13} aria-hidden /> ล้างคำค้นหา
               </button>
@@ -324,7 +324,7 @@ export function ItemsList() {
                               <div className="flex items-center gap-2">
                                 <span className="truncate font-semibold">{it.name}</span>
                                 {archived && (
-                                  <span className="shrink-0 rounded-full bg-ink-100 px-2 py-0.5 text-micro font-semibold text-ink-500">
+                                  <span className="shrink-0 rounded-full bg-ink-100 px-2 py-0.5 text-micro font-medium text-ink-500">
                                     ปิดใช้งาน
                                   </span>
                                 )}

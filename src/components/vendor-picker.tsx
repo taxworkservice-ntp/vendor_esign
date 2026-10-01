@@ -99,7 +99,7 @@ export function VendorPicker({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="flex items-center gap-1.5 font-semibold">
-              <Check size={15} className="text-emerald-600" /> {selected.name}
+              <Check size={15} className="text-success" /> {selected.name}
             </p>
             <p className="mt-0.5 truncate text-body text-ink-500">{selected.address}</p>
             <p className="mt-0.5 font-mono text-label text-ink-400">เลขบัตร {displayTaxId(selected)}</p>
@@ -148,7 +148,7 @@ export function VendorPicker({
         <ul
           id="vendor-picker-list"
           role="listbox"
-          className="absolute z-20 mt-1.5 max-h-72 w-full overflow-auto rounded-control border border-card-border bg-white p-1.5 shadow-lg"
+          className="absolute z-20 mt-1.5 max-h-72 w-full overflow-auto rounded-control border border-card-border bg-white p-1.5 shadow-overlay"
         >
           {matches.map((v, i) => (
             <li

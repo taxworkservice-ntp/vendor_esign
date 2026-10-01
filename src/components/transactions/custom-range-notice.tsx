@@ -55,7 +55,7 @@ export function CustomRangeNotice({
         <button
           type="button"
           onClick={onUsePeriod}
-          className="inline-flex items-center gap-1.5 rounded-control bg-primary-deep px-2.5 py-1.5 text-label font-semibold text-white transition hover:bg-primary-deeper"
+          className="inline-flex items-center gap-1.5 rounded-control bg-primary px-2.5 py-1.5 text-label font-semibold text-white transition hover:brightness-110"
         >
           <RotateCcw size={13} aria-hidden />
           กลับไปใช้รอบ{globalMonth ? formatMonthTH(globalMonth) : 'ทั้งหมด'}

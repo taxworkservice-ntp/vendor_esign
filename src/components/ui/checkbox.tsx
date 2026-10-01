@@ -27,9 +27,9 @@ export function Checkbox({
         }}
         className={cn(
           'h-4 w-4 shrink-0 cursor-pointer appearance-none rounded-[4px] border border-ink-300 bg-white transition',
-          'checked:border-ink-900 checked:bg-ink-900',
-          'indeterminate:border-ink-900 indeterminate:bg-ink-900',
-          'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-900',
+          'checked:border-primary checked:bg-primary',
+          'indeterminate:border-primary indeterminate:bg-primary',
+          'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
           'disabled:cursor-not-allowed disabled:opacity-40',
         )}
         style={

@@ -41,7 +41,7 @@ import { cn } from '../lib/cn'
 // encrypted. Debouncing is what keeps that affordable.
 
 const thCls =
-  'sticky top-0 z-10 border-b border-card-border bg-ink-50 px-4 py-2.5 text-left text-label font-semibold uppercase tracking-wide text-ink-500'
+  'sticky top-0 z-10 border-b border-card-border bg-ink-50 px-4 py-2.5 text-left text-label font-medium text-ink-500'
 
 const SORTS: { v: VendorSort; th: string }[] = [
   { v: 'recent', th: 'เพิ่มล่าสุด' },
@@ -224,7 +224,7 @@ export function VendorsList() {
               <button
                 type="button"
                 onClick={() => setSearch('')}
-                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold text-ink-500 transition hover:bg-ink-100 hover:text-ink-900"
+                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium text-ink-500 transition hover:bg-ink-100 hover:text-ink-900"
               >
                 <RotateCcw size={13} aria-hidden /> ล้างคำค้นหา
               </button>
@@ -314,7 +314,7 @@ export function VendorsList() {
                                   {vendorDisplayName(v.prefix, v.name)}
                                 </Link>
                                 {archived && (
-                                  <span className="shrink-0 rounded-full bg-ink-100 px-2 py-0.5 text-micro font-semibold text-ink-500">
+                                  <span className="shrink-0 rounded-full bg-ink-100 px-2 py-0.5 text-micro font-medium text-ink-500">
                                     ปิดใช้งาน
                                   </span>
                                 )}

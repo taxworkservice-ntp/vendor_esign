@@ -49,7 +49,7 @@ import { cn } from '../lib/cn'
 // overridable here, same as the transaction list.
 
 const thBase =
-  'sticky top-0 z-10 border-b border-card-border bg-ink-50 px-3 py-2.5 text-label font-semibold uppercase tracking-wide text-ink-500'
+  'sticky top-0 z-10 border-b border-card-border bg-ink-50 px-3 py-2.5 text-label font-medium text-ink-500'
 
 const STATUS_CHIPS: { v: WhtStatusFilter; th: string }[] = [
   { v: 'all', th: 'ทั้งหมด' },
@@ -267,7 +267,7 @@ export function WhtList() {
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5 border-t border-card-border pt-3">
-            <span className="mr-1 text-label font-semibold text-ink-500">สถานะการยื่น</span>
+            <span className="mr-1 text-label font-medium text-ink-500">สถานะการยื่น</span>
             {STATUS_CHIPS.map((c) => (
               <FilterChip key={c.v} active={effective.status === c.v} onClick={() => patch({ status: c.v })}>
                 {c.th}
@@ -280,7 +280,7 @@ export function WhtList() {
                   setSearch('')
                   setQuery((q) => ({ ...q, q: '', formType: '', status: 'all' }))
                 }}
-                className="ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-label font-semibold text-ink-500 transition hover:bg-ink-100 hover:text-ink-900"
+                className="ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-label font-medium text-ink-500 transition hover:bg-ink-100 hover:text-ink-900"
               >
                 <RotateCcw size={13} aria-hidden /> ล้างตัวกรอง
               </button>
@@ -356,7 +356,7 @@ export function WhtList() {
                               <span
                                 className={cn(
                                   'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-label font-semibold',
-                                  filed ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700',
+                                  filed ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning',
                                 )}
                               >
                                 {filed ? <CheckCircle2 size={12} aria-hidden /> : <CircleDashed size={12} aria-hidden />}
@@ -384,8 +384,8 @@ export function WhtList() {
                                   className={cn(
                                     'grid h-8 w-8 place-items-center rounded-control transition',
                                     filed
-                                      ? 'text-emerald-600 hover:bg-emerald-50'
-                                      : 'text-ink-400 hover:bg-ink-100 hover:text-emerald-600',
+                                      ? 'text-success hover:bg-success-soft'
+                                      : 'text-ink-400 hover:bg-ink-100 hover:text-success',
                                   )}
                                 >
                                   {filed ? <CheckCircle2 size={15} aria-hidden /> : <CircleDashed size={15} aria-hidden />}

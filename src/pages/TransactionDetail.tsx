@@ -11,7 +11,7 @@ import { FieldError, Input, Label, Textarea } from '../components/ui/input'
 import { ConfirmDialog } from '../components/ui/confirm-dialog'
 import { EmptyState } from '../components/ui/empty-state'
 import { ErrorState } from '../components/ui/error-state'
-import { TableSkeleton } from '../components/ui/table-skeleton'
+import { PanelSkeleton } from '../components/ui/table-skeleton'
 import { defaultSettings, renderInviteMessage } from '../lib/settings'
 import { itemsTotal, normalizeLineItem } from '../lib/line-items'
 import { vendorDisplayName } from '../lib/vendor-name'
@@ -35,16 +35,30 @@ export function TransactionDetail() {
   const [slipErr, setSlipErr] = useState('')
   const [slipBusy, setSlipBusy] = useState(false)
 
+  // Corrections come from the authorization record. They used to be read from
+  // mock-only storage, so on the server path a vendor who corrected the client's
+  // spelling was never told — the diff is now derived server-side.
+  //
+  // This hook is ABOVE the loading/error/not-found returns on purpose. It used to
+  // sit just below them, which made the page a rules-of-hooks violation: the
+  // loading render called 41 hooks and the loaded render called 42, so React threw
+  // "Rendered more hooks than during the previous render" and the error boundary
+  // swallowed the whole page — the one page a bookkeeper opens to check a
+  // signature. Optional chaining means it safely receives undefined while loading
+  // and stays disabled.
+  const { data: auth } = useReceiptAuthorization(t?.id)
+  const corrections = auth?.corrections ?? []
+
   // Loading, failure and not-found are three different things. Collapsing them
   // into "ไม่พบรายการ" told the user a record did not exist when in fact the
   // request had failed or was still in flight.
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <Link to="/" className="text-body font-semibold text-ink-500">← กลับรายการ</Link>
+        <Link to="/" className="text-body font-medium text-ink-500">← กลับรายการ</Link>
         <Card>
           <CardBody>
-            <TableSkeleton rows={6} cols={2} />
+            <PanelSkeleton rows={6} cols={2} />
           </CardBody>
         </Card>
       </div>
@@ -54,7 +68,7 @@ export function TransactionDetail() {
   if (isError) {
     return (
       <div className="space-y-4">
-        <Link to="/" className="text-body font-semibold text-ink-500">← กลับรายการ</Link>
+        <Link to="/" className="text-body font-medium text-ink-500">← กลับรายการ</Link>
         <Card>
           <ErrorState
             title="โหลดรายการไม่สำเร็จ"
@@ -69,7 +83,7 @@ export function TransactionDetail() {
   if (!t) {
     return (
       <div className="space-y-4">
-        <Link to="/" className="text-body font-semibold text-ink-500">← กลับรายการ</Link>
+        <Link to="/" className="text-body font-medium text-ink-500">← กลับรายการ</Link>
         <Card>
           <EmptyState
             icon={FileSearch}
@@ -87,11 +101,6 @@ export function TransactionDetail() {
   }
 
   const link = t.inviteToken ? `${location.origin}/v/${t.inviteToken}` : ''
-  // Corrections come from the authorization record. They used to be read from
-  // mock-only storage, so on the server path a vendor who corrected the client's
-  // spelling was never told — the diff is now derived server-side.
-  const { data: auth } = useReceiptAuthorization(t.id)
-  const corrections = auth?.corrections ?? []
   const cfg = settings ?? defaultSettings(t.tenantId)
   const defaultMessage = renderInviteMessage(cfg.inviteMessageTemplate, {
     vendor: t.vendor.name,
@@ -140,7 +149,7 @@ export function TransactionDetail() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <button onClick={() => nav(-1)} className="inline-flex items-center gap-1.5 text-body font-semibold text-ink-500 hover:text-ink-900">
+        <button onClick={() => nav(-1)} className="inline-flex items-center gap-1.5 text-body font-medium text-ink-500 hover:text-ink-900">
           <ArrowLeft size={16} /> กลับ
         </button>
         <StatusBadge status={t.status} />
@@ -162,9 +171,9 @@ export function TransactionDetail() {
                 </p>
               )}
               {corrections.length > 0 && (
-                <div className="mt-3 rounded-control bg-amber-50 p-3 text-body">
-                  <p className="font-semibold text-amber-800">ผู้ขายแก้ไขข้อมูลที่บันทึกไว้:</p>
-                  <ul className="mt-1 list-disc pl-5 text-amber-800">
+                <div className="mt-3 rounded-control bg-warning-soft p-3 text-body">
+                  <p className="font-semibold text-warning">ผู้ขายแก้ไขข้อมูลที่บันทึกไว้:</p>
+                  <ul className="mt-1 list-disc pl-5 text-warning">
                     {corrections.map((x, i) => (
                       <li key={i}>{x.field === 'name' ? 'ชื่อ' : x.field === 'address' ? 'ที่อยู่' : 'คำนำหน้า'}: {x.from || '—'} → <b>{x.to || '—'}</b></li>
                     ))}
@@ -174,12 +183,12 @@ export function TransactionDetail() {
               <dl className="mt-5 grid grid-cols-2 gap-3 text-body sm:grid-cols-4">
                 <div className="rounded-control bg-ink-50 p-3"><dt className="text-label text-ink-500">ยอดรวม (ฐานภาษี)</dt><dd className="font-semibold tabular-nums">{fmtTHB(t.grossAmount)}</dd></div>
                 <div className="rounded-control bg-ink-50 p-3"><dt className="text-label text-ink-500">หักภาษี ณ ที่จ่าย {t.whtRate}%</dt><dd className="font-semibold tabular-nums">{fmtTHB(t.whtAmount)}</dd></div>
-                <div className="rounded-control bg-ink-900 p-3 text-white"><dt className="text-label text-white/70">ยอดรับสุทธิ</dt><dd className="font-semibold tabular-nums">{fmtTHB(t.netAmount)}</dd></div>
+                <div className="rounded-control bg-primary p-3 text-white"><dt className="text-label text-white/85">ยอดรับสุทธิ</dt><dd className="font-semibold tabular-nums">{fmtTHB(t.netAmount)}</dd></div>
                 <div className="rounded-control bg-ink-50 p-3"><dt className="text-label text-ink-500">วันที่โอน</dt><dd className="font-semibold">{fmtDateTH(t.transferDate)}</dd></div>
               </dl>
               <div className="mt-4 flex flex-wrap gap-2 text-body">
                 {t.checks.map((c) => (
-                  <span key={c.key} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-semibold ${c.state === 'pass' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                  <span key={c.key} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-semibold ${c.state === 'pass' ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'}`}>
                     {c.state === 'pass' ? <CheckCircle2 size={14} /> : <ShieldAlert size={14} />} {c.label}
                   </span>
                 ))}
@@ -193,7 +202,7 @@ export function TransactionDetail() {
               <div className="mt-3 overflow-x-auto">
                 <table className="w-full min-w-[560px] text-body">
                   <thead>
-                    <tr className="border-b border-card-border text-label font-semibold uppercase tracking-wide text-ink-500">
+                    <tr className="border-b border-card-border text-label font-medium text-ink-500">
                       <th className="py-2 pr-2 text-right">#</th>
                       <th className="px-2 py-2 text-left">รายละเอียด</th>
                       <th className="px-2 py-2 text-right">จำนวน</th>
@@ -233,7 +242,7 @@ export function TransactionDetail() {
               <ol className="mt-3 space-y-0">
                 {t.timeline.map((e, i) => (
                   <li key={i} className="relative pb-4 pl-6 last:pb-0">
-                    <span className="absolute left-1 top-1.5 h-2 w-2 rounded-full bg-ink-900" />
+                    <span className="absolute left-1 top-1.5 h-2 w-2 rounded-full bg-primary" />
                     {i < t.timeline.length - 1 && <span className="absolute left-[11px] top-4 h-full w-px bg-ink-100" />}
                     <p className="text-body font-semibold">{e.label}</p>
                     <p className="text-body text-ink-500">{fmtDateTH(e.at)}{e.detail ? ` · ${e.detail}` : ''}</p>
@@ -241,7 +250,7 @@ export function TransactionDetail() {
                 ))}
               </ol>
               {t.status === 'void' && t.voidReason && (
-                <p className="mt-3 rounded-control bg-red-50 p-3 text-body font-medium text-red-700">ยกเลิกเอกสาร: {t.voidReason} · เลขที่เดิมคงไว้ และออกเลขที่ใหม่แทน</p>
+                <p className="mt-3 rounded-control bg-danger-soft p-3 text-body font-medium text-danger">ยกเลิกเอกสาร: {t.voidReason} · เลขที่เดิมคงไว้ และออกเลขที่ใหม่แทน</p>
               )}
             </CardBody>
           </Card>
@@ -264,7 +273,7 @@ export function TransactionDetail() {
                       <button
                         type="button"
                         onClick={() => setEditedMessage(null)}
-                        className="mt-1.5 inline-flex items-center gap-1 text-label font-semibold text-ink-500 transition hover:text-ink-900"
+                        className="mt-1.5 inline-flex items-center gap-1 text-label font-medium text-ink-500 transition hover:text-ink-900"
                       >
                         <RotateCcw size={12} /> รีเซ็ตเป็นข้อความเริ่มต้น
                       </button>
@@ -283,7 +292,7 @@ export function TransactionDetail() {
                     ระบบ<b>ไม่ส่งข้อความเอง</b> — โปรดคัดลอกข้อความด้านบนแล้ว<b>วางในแชท (LINE)</b> ของท่าน ·
                     ลิงก์ใช้ได้หลายครั้งจนกว่าผู้ขายจะลงนาม มีวันหมดอายุ และสามารถเพิกถอนได้ · ปรับข้อความเริ่มต้นได้ที่เมนู “ตั้งค่า”
                   </p>
-                  <p className={`text-label font-semibold ${t.taxIdLast4 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                  <p className={`text-label font-semibold ${t.taxIdLast4 ? 'text-success' : 'text-warning'}`}>
                     {t.taxIdLast4 ? `ล็อกด้วยเลขบัตรประชาชน (ลงท้าย ${t.taxIdLast4}) — ผู้ที่ไม่มีเลขบัตรจะเปิดไม่ได้` : 'รายการก่อนหน้า — ไม่ได้ตั้งการล็อกด้วยเลขบัตรประชาชน'}
                   </p>
                   <Button variant="ghost" className="w-full" onClick={() => setConfirmRevoke(true)}>

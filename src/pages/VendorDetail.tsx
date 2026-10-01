@@ -15,7 +15,7 @@ import { Select } from '../components/ui/select'
 import { ConfirmDialog } from '../components/ui/confirm-dialog'
 import { EmptyState } from '../components/ui/empty-state'
 import { ErrorState } from '../components/ui/error-state'
-import { TableSkeleton } from '../components/ui/table-skeleton'
+import { PanelSkeleton } from '../components/ui/table-skeleton'
 import { StatusBadge } from '../components/ui/badge'
 
 export function VendorDetail() {
@@ -58,7 +58,7 @@ export function VendorDetail() {
         <PageHeader title="กำลังโหลดข้อมูลผู้ขาย" sub="—" />
         <Card>
           <CardBody>
-            <TableSkeleton rows={5} cols={2} />
+            <PanelSkeleton rows={5} cols={2} />
           </CardBody>
         </Card>
       </div>
@@ -268,7 +268,7 @@ export function VendorDetail() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="font-mono">
                   {v.taxLast4 ? `x-xxxx-xxxxx-${v.taxLast4.slice(0, 2)}-${v.taxLast4.slice(2)}` : 'บันทึกไว้'}
-                  <span className="ml-2 font-sans text-body text-emerald-700">เข้ารหัส (AES-256-GCM)</span>
+                  <span className="ml-2 font-sans text-body text-success">เข้ารหัส (AES-256-GCM)</span>
                 </p>
                 <Button
                   variant="ghost"
@@ -323,7 +323,7 @@ export function VendorDetail() {
                 {history && history.total > recent.length && (
                   <Link
                     to={`/?vendor=${v.id}`}
-                    className="text-label font-semibold text-ink-500 underline-offset-2 hover:underline"
+                    className="text-label font-medium text-ink-500 underline-offset-2 hover:underline"
                   >
                     ดูทั้งหมด ({history.total})
                   </Link>

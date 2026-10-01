@@ -13,13 +13,15 @@ export default {
       },
       colors: {
         ...colors,
-        paper: '#f7f5f0',
       },
       fontSize: { ...fontSize } as unknown as Record<string, [string, { lineHeight: string }]>,
       borderRadius: { ...borderRadius },
       boxShadow: {
-        card: '0 1px 2px rgb(26 35 50 / 0.06), 0 8px 24px -12px rgb(26 35 50 / 0.18)',
-        overlay: '0 10px 40px -12px rgb(26 35 50 / 0.28)',
+        // Tinted with the current ink-900 (#37352f). These previously hardcoded
+        // rgb(26 35 50), the old cool navy, which left a blue-grey shadow under
+        // warm neutrals.
+        card: '0 1px 2px rgb(55 53 47 / 0.06), 0 8px 24px -12px rgb(55 53 47 / 0.18)',
+        overlay: '0 10px 40px -12px rgb(55 53 47 / 0.28)',
       },
     },
   },

@@ -25,7 +25,7 @@ interface ToastApi {
 const Ctx = createContext<ToastApi | null>(null)
 
 const TONE: Record<ToastTone, { cls: string; Icon: typeof Check }> = {
-  success: { cls: 'border-emerald-200 bg-emerald-50 text-emerald-800', Icon: Check },
+  success: { cls: 'border-success/30 bg-success-soft text-success', Icon: Check },
   error: { cls: 'border-danger/30 bg-danger-soft text-danger', Icon: AlertTriangle },
   info: { cls: 'border-card-border bg-white text-ink-700', Icon: Info },
 }

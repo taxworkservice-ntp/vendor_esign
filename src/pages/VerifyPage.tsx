@@ -15,7 +15,7 @@ export function VerifyPage() {
   return (
     <div className="mx-auto max-w-xl space-y-4">
       <div className="flex items-center gap-2.5">
-        <span className="grid h-9 w-9 place-items-center rounded-control bg-emerald-700 text-white">
+        <span className="grid h-9 w-9 place-items-center rounded-control bg-success text-white">
           <ShieldCheck size={18} />
         </span>
         <div className="leading-tight">

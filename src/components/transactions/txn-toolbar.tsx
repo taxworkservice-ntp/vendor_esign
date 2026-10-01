@@ -86,18 +86,22 @@ export function TxnToolbar({
             aria-expanded={panelOpen}
             aria-controls="txn-filter-panel"
             className={cn(
-              'inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-body font-semibold transition',
-              panelOpen || count > 0 ? 'bg-ink-900 text-white' : 'bg-ink-100 text-ink-700 hover:bg-ink-300/50',
+              'inline-flex h-8 items-center gap-1.5 rounded-full border px-3.5 text-body transition',
+              panelOpen || count > 0
+                ? 'border-primary/30 bg-primary-soft font-semibold text-primary-text'
+                : 'border-transparent bg-ink-100 font-medium text-ink-700 hover:bg-ink-300/50',
             )}
           >
             <SlidersHorizontal size={14} aria-hidden /> ตัวกรอง
-            {count > 0 && <span className="rounded-full bg-white/25 px-1.5 text-label tabular-nums">{count}</span>}
+            {count > 0 && (
+              <span className="rounded-full bg-primary/15 px-1.5 text-label tabular-nums">{count}</span>
+            )}
           </button>
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5 border-t border-card-border pt-3">
-        <span className="mr-1 text-label font-semibold text-ink-500">สถานะ</span>
+        <span className="mr-1 text-label font-medium text-ink-500">สถานะ</span>
         {chips.map((c) => (
           <FilterChip key={c.v} active={filters.status === c.v} onClick={() => onPatch({ status: c.v })}>
             {c.th}

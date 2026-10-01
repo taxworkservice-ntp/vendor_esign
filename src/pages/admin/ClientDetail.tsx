@@ -73,8 +73,10 @@ export function ClientDetail() {
           <button
             key={v}
             onClick={() => setTab(v)}
-            className={`rounded-full px-3.5 py-2 text-body font-semibold transition ${
-              tab === v ? 'bg-ink-900 text-white' : 'bg-ink-100 text-ink-700 hover:bg-ink-100'
+            className={`rounded-full border px-3.5 py-2 text-body transition ${
+              tab === v
+                ? 'border-primary/30 bg-primary-soft font-semibold text-primary-text'
+                : 'border-transparent bg-ink-100 font-medium text-ink-700 hover:bg-ink-300/50'
             }`}
           >
             {th}
@@ -112,10 +114,10 @@ export function ClientDetail() {
               </div>
               <FieldError msg={err} />
               {tempPw && (
-                <div className="rounded-control bg-amber-50 p-3 text-body">
-                  <p className="font-semibold text-amber-800">รหัสผ่านชั่วคราว (แสดงเพียงครั้งเดียว — โปรดส่งให้ผู้ใช้ผ่านช่องทางอื่น แล้วระบบจะบังคับให้เปลี่ยน):</p>
+                <div className="rounded-control bg-warning-soft p-3 text-body">
+                  <p className="font-semibold text-warning">รหัสผ่านชั่วคราว (แสดงเพียงครั้งเดียว — โปรดส่งให้ผู้ใช้ผ่านช่องทางอื่น แล้วระบบจะบังคับให้เปลี่ยน):</p>
                   <p className="mt-1 font-mono text-lg font-semibold tracking-wide">{tempPw}</p>
-                  <p className="mt-1 text-label text-amber-700">หมดอายุใน 7 วัน · ไม่ถูกจัดเก็บเป็นข้อความธรรมดาในฐานข้อมูล (จัดเก็บเฉพาะค่าแฮช scrypt)</p>
+                  <p className="mt-1 text-label text-warning">หมดอายุใน 7 วัน · ไม่ถูกจัดเก็บเป็นข้อความธรรมดาในฐานข้อมูล (จัดเก็บเฉพาะค่าแฮช scrypt)</p>
                 </div>
               )}
             </CardBody>
@@ -125,10 +127,10 @@ export function ClientDetail() {
             <table className="w-full min-w-[640px] border-collapse text-body">
               <thead>
                 <tr className="border-b border-card-border bg-ink-50/80">
-                  <th className="px-4 py-3 text-left text-label font-semibold uppercase tracking-wide text-ink-500">อีเมล</th>
-                  <th className="px-4 py-3 text-left text-label font-semibold uppercase tracking-wide text-ink-500">บทบาท</th>
-                  <th className="px-4 py-3 text-left text-label font-semibold uppercase tracking-wide text-ink-500">สถานะ</th>
-                  <th className="px-4 py-3 text-right text-label font-semibold uppercase tracking-wide text-ink-500">จัดการ</th>
+                  <th className="px-4 py-3 text-left text-label font-medium text-ink-500">อีเมล</th>
+                  <th className="px-4 py-3 text-left text-label font-medium text-ink-500">บทบาท</th>
+                  <th className="px-4 py-3 text-left text-label font-medium text-ink-500">สถานะ</th>
+                  <th className="px-4 py-3 text-right text-label font-medium text-ink-500">จัดการ</th>
                 </tr>
               </thead>
               <tbody>
@@ -136,7 +138,7 @@ export function ClientDetail() {
                   <tr key={u.id} className="border-b border-card-border last:border-0">
                     <td className="px-4 py-3">
                       <span className="font-semibold">{u.email}</span>
-                      {u.mustChangePw && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-label font-semibold text-amber-800">รอเปลี่ยนรหัส</span>}
+                      {u.mustChangePw && <span className="ml-2 rounded-full bg-warning-soft px-2 py-0.5 text-label font-semibold text-warning">รอเปลี่ยนรหัส</span>}
                     </td>
                     <td className="px-4 py-3 font-mono text-body">{u.role}</td>
                     <td className="px-4 py-3">{u.status === 'active' ? 'ใช้งาน' : 'ปิดใช้งาน'}</td>
