@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useClientAuth } from '../lib/client-auth'
-import { currentMonth, previousMonth } from '../lib/txn-filters'
-import { isValidMonth, readStoredMonth, resolveMonth, writeStoredMonth } from '../lib/global-month'
+import { currentMonth, monthOffset } from '../lib/txn-filters'
+import { isValidMonth, readStoredMonth, resolveMonth, shiftMonth, writeStoredMonth } from '../lib/global-month'
+
+// Forward clamp for stepping: one month ahead at most (lets the books be
+// pre-positioned without wandering into far-future periods).
+const MAX_AHEAD = 1
 
 // Global accounting-period state. Tenant-scoped localStorage persistence;
 // an explicit ?month= in the URL wins once (shareable links) and is then
@@ -51,13 +55,26 @@ export function useGlobalMonth() {
 
   const clearMonth = useCallback(() => setMonth(''), [setMonth])
 
+  const maxMonth = monthOffset(MAX_AHEAD)
+  // From "all time", stepping starts at the current month (most likely
+  // intent); forward is clamped so › never passes the month after current.
+  const step = useCallback(
+    (delta: number) => {
+      const eff = month || currentMonth()
+      const next = shiftMonth(eff, delta)
+      setMonth(delta > 0 && next > maxMonth ? maxMonth : next)
+    },
+    [month, maxMonth, setMonth],
+  )
+
   return {
     month,
     setMonth,
     clearMonth,
+    step,
+    canStepNext: (month || currentMonth()) < maxMonth,
     isAllTime: month === '',
     isCurrentMonth: month === currentMonth(),
     thisMonth: currentMonth(),
-    prevMonth: previousMonth(),
   }
 }

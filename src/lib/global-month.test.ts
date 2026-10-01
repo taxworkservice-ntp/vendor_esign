@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { formatMonthTH, isValidMonth, monthRange, monthStorageKey, readStoredMonth, resolveMonth, writeStoredMonth } from './global-month'
+import { formatMonthTH, isValidMonth, monthRange, monthStorageKey, readStoredMonth, recentMonths, resolveMonth, shiftMonth, writeStoredMonth } from './global-month'
 
 class LS {
   private m = new Map<string, string>()
@@ -76,5 +76,25 @@ describe('global-month', () => {
     expect(formatMonthTH('2026-09')).toBe('ก.ย. 2569')
     expect(formatMonthTH('2025-12')).toBe('ธ.ค. 2568')
     expect(formatMonthTH('bogus')).toBe('bogus')
+  })
+
+  it('shifts months across year boundaries', () => {
+    expect(shiftMonth('2026-09', -1)).toBe('2026-08')
+    expect(shiftMonth('2026-09', 1)).toBe('2026-10')
+    expect(shiftMonth('2026-01', -1)).toBe('2025-12')
+    expect(shiftMonth('2025-12', 1)).toBe('2026-01')
+    expect(shiftMonth('2026-09', -12)).toBe('2025-09')
+    expect(shiftMonth('2026-09', 0)).toBe('2026-09')
+    expect(() => shiftMonth('bogus', 1)).toThrow('invalid-month')
+  })
+
+  it('lists recent months newest-first', () => {
+    const today = new Date(2026, 8, 29) // 2026-09-29
+    const list = recentMonths(12, today)
+    expect(list).toHaveLength(12)
+    expect(list[0]).toBe('2026-09')
+    expect(list[1]).toBe('2026-08')
+    expect(list[11]).toBe('2025-10')
+    expect(recentMonths(3, today)).toEqual(['2026-09', '2026-08', '2026-07'])
   })
 })

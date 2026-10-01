@@ -92,3 +92,22 @@ export function formatMonthTH(month: string): string {
   if (!m) return month
   return `${TH_SHORT[Number(m[2]) - 1]} ${Number(m[1]) + 543}`
 }
+
+// Shift a YYYY-MM month by `delta` months (negative = back). Pure calendar
+// arithmetic across year boundaries: 2026-01 − 1 → 2025-12.
+export function shiftMonth(month: string, delta: number): string {
+  const m = MONTH_RE.exec(month)
+  if (!m) throw new Error('invalid-month')
+  const total = Number(m[1]) * 12 + (Number(m[2]) - 1) + delta
+  const y = Math.floor(total / 12)
+  const mo = (total % 12) + 1
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${y}-${pad(mo)}`
+}
+
+// Dropdown presets: this month + the previous `count - 1` months, newest
+// first. Fixed calendar list — never depends on which months have data.
+export function recentMonths(count = 12, today: Date = new Date()): string[] {
+  const base = currentMonth(today)
+  return Array.from({ length: count }, (_, i) => shiftMonth(base, -i))
+}
