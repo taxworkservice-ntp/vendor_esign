@@ -60,7 +60,7 @@ type RecordWithVendor = WhtRecord & { vendor?: WhtVendor }
 function buildFields(record: RecordWithVendor, profile: WhtProfile, seq: number): FieldDef[] {
   const v = record.vendor
   const month = record.issueDate ? new Date(record.issueDate).getMonth() + 1 : 1
-  const whtId = record.certificateNo || (month ? `${record.issueDate.slice(2, 4)}${String(month).padStart(2, '0')}${String(seq + 1).padStart(3, '0')}` : '')
+  const whtId = record.certificateNo || (month ? `${record.issueDate.slice(2, 4)}${String(month).padStart(2, '0')}1${String(seq + 1).padStart(3, '0')}` : '')
   const dateStr = fmtWhtDate(record.issueDate)
   const amtStr = fmtWhtNum(record.amount)
   const whtStr = fmtWhtNum(record.whtAmount)

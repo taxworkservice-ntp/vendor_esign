@@ -105,7 +105,7 @@ try {
 
   await client.query(`insert into wht_vendors (user_id, name, tax_id, vendor_type) values ('ABC','ผู้ขาย ทดสอบ','1234567890123','individual')`)
   const cert = await client.query(`select generate_wht_certificate_no('ABC', '2026-09-18'::date) n`)
-  cert.rows[0].n === '2609001' ? ok(`wht cert → ${cert.rows[0].n}`) : fail(`wht cert got ${cert.rows[0].n}`)
+  cert.rows[0].n === '26091001' ? ok(`wht cert → ${cert.rows[0].n}`) : fail(`wht cert got ${cert.rows[0].n}`)
 
   // RLS smoke: enforced for a NON-owner role (superusers/owners bypass RLS).
   await client.query(`insert into items (user_id, name, unit, unit_price) values ('ABC','ค่าทดสอบ','งาน',100)`)

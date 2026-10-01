@@ -1,6 +1,7 @@
 // WHT (withholding tax) domain — types + pure helpers ported from
 // invoice-system (wht/print.tsx + whtCertificate.ts) so output matches exactly.
-// Certificate number format: YYMM + 3-digit sequence per workspace/month.
+// Certificate number format: YYMM + series digit + 3-digit sequence per
+// workspace/month (e.g. 26091003).
 
 export type WhtFormType = 'pnd1' | 'pnd1_special' | 'pnd2' | 'pnd3' | 'pnd2a' | 'pnd3a' | 'pnd53'
 
@@ -44,7 +45,17 @@ export function formTypeForVendorType(t: 'company' | 'individual'): WhtFormType 
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 
-// YYMM + 3-digit sequence, mirroring generate_wht_certificate_no().
+// Certificate number: YYMM + series digit + 3-digit sequence per
+// workspace/month, mirroring generate_wht_certificate_no().
+// The series digit '1' reserves this system's block: the client also issues
+// WHT certificates outside this app under a different leading block, so the
+// fixed '1' keeps the two sources collision-free (pilot convention — one
+// client; graduate to per-source counters if more issuers appear).
+// Old 7-char numbers (YYMMNNN, no series digit) stay valid; old and new share
+// one counter per month since the sequence always reads the last 3 digits.
+const WHT_SERIES = '1'
+
+// YYMM + series digit + 3-digit sequence, mirroring generate_wht_certificate_no().
 export function nextWhtCertificateNo(existing: (string | undefined)[], issueDate: string): string {
   const yymm = issueDate.slice(2, 7).replace('-', '')
   let maxSeq = 0
@@ -53,7 +64,7 @@ export function nextWhtCertificateNo(existing: (string | undefined)[], issueDate
     const seq = parseInt(no.slice(-3), 10)
     if (Number.isFinite(seq) && seq > maxSeq) maxSeq = seq
   }
-  return `${yymm}${String(maxSeq + 1).padStart(3, '0')}`
+  return `${yymm}${WHT_SERIES}${String(maxSeq + 1).padStart(3, '0')}`
 }
 
 export function calcWhtAmount(amount: number, ratePct: number): number {

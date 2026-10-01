@@ -7,10 +7,17 @@ describe('wht helpers (host parity)', () => {
     expect(formTypeForVendorType('individual')).toBe('pnd3')
   })
 
-  it('generates YYMM + 3-digit sequence, incrementing per month', () => {
-    expect(nextWhtCertificateNo([], '2026-09-18')).toBe('2609001')
-    expect(nextWhtCertificateNo(['2609001', '2609002'], '2026-09-22')).toBe('2609003')
-    expect(nextWhtCertificateNo(['2609005'], '2026-10-01')).toBe('2610001') // new month resets
+  it('generates YYMM + series 1 + 3-digit sequence, incrementing per month', () => {
+    expect(nextWhtCertificateNo([], '2026-09-18')).toBe('26091001')
+    expect(nextWhtCertificateNo(['26091001', '26091002'], '2026-09-22')).toBe('26091003')
+    expect(nextWhtCertificateNo(['2609005'], '2026-10-01')).toBe('26101001') // new month resets
+  })
+
+  it('shares one counter between old (7-char) and new (8-char) numbers', () => {
+    // Historical certs issued before the series digit existed still feed the
+    // same per-month sequence — unique and monotonic, never restarted.
+    expect(nextWhtCertificateNo(['2609001', '2609002'], '2026-09-22')).toBe('26091003')
+    expect(nextWhtCertificateNo(['26091005', '2609009'], '2026-09-22')).toBe('26091010')
   })
 
   it('computes WHT and formats helpers', () => {
