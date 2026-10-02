@@ -10,14 +10,18 @@
 // A file that lands in an accountant's folder should say what it is without
 // opening it, and the name must survive being written to disk.
 
-/** Sanitize a segment so it is safe on every filesystem. Drops path chars. */
+/**
+ * Sanitize a segment so it is safe on every filesystem. Drops path chars.
+ * `\p{M}` keeps combining marks — without it a Thai vowel/tone mark (e.g. ่)
+ * would be replaced and corrupt the name.
+ */
 function seg(s: string): string {
   return s
     .trim()
-    .replace(/[^\p{L}\p{N}._ -]+/gu, '-')
+    .replace(/[^\p{L}\p{M}\p{N}._ -]+/gu, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
-    .slice(0, 80)
+    .slice(0, 120)
 }
 
 /** Local timestamp suffix `YYYYMMDD-HHMM`, so repeated exports never collide. */
@@ -71,13 +75,12 @@ const TITLES = ['นางสาว', 'นาง', 'นาย']
 
 /**
  * Vendor name for a filename: drop a leading personal title, collapse internal
- * whitespace to single spaces, then trim to `max` characters at a word boundary
- * (a single over-long token is hard-cut). Spaces are kept — not replaced with
- * dashes — because it stays readable and `documentFileName` joins with `-`.
+ * whitespace, join words with `_`, then trim to `max` characters at a word
+ * boundary (a single over-long token is hard-cut).
  *
- * `นาย สมชาย การช่าง` → `สมชาย การช่าง` → (`max` 10) `สมชาย การ`.
+ * `นาย สมชาย การช่าง` → `สมชาย_การช่าง` → (`max` 20) `สมชาย_การช่าง`.
  */
-export function trimVendor(name: string | undefined, max = 10): string {
+export function trimVendor(name: string | undefined, max = 20): string {
   let s = (name ?? '').trim().replace(/\s+/g, ' ')
   for (const t of TITLES) {
     if (s.startsWith(t)) {
@@ -85,21 +88,21 @@ export function trimVendor(name: string | undefined, max = 10): string {
       break
     }
   }
-  if (s.length <= max) return s
+  if (s.length <= max) return s.replace(/ /g, '_')
   // Keep whole words while they fit; if a further word does not fit whole,
-  // include as much of it as remains — better "สมชาย การ" than "สมชาย".
+  // include as much of it as remains — better "สมชาย_การ" than "สมชาย".
   const words = s.split(' ')
   const kept: string[] = []
   for (const w of words) {
-    const next = [...kept, w].join(' ')
+    const next = [...kept, w].join('_')
     if (next.length > max) {
-      const room = max - (kept.join(' ').length + (kept.length ? 1 : 0))
+      const room = max - (kept.join('_').length + (kept.length ? 1 : 0))
       if (room > 0) kept.push(w.slice(0, room))
       break
     }
     kept.push(w)
   }
-  return kept.join(' ')
+  return kept.join('_')
 }
 
 /** Two decimals, no grouping — ASCII-safe for filenames. */

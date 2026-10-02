@@ -40,17 +40,22 @@ describe('downloadName', () => {
 })
 
 describe('trimVendor', () => {
-  it('drops the personal title and fills to the limit at a word boundary', () => {
-    // First + partial last name fits in 10: "สมชาย การช" (keeps both names).
-    expect(trimVendor('นาย สมชาย การช่าง')).toBe('สมชาย การช')
-    expect(trimVendor('นาย สมชาย ใจดี')).toBe('สมชาย ใจดี') // "ใจดี" is short
+  it('drops the personal title and joins words with _', () => {
+    expect(trimVendor('นาย สมชาย การช่าง')).toBe('สมชาย_การช่าง')
+    expect(trimVendor('นาย สมชาย ใจดี')).toBe('สมชาย_ใจดี')
     expect(trimVendor('นางสาว สุดา')).toBe('สุดา')
-    expect(trimVendor('บริษัท ซัพพลาย พลัส')).toBe('บริษัท ซัพ')
+    expect(trimVendor('บริษัท ซัพพลาย พลัส')).toBe('บริษัท_ซัพพลาย_พลัส')
   })
 
-  it('passes short names through unchanged and hard-cuts a single long token', () => {
+  it('passes short names through and hard-cuts a single long token at 20', () => {
     expect(trimVendor('สมชาย')).toBe('สมชาย')
-    expect(trimVendor('ก'.repeat(25))).toBe('ก'.repeat(10))
+    expect(trimVendor('ก'.repeat(25))).toBe('ก'.repeat(20))
+  })
+
+  it('fills to the limit at a word boundary when over the limit', () => {
+    const long = 'นาย สมชาย การช่างไฟฟ้าอุตสาหกรรม' // over 20 once titles are dropped
+    expect(trimVendor(long).length).toBeLessThanOrEqual(20)
+    expect(trimVendor(long).startsWith('สมชาย_')).toBe(true)
   })
 })
 
@@ -58,7 +63,7 @@ describe('documentFileName', () => {
   it('builds number-vendor_amount.pdf', () => {
     expect(
       documentFileName({ number: 'RCT-001-2569-001', vendorName: 'สมชาย การช่าง', amount: 5000 }),
-    ).toBe('RCT-001-2569-001-สมชาย การช_5000.00.pdf')
+    ).toBe('RCT-001-2569-001-สมชาย_การช่าง_5000.00.pdf')
   })
 
   it('omits the vendor or amount when absent', () => {
