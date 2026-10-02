@@ -1,14 +1,12 @@
 import { Hono } from 'hono'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { sql, withTenant } from '../../src/server/db'
 import { amountToThaiWords } from '../../src/lib/thai-words'
 import { isVendorPrefix, prefixRequired, isEntityName, vendorDisplayName } from '../../src/lib/vendor-name'
 import { currentBeYear } from '../../src/lib/settings-types'
 import { formTypeForVendorType } from '../../src/lib/wht'
 import { decryptId } from './crypto'
-import { saveBytes } from './storage'
+import { readStoredDurable, saveBytesDurable } from './storage'
 import { buildReceiptPdf } from './pdf'
 import { sha256hex, sessionUser } from './auth'
 import { getVendorMemory } from './vendor-memory'
@@ -222,7 +220,7 @@ app.post('/api/vendor/:token/sign', async (c) => {
     corrections.push({ field: 'name', from: String(r.record_name), to: subName })
   if (subAddr !== String(r.record_address))
     corrections.push({ field: 'address', from: String(r.record_address), to: subAddr })
-  const sigPath = saveBytes('signatures', `${txnId}.png`, png, rowTenant)
+  const sigPath = await saveBytesDurable('signatures', `${txnId}.png`, png, rowTenant)
   await db`insert into vendor_authorizations
     (user_id, transaction_id, vendor_prefix, vendor_name, vendor_address, vendor_masked_id,
      signature_image_path, verification_method, line_user_id, ip, user_agent,
@@ -349,12 +347,9 @@ app.post('/api/transactions/:id/finalize', async (c) => {
   const lineItems = rawItems
     .map((it) => ({ description: String(it.description ?? ''), amount: Number(it.amount) || 0 }))
     .filter((it) => it.description.trim() || it.amount > 0)
-  let sig: Uint8Array | undefined
-  try {
-    sig = readFileSync(join(process.env.STORAGE_DIR ?? join(process.cwd(), 'storage'), d.signature_image_path))
-  } catch {
-    sig = undefined
-  }
+  // Read the vendor's signature through the storage seam so it comes from R2
+  // when configured — a serverless instance rarely has the file on local disk.
+  const sig = await readStoredDurable(rowTenant, d.signature_image_path)
   const verifyUrl = `${PUBLIC_BASE}/verify/${code.toUpperCase()}`
   const { bytes, sha256 } = await buildReceiptPdf({
     number,
@@ -378,7 +373,7 @@ app.post('/api/transactions/:id/finalize', async (c) => {
     slipReference: d.slip_reference,
     signaturePng: sig,
   })
-  const pdfPath = saveBytes('pdfs', `${number}.pdf`, bytes, rowTenant)
+  const pdfPath = await saveBytesDurable('pdfs', `${number}.pdf`, bytes, rowTenant)
   await db`update vendor_receipts set pdf_path = ${pdfPath}, pdf_sha256 = ${sha256}
     where transaction_id = ${txnId} and user_id = ${rowTenant}`
   return c.json({ ok: true, number, verificationCode: code.toUpperCase(), pdfSha256: sha256, pdfPath })

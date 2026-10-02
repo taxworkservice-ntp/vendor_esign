@@ -1,4 +1,5 @@
 import { statusLabel } from './txn-filters'
+import { downloadName, stamp } from './download-name'
 import { whtFormLabel } from './wht'
 import type { WhtRecordWithVendor } from './wht'
 import { vendorDisplayName } from './vendor-name'
@@ -82,10 +83,12 @@ export function txnsToCsv(txns: PaymentTransaction[]): string {
   return withBom(toCsv(sortForExport(txns), TXN_COLUMNS))
 }
 
-/** Local timestamp so repeated exports do not overwrite each other. */
+/**
+ * Generic dated CSV name. Prefer `downloadName()` with a `kind`/`clientCode`
+ * for anything user-facing; this remains for callers that only need a stamp.
+ */
 export function exportFilename(when: Date = new Date()): string {
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `transactions-${when.getFullYear()}${p(when.getMonth() + 1)}${p(when.getDate())}-${p(when.getHours())}${p(when.getMinutes())}.csv`
+  return `transactions-${stamp(when)}.csv`
 }
 
 /**

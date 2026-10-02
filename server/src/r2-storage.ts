@@ -1,4 +1,4 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 // R2 (Cloudflare) storage for client-uploaded assets such as the signature
@@ -56,4 +56,40 @@ export async function signDownload(path: string): Promise<string | null> {
     Bucket: R2_BUCKET,
     Key: path,
   }), { expiresIn: 300 })
+}
+
+/** Write bytes directly from the server (signatures, receipt PDFs). */
+export async function putObject(path: string, bytes: Uint8Array, contentType?: string): Promise<boolean> {
+  const c = getClient()
+  if (!c) return false
+  await c.send(new PutObjectCommand({
+    Bucket: R2_BUCKET,
+    Key: path,
+    Body: bytes,
+    ContentType: contentType,
+  }))
+  return true
+}
+
+/** Read an object's bytes, or null when absent (or R2 is not configured). */
+export async function getObject(path: string): Promise<Uint8Array | null> {
+  const c = getClient()
+  if (!c) return null
+  try {
+    const res = await c.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: path }))
+    if (!res.Body) return null
+    return new Uint8Array(await res.Body.transformToByteArray())
+  } catch {
+    return null
+  }
+}
+
+export async function deleteObject(path: string): Promise<void> {
+  const c = getClient()
+  if (!c) return
+  try {
+    await c.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: path }))
+  } catch {
+    /* best-effort */
+  }
 }

@@ -9,7 +9,7 @@ import { itemsSummary, itemsTotal, normalizeLineItem } from '../../src/lib/line-
 import { emptyTotals, type TxnTotals } from '../../src/lib/txn-filters'
 import { parseListQuery } from '../../src/lib/txn-list-query'
 import { limitClause, orderByClause, totalsClause, whereClause } from './txn-sql'
-import { readStored } from './storage'
+import { readStoredDurable } from './storage'
 import type { PaymentTransaction } from '../../src/lib/types'
 
 // ── Client transactions API ───────────────────────────────────────────────
@@ -277,7 +277,7 @@ txnRoutes.get('/transactions/:id/authorization', async (c) => {
 
   // The image is optional: a row can be authorized with an unreadable file, and
   // the client must be able to tell "not signed" from "signed, image missing".
-  const sig = readStored(g.ws, a.signature_image_path as string)
+  const sig = await readStoredDurable(g.ws, a.signature_image_path as string)
 
   return c.json({
     signedAt: iso(a.signed_at),
@@ -309,7 +309,7 @@ txnRoutes.get('/transactions/:id/receipt.pdf', async (c) => {
   })
   const r = rows[0]
   if (!r) return c.json({ error: 'not-issued' }, 404)
-  const bytes = readStored(g.ws, r.pdf_path as string)
+  const bytes = await readStoredDurable(g.ws, r.pdf_path as string)
   if (!bytes) return c.json({ error: 'pdf-unavailable' }, 404)
 
   const number = String(r.number ?? 'receipt')

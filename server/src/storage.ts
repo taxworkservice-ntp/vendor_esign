@@ -1,9 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { getObject, putObject, r2Configured } from './r2-storage'
 
-// Local-disk storage seam. Layout mirrors future bucket names
-// (slips/, signatures/, pdfs/) so a move to S3-compatible storage
-// only swaps this module. Directory is gitignored.
+// Storage seam for private artifacts (slips/, signatures/, pdfs/).
+//
+// Prefers Cloudflare R2 when configured — a serverless deployment has an
+// ephemeral, per-instance disk, so a signature written by the instance that
+// handled signing is gone when another instance later serves the receipt.
+// Local disk remains the dev/test fallback. Layout mirrors the bucket keys:
+// `<tenantId>/<area>/<name>`. Directory is gitignored.
 export function storageRoot(): string {
   return process.env.STORAGE_DIR ?? join(process.cwd(), 'storage')
 }
@@ -74,6 +79,52 @@ export function readStored(tenantId: string, relPath: string | null | undefined)
   } catch {
     return undefined
   }
+}
+
+/**
+ * Persist bytes for a tenant, to R2 when configured else local disk.
+ * Returns the relative path to store in the database regardless of backend.
+ */
+export async function saveBytesDurable(
+  area: StorageArea,
+  name: string,
+  bytes: Uint8Array,
+  tenantId: string,
+): Promise<string> {
+  const safe = name.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const relPath = `${tenantId}/${area}/${safe}`
+  if (r2Configured()) {
+    const contentType =
+      area === 'pdfs' ? 'application/pdf'
+        : area === 'signatures' ? 'image/png'
+          : undefined
+    await putObject(relPath, bytes, contentType)
+    return relPath
+  }
+  return saveBytes(area, name, bytes, tenantId)
+}
+
+/**
+ * Read a stored artifact for a tenant from R2 when configured, else local disk.
+ * The DB path is validated before any read so a row can never escape the tenant.
+ */
+export async function readStoredDurable(
+  tenantId: string,
+  relPath: string | null | undefined,
+): Promise<Uint8Array | undefined> {
+  if (!relPath) return undefined
+  // Validate the shape/paths exactly as the disk reader does; for R2 the
+  // `<tenantId>/<area>/<name>` key must still start with this tenant.
+  if (r2Configured()) {
+    const segments = relPath.split(/[\\/]/)
+    if (segments.some((s) => s === '..') || segments[0] !== tenantId || segments.length < 3) {
+      return undefined
+    }
+    const fromR2 = await getObject(relPath)
+    if (fromR2) return fromR2
+    // Fall through to disk: a file may pre-date R2 being enabled.
+  }
+  return readStored(tenantId, relPath)
 }
 
 /** The tenant's own directory, for assertions and tests. */

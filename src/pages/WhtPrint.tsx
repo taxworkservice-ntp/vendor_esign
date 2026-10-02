@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { Download, Printer } from 'lucide-react'
 import { fetchWhtByIds, fetchWhtByScope } from '../lib/wht-source'
 import { signDownload } from '../lib/r2-assets'
+import { downloadName } from '../lib/download-name'
 import { useClientAuth } from '../lib/client-auth'
 import { loadSettings } from '../lib/settings'
 import {
@@ -54,6 +55,7 @@ interface WhtProfile {
   company_name_th: string
   tax_id: string
   address: string
+  clientCode?: string
   signatureStoragePath?: string
   stampStoragePath?: string
 }
@@ -308,6 +310,7 @@ export function WhtPrint() {
           company_name_th: s.displayName,
           tax_id: s.taxId,
           address: s.address,
+          clientCode: s.clientCode,
           signatureStoragePath: s.signatureStoragePath,
           stampStoragePath: s.stampStoragePath,
         })
@@ -357,7 +360,18 @@ export function WhtPrint() {
         if (i > 0) pdf.addPage()
         pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 595.28, 841.89)
       }
-      pdf.save(`wht_${records.length}.pdf`)
+      // Name says what it is, which workspace, and which period — a single
+      // certificate is named by its own number, a batch by the scope period.
+      const single = records.length === 1 ? records[0].certificateNo : undefined
+      pdf.save(
+        downloadName({
+          kind: 'wht-certificate',
+          clientCode: profile?.clientCode,
+          period: single ? undefined : scope.get('month') || 'all',
+          qualifier: single ?? `${records.length}-docs`,
+          ext: 'pdf',
+        }),
+      )
     } catch {
       setErr('สร้าง PDF ไม่สำเร็จ — โปรดลองใหม่อีกครั้ง')
     } finally {

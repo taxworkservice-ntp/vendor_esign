@@ -27,7 +27,8 @@ import {
 } from '../lib/txn-filters'
 import { parseListQuery, queryFromFilters, queryToParams } from '../lib/txn-list-query'
 import { attentionFor } from '../lib/attention'
-import { downloadCsv, exportFilename, txnsToCsv } from '../lib/csv'
+import { downloadCsv, txnsToCsv } from '../lib/csv'
+import { downloadName } from '../lib/download-name'
 import { inviteUrl } from '../lib/app-url'
 import { cn } from '../lib/cn'
 import { Card, CardBody } from '../components/ui/card'
@@ -312,10 +313,11 @@ export function TransactionList() {
 
   const saveCsv = useCallback(
     (pool: PaymentTransaction[]) => {
-      downloadCsv(exportFilename(), txnsToCsv(pool))
+      const period = queryFilters.month || [queryFilters.from, queryFilters.to].filter(Boolean).join('..') || undefined
+      downloadCsv(downloadName({ kind: 'transactions', clientCode: cfg.clientCode, period, ext: 'csv' }), txnsToCsv(pool))
       toast.show(`ส่งออก ${pool.length} รายการแล้ว`)
     },
-    [toast],
+    [toast, queryFilters.month, queryFilters.from, queryFilters.to, cfg.clientCode],
   )
 
   const exportSelected = useCallback(() => {

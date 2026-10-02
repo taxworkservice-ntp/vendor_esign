@@ -6,7 +6,10 @@ import { useDebounced } from '../hooks/useDebounced'
 import { displayTaxId } from '../lib/vendors-mock'
 import { vendorDisplayName } from '../lib/vendor-name'
 import { fmtDateTH, fmtTHB } from '../lib/format'
-import { downloadCsv, exportFilename, toCsv, withBom, type CsvColumn } from '../lib/csv'
+import { downloadCsv, toCsv, withBom, type CsvColumn } from '../lib/csv'
+import { downloadName } from '../lib/download-name'
+import { useSettings } from '../hooks/useSettings'
+import { defaultSettings } from '../lib/settings'
 import type { ClientVendor } from '../lib/vendors-mock'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
@@ -76,6 +79,8 @@ export function VendorsList() {
   const nav = useNavigate()
   const toast = useToast()
   const searchRef = useRef<HTMLInputElement>(null)
+  const { data: settings } = useSettings()
+  const clientCode = (settings ?? defaultSettings()).clientCode
 
   const vendors = useMemo(() => data ?? [], [data])
   const totalOutstanding = useMemo(
@@ -121,9 +126,9 @@ export function VendorsList() {
       toast.show('ไม่มีรายการให้ส่งออก', 'error')
       return
     }
-    downloadCsv(`vendors-${exportFilename().replace(/^transactions-/, '')}`, withBom(toCsv(vendors, CSV_COLUMNS)))
+    downloadCsv(downloadName({ kind: 'vendors', clientCode, ext: 'csv' }), withBom(toCsv(vendors, CSV_COLUMNS)))
     toast.show(`ส่งออกทะเบียนผู้ขาย ${vendors.length} รายการแล้ว`)
-  }, [vendors, toast])
+  }, [vendors, toast, clientCode])
 
   const filtered = debouncedSearch.trim() !== ''
   const isEmpty = !isLoading && !isError && vendors.length === 0

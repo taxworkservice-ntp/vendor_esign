@@ -22,7 +22,10 @@ import { formatMonthTH } from '../lib/global-month'
 import { fmtWhtDate } from '../lib/wht'
 import { WHT_FORM_LABELS, WHT_FORM_TYPES, parseWhtListQuery, whtQueryToParams, type WhtListQuery } from '../lib/wht-list-query'
 import { nextWhtSort, whtSortField, type WhtSortField, type WhtStatusFilter } from '../lib/wht-summary'
-import { downloadCsv, exportFilename, whtToCsv } from '../lib/csv'
+import { downloadCsv, whtToCsv } from '../lib/csv'
+import { downloadName } from '../lib/download-name'
+import { useSettings } from '../hooks/useSettings'
+import { defaultSettings } from '../lib/settings'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
 import { Button } from '../components/ui/button'
@@ -75,6 +78,8 @@ export function WhtList() {
   const setStatus = useSetWhtStatus()
   const bulkSetStatus = useBulkSetWhtStatus()
   const searchRef = useRef<HTMLInputElement>(null)
+  const { data: settings } = useSettings()
+  const clientCode = (settings ?? defaultSettings()).clientCode
 
   // Seed from the URL (a shared "show me October" link) and the global period.
   const [url] = useState(() => parseWhtListQuery(params))
@@ -177,9 +182,12 @@ export function WhtList() {
       toast.show('ไม่มีรายการให้ส่งออก', 'error')
       return
     }
-    downloadCsv(`wht-${effective.month || 'all'}-${exportFilename().replace(/^transactions-/, '')}`, whtToCsv(records))
+    downloadCsv(
+      downloadName({ kind: 'wht-certificates', clientCode, period: effective.month || 'all', ext: 'csv' }),
+      whtToCsv(records),
+    )
     toast.show(`ส่งออก ${records.length} ฉบับแล้ว (หน้าที่แสดง)`)
-  }, [records, effective.month, toast])
+  }, [records, effective.month, toast, clientCode])
 
   const onBulkFiled = useCallback(() => {
     if (selected.size === 0) return

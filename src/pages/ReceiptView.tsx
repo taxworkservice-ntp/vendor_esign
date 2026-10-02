@@ -8,6 +8,7 @@ import { mockReceiptNumber } from '../lib/receipt'
 import { downloadElementAsA4Pdf } from '../lib/receipt-pdf'
 import { SIGNATURE_COPY, signatureState } from '../lib/signature-state'
 import { apiDownload, hasServer, saveBlob } from '../lib/api-client'
+import { downloadName } from '../lib/download-name'
 import { fmtTHB, fmtDateTH } from '../lib/format'
 import { amountToThaiWords } from '../lib/thai-words'
 import { lineTotal, normalizeLineItem } from '../lib/line-items'
@@ -100,7 +101,14 @@ export function ReceiptView() {
     if (!sheetRef.current) return
     setBusy(true)
     try {
-      await downloadElementAsA4Pdf(sheetRef.current, `${number}-preview.pdf`)
+      const name = downloadName({
+        kind: 'receipt',
+        clientCode: client.clientCode,
+        qualifier: t.receiptNumber ?? t.id,
+        ext: 'pdf',
+        when: null,
+      })
+      await downloadElementAsA4Pdf(sheetRef.current, name)
     } catch {
       setErr('ดาวน์โหลดใบเสร็จไม่สำเร็จ — โปรดลองใหม่อีกครั้ง')
     } finally {
