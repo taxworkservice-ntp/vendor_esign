@@ -10,6 +10,7 @@ import { emptyTotals, type TxnTotals } from '../../src/lib/txn-filters'
 import { parseListQuery } from '../../src/lib/txn-list-query'
 import { limitClause, orderByClause, totalsClause, whereClause } from './txn-sql'
 import { readStoredDurable } from './storage'
+import { contentDisposition, documentFileName } from '../../src/lib/download-name'
 import type { PaymentTransaction } from '../../src/lib/types'
 
 // ── Client transactions API ───────────────────────────────────────────────
@@ -301,9 +302,15 @@ txnRoutes.get('/transactions/:id/receipt.pdf', async (c) => {
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
   const rows = await withTenant(g.ws, 'client', async () => {
     const db = sql()
+    // Join the payable so the filename can carry the vendor (title-stripped)
+    // and the gross base, matching the client's preview download exactly.
     return (await db.query(
-      `select number, verification_code, pdf_path, pdf_sha256
-       from vendor_receipts where transaction_id = $1 and user_id = $2`,
+      `select r.number, r.verification_code, r.pdf_path, r.pdf_sha256,
+              p.gross_amount, v.name as vendor_name
+       from vendor_receipts r
+       join vendor_payables p on p.id = r.transaction_id and p.user_id = r.user_id
+       join vendor_payees v on v.id = p.vendor_id
+       where r.transaction_id = $1 and r.user_id = $2`,
       [c.req.param('id'), g.ws],
     )) as unknown as Record<string, unknown>[]
   })
@@ -313,10 +320,16 @@ txnRoutes.get('/transactions/:id/receipt.pdf', async (c) => {
   if (!bytes) return c.json({ error: 'pdf-unavailable' }, 404)
 
   const number = String(r.number ?? 'receipt')
+  const filename = documentFileName({
+    number,
+    vendorName: String(r.vendor_name ?? ''),
+    amount: Number(r.gross_amount),
+  })
   return new Response(new Uint8Array(bytes), {
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="${number.replace(/[^a-zA-Z0-9._-]/g, '_')}.pdf"`,
+      // Dual header: filename* carries the Thai name, filename= is the fallback.
+      'Content-Disposition': contentDisposition(filename),
       'Content-Length': String(bytes.byteLength),
       // Surfaced so the client can show what it is handing over, and so the
       // file can be checked against the value recorded at issuance.

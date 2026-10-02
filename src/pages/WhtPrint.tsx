@@ -3,7 +3,9 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { Download, Printer } from 'lucide-react'
 import { fetchWhtByIds, fetchWhtByScope } from '../lib/wht-source'
 import { signDownload } from '../lib/r2-assets'
-import { downloadName } from '../lib/download-name'
+import { documentFileName, stamp } from '../lib/download-name'
+import { elementToA4PdfBytes } from '../lib/receipt-pdf'
+import { saveBlob } from '../lib/api-client'
 import { useClientAuth } from '../lib/client-auth'
 import { loadSettings } from '../lib/settings'
 import {
@@ -347,31 +349,53 @@ export function WhtPrint() {
     return () => { cancelled = true }
   }, [profile?.signatureStoragePath, profile?.stampStoragePath])
 
+  // One Revenue-Department form per certificate. A single record downloads as
+  // a plain PDF named by its number/vendor/amount; several records are zipped,
+  // one file each — accountants file them per vendor, not as one long PDF.
   const exportPdf = async () => {
     setErr('')
     setBusy(true)
     try {
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')])
       const sheets = Array.from(document.querySelectorAll<HTMLElement>('.print-sheet'))
       if (!sheets.length) throw new Error('no-sheets')
-      const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' })
-      for (let i = 0; i < sheets.length; i++) {
-        const canvas = await html2canvas(sheets[i], { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false })
-        if (i > 0) pdf.addPage()
-        pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 595.28, 841.89)
+
+      const used = new Set<string>()
+      const uniqueName = (r: WhtRecordWithVendor): string => {
+        const base = documentFileName({
+          number: r.certificateNo || r.id,
+          vendorName: r.vendorName,
+          amount: r.amount,
+        })
+        if (!used.has(base)) {
+          used.add(base)
+          return base
+        }
+        const dot = base.lastIndexOf('.')
+        const stem = dot > 0 ? base.slice(0, dot) : base
+        const ext = dot > 0 ? base.slice(dot) : ''
+        let n = 2
+        while (used.has(`${stem}-${n}${ext}`)) n++
+        const finalName = `${stem}-${n}${ext}`
+        used.add(finalName)
+        return finalName
       }
-      // Name says what it is, which workspace, and which period — a single
-      // certificate is named by its own number, a batch by the scope period.
-      const single = records.length === 1 ? records[0].certificateNo : undefined
-      pdf.save(
-        downloadName({
-          kind: 'wht-certificate',
-          clientCode: profile?.clientCode,
-          period: single ? undefined : scope.get('month') || 'all',
-          qualifier: single ?? `${records.length}-docs`,
-          ext: 'pdf',
-        }),
-      )
+
+      const files: Record<string, Uint8Array> = {}
+      for (let i = 0; i < sheets.length; i++) {
+        const bytes = await elementToA4PdfBytes(sheets[i])
+        files[uniqueName(records[i])] = bytes
+      }
+
+      if (records.length === 1) {
+        const [name] = Object.keys(files)
+        saveBlob(new Blob([files[name].slice().buffer], { type: 'application/pdf' }), name)
+      } else {
+        const { zipSync } = await import('fflate')
+        // PDFs are already compressed; store without re-deflating.
+        const zipped = zipSync(files, { level: 0 })
+        const period = scope.get('month') || 'all'
+        saveBlob(new Blob([zipped.slice().buffer], { type: 'application/zip' }), `wht-certificates-${period}-${records.length}-docs-${stamp()}.zip`)
+      }
     } catch {
       setErr('สร้าง PDF ไม่สำเร็จ — โปรดลองใหม่อีกครั้ง')
     } finally {

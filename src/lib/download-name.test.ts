@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { downloadName, stamp } from './download-name'
+import { contentDisposition, documentFileName, downloadName, stamp, trimVendor } from './download-name'
 
 const when = new Date(2026, 9, 2, 14, 30) // 2026-10-02 14:30 local
 
@@ -34,7 +34,54 @@ describe('downloadName', () => {
 
   it('sanitises unsafe characters', () => {
     const name = downloadName({ kind: 'receipt', clientCode: 'A/B', qualifier: 'RCT 001/2569', ext: 'pdf', when: null })
-    expect(name).toBe('receipt-A-B-RCT-001-2569.pdf')
     expect(name).not.toMatch(/[/\\]/)
+    expect(name.endsWith('.pdf')).toBe(true)
+  })
+})
+
+describe('trimVendor', () => {
+  it('drops the personal title and fills to the limit at a word boundary', () => {
+    // First + partial last name fits in 10: "สมชาย การช" (keeps both names).
+    expect(trimVendor('นาย สมชาย การช่าง')).toBe('สมชาย การช')
+    expect(trimVendor('นาย สมชาย ใจดี')).toBe('สมชาย ใจดี') // "ใจดี" is short
+    expect(trimVendor('นางสาว สุดา')).toBe('สุดา')
+    expect(trimVendor('บริษัท ซัพพลาย พลัส')).toBe('บริษัท ซัพ')
+  })
+
+  it('passes short names through unchanged and hard-cuts a single long token', () => {
+    expect(trimVendor('สมชาย')).toBe('สมชาย')
+    expect(trimVendor('ก'.repeat(25))).toBe('ก'.repeat(10))
+  })
+})
+
+describe('documentFileName', () => {
+  it('builds number-vendor_amount.pdf', () => {
+    expect(
+      documentFileName({ number: 'RCT-001-2569-001', vendorName: 'สมชาย การช่าง', amount: 5000 }),
+    ).toBe('RCT-001-2569-001-สมชาย การช_5000.00.pdf')
+  })
+
+  it('omits the vendor or amount when absent', () => {
+    expect(documentFileName({ number: '26091001', amount: 1500 })).toBe('26091001_1500.00.pdf')
+    expect(documentFileName({ number: '26091001', vendorName: 'สมชาย' })).toBe('26091001-สมชาย.pdf')
+    expect(documentFileName({ number: '26091001' })).toBe('26091001.pdf')
+  })
+
+  it('always uses two decimals and no path separators', () => {
+    const name = documentFileName({ number: 'RCT/001', vendorName: 'ก/ข', amount: 99.5 })
+    expect(name).toBe('RCT-001-ก-ข_99.50.pdf')
+    expect(name).not.toMatch(/[/\\]/)
+  })
+})
+
+describe('contentDisposition', () => {
+  it('emits an ASCII fallback plus an RFC 5987 filename*', () => {
+    const h = contentDisposition('RCT-001-2569-001-สมชาย การ_5000.00.pdf')
+    expect(h).toContain('attachment;')
+    expect(h).toMatch(/filename="[^"]*\.pdf"/)
+    // The fallback carries no Thai, and the starred form is percent-encoded.
+    expect(/"filename="[^"]*[^\x00-\x7F]/.test(h)).toBe(false)
+    expect(h).toMatch(/filename\*=UTF-8''/)
+    expect(h).toContain('%E0%B8%AA%E0%B8%A1%E0%B8%8A%E0%B8%B2%E0%B8%A2')
   })
 })
