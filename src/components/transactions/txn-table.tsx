@@ -64,6 +64,9 @@ function SkeletonRows({ rows, dense }: { rows: number; dense: boolean }) {
             <div className="mt-2 h-3 w-28 animate-pulse rounded bg-ink-100" />
           </td>
           <td className={cn('border-b border-card-border px-3', pad)}>
+            <div className="h-3.5 w-24 animate-pulse rounded bg-ink-100" />
+          </td>
+          <td className={cn('border-b border-card-border px-3', pad)}>
             <div className="h-3.5 w-20 animate-pulse rounded bg-ink-100" />
           </td>
           <td className={cn('border-b border-card-border px-3', pad)}>
@@ -117,7 +120,7 @@ export function TxnTable({
   return (
     // border-collapse (not border-separate) so the per-cell border-b rules
     // produce one hairline per row, matching the other list pages.
-    <table className="w-full min-w-[1120px] border-collapse text-body">
+    <table className="w-full min-w-[1220px] border-collapse text-body">
       <thead>
         <tr>
           <th className={cn(thBase, 'w-9 pl-3 pr-0')}>
@@ -129,10 +132,11 @@ export function TxnTable({
               hideLabel
             />
           </th>
-          <SortHeader field="vendor" label="ผู้ขาย" sort={sort} onSort={onSort} />
-          <th className={thBase}>รายการ</th>
-          <SortHeader field="date" label="วันที่โอน" sort={sort} onSort={onSort} />
-          <th className={thBase}>เลขที่ใบเสร็จ</th>
+           <SortHeader field="vendor" label="ผู้ขาย" sort={sort} onSort={onSort} />
+           <th className={thBase}>รายการ</th>
+           <SortHeader field="created" label="แก้ไขล่าสุด" sort={sort} onSort={onSort} />
+           <SortHeader field="date" label="วันที่โอน" sort={sort} onSort={onSort} />
+           <th className={thBase}>เลขที่ใบเสร็จ</th>
           <SortHeader field="gross" label="ยอดรวม (บาท)" sort={sort} onSort={onSort} align="right" />
           <SortHeader field="wht" label="หัก ณ ที่จ่าย" sort={sort} onSort={onSort} align="right" />
           <SortHeader field="net" label="สุทธิ (บาท)" sort={sort} onSort={onSort} align="right" />

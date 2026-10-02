@@ -19,6 +19,7 @@ import { statusSet, type TxnListQuery } from '../../src/lib/txn-list-query'
 /** Whitelisted sort expressions. Keys are exactly SortField. */
 const ORDER_BY: Record<SortField, string> = {
   date: 'p.transfer_date',
+  created: 'p.created_at',
   gross: 'p.gross_amount',
   wht: 'p.wht_amount',
   net: 'p.net_amount',

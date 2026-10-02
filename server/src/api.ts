@@ -333,15 +333,10 @@ app.post('/api/transactions/:id/finalize', async (c) => {
         )
       }
       const issueDate = String(d.transfer_date).slice(0, 10)
-      // WHT description is the payment type label (ประเภทการจ่าย) from settings,
-      // not the transaction note — the Revenue Department form expects the
-      // income category, not free text.
-      const whtRatesCfg = (await db`select value from config where user_id = ${rowTenant} and key = 'wht_rates'`) as unknown as { value: unknown }[]
-      const ratesRaw = Array.isArray(whtRatesCfg[0]?.value) ? (whtRatesCfg[0].value as { paymentType?: string; label?: string }[]) : []
-      const whtDescription = ratesRaw.find((r) => r.paymentType === d.payment_type)?.label
-        ?? d.payment_type
-        ?? d.note
-        ?? d.description
+      // The printed description is the payment type NAME (ประเภทการจ่าย), not
+      // the transaction note and not a stored label — older labels carried a
+      // rate suffix ("ค่าบริการ — 3%") which must not appear on the form.
+      const whtDescription = d.payment_type || d.note || d.description
       await db`insert into wht_records
         (user_id, vendor_id, form_type, issue_date, amount, wht_rate, wht_amount, description, status, certificate_no, source_transaction_id)
         values (${rowTenant}, ${vendorId}, ${formTypeForVendorType(vType)}, ${issueDate}::date,

@@ -48,7 +48,7 @@ export interface TxnListQuery {
 }
 
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/
-const SORT_FIELDS: readonly SortField[] = ['date', 'gross', 'wht', 'net', 'vendor', 'status']
+const SORT_FIELDS: readonly SortField[] = ['date', 'created', 'gross', 'wht', 'net', 'vendor', 'status']
 const SLIPS: readonly SlipFilter[] = ['all', 'with', 'without']
 const GROUPS = ['active', 'done', 'voided'] as const
 
@@ -104,7 +104,7 @@ function str(v: string | null, max: number): string {
 
 function asSort(v: string | null): SortKey {
   const [field, dir] = (v ?? '').split('-')
-  if (!SORT_FIELDS.includes(field as SortField)) return 'date-desc'
+  if (!SORT_FIELDS.includes(field as SortField)) return 'created-desc'
   return `${field}-${dir === 'asc' ? 'asc' : 'desc'}` as SortKey
 }
 
@@ -176,7 +176,7 @@ export function queryToParams(q: TxnListQuery): URLSearchParams {
   if (q.max) p.set('max', q.max)
   if (q.vendorId) p.set('vendor', q.vendorId)
   if (q.attention) p.set('attention', '1')
-  if (q.sort !== 'date-desc') p.set('sort', q.sort)
+  if (q.sort !== 'created-desc') p.set('sort', q.sort)
   if (q.limit !== DEFAULT_PAGE_SIZE) p.set('limit', String(q.limit))
   if (q.offset) p.set('offset', String(q.offset))
   return p

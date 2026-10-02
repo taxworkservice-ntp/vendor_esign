@@ -36,7 +36,19 @@ export function loadSettings(tenantId = 'ABC'): TenantSettings {
   const base = defaultSettings(tenantId)
   try {
     const raw = localStorage.getItem(keyFor(tenantId))
-    if (raw) return { ...base, ...(JSON.parse(raw) as Partial<TenantSettings>) }
+    if (raw) {
+      const stored = JSON.parse(raw) as Partial<TenantSettings>
+      // Older stores persisted labels with a rate suffix ("ค่าบริการ — 3%"),
+      // which is printed verbatim on the WHT form. Strip it on read so a stale
+      // blob cannot leak the rate onto a government document.
+      if (Array.isArray(stored.whtRates)) {
+        stored.whtRates = stored.whtRates.map((r) => ({
+          ...r,
+          label: typeof r.label === 'string' ? r.label.replace(/\s*—\s*\d+(\.\d+)?%?\s*$/, '') : r.label,
+        }))
+      }
+      return { ...base, ...stored }
+    }
   } catch { /* ignore */ }
   return base
 }

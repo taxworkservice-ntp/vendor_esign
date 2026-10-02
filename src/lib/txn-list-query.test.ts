@@ -19,7 +19,7 @@ const F = (o: Partial<TransactionFilters>): TransactionFilters => ({ ...emptyFil
 describe('parseListQuery — validation', () => {
   it('defaults everything to a safe, unfiltered first page', () => {
     const q = parseListQuery(sp(''))
-    expect(q).toMatchObject({ q: '', status: 'all', month: '', from: '', to: '', slip: 'all', sort: 'date-desc' })
+    expect(q).toMatchObject({ q: '', status: 'all', month: '', from: '', to: '', slip: 'all', sort: 'created-desc' })
     expect(q.limit).toBe(DEFAULT_PAGE_SIZE)
     expect(q.offset).toBe(0)
     expect(isUnfiltered(q)).toBe(true)
@@ -65,8 +65,8 @@ describe('parseListQuery — validation', () => {
       expect(parseListQuery(sp(`sort=${f}`)).sort).toBe(`${f}-desc`)
       expect(parseListQuery(sp(`sort=${f}-sideways`)).sort).toBe(`${f}-desc`)
     }
-    expect(parseListQuery(sp('sort=id;drop')).sort).toBe('date-desc')
-    expect(parseListQuery(sp('sort=')).sort).toBe('date-desc')
+    expect(parseListQuery(sp('sort=id;drop')).sort).toBe('created-desc')
+    expect(parseListQuery(sp('sort=')).sort).toBe('created-desc')
   })
 
   it('clamps a hostile limit', () => {

@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { AlertTriangle, Copy, ExternalLink, Paperclip } from 'lucide-react'
 import { attentionFor } from '../../lib/attention'
 import { inviteUrl } from '../../lib/app-url'
-import { fmtDateTH, fmtTHB } from '../../lib/format'
+import { fmtDateTH, fmtDateTimeTH, fmtTHB } from '../../lib/format'
 import { vendorDisplayName } from '../../lib/vendor-name'
 import type { PaymentTransaction } from '../../lib/types'
 import { StatusBadge } from '../ui/badge'
@@ -111,6 +111,10 @@ export function TxnRow({
             <span className="text-ink-400">ไม่มีสลิป</span>
           )}
         </p>
+      </td>
+
+      <td className={cn('whitespace-nowrap border-b border-card-border px-3 text-label text-ink-500', pad)}>
+        {fmtDateTimeTH(t.createdAt)}
       </td>
 
       <td className={cn('whitespace-nowrap border-b border-card-border px-3 tabular-nums', pad)}>{fmtDateTH(t.transferDate)}</td>

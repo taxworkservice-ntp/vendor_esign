@@ -2,11 +2,12 @@ import type { WhtRecord, WhtRecordWithVendor, WhtVendor } from './wht'
 import { formTypeForVendorType, nextWhtCertificateNo } from './wht'
 import type { PaymentTransaction } from './types'
 import { isEntityName, vendorDisplayName } from './vendor-name'
-import { loadSettings } from './settings'
 
 // Per-tenant WHT store (mock). Server parity: wht_vendors + wht_records.
 
-const KEY = 'taxwork-wht-v1'
+// v2: descriptions are the payment type name only (v1 records could carry a
+// legacy "— N%" suffix). Bumping the key drops the stale store and reseeds.
+const KEY = 'taxwork-wht-v2'
 
 export interface WhtBundle {
   vendors: WhtVendor[]
@@ -105,9 +106,10 @@ export function generateWhtForTxn(txn: PaymentTransaction): WhtRecord | null {
     all.records.filter((r) => r.tenantId === txn.tenantId).map((r) => r.certificateNo),
     issueDate,
   )
-  const s = loadSettings(txn.tenantId)
-  const paymentTypeLabel = s.whtRates.find((r) => r.paymentType === txn.paymentType)?.label
-    ?? txn.paymentType
+  // The printed description is the payment type NAME only — never a stored
+  // label, which an older settings blob may have suffixed with the rate
+  // (e.g. "ค่าบริการ — 3%") and which must not leak onto the government form.
+  const paymentTypeName = txn.paymentType
   const record: WhtRecord = {
     id: `wr-${txn.id}`,
     tenantId: txn.tenantId,
@@ -118,7 +120,7 @@ export function generateWhtForTxn(txn: PaymentTransaction): WhtRecord | null {
     whtRate: txn.whtRate,
     whtAmount: txn.whtAmount,
     certificateNo,
-    description: paymentTypeLabel,
+    description: paymentTypeName,
     status: 'active',
     createdAt: new Date().toISOString(),
     sourceTransactionId: txn.id,

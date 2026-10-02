@@ -5,7 +5,7 @@ import type { PaymentTransaction, TxnStatus } from './types'
 // and the mock/server paths stay identical.
 
 export type SlipFilter = 'all' | 'with' | 'without'
-export type SortField = 'date' | 'gross' | 'wht' | 'net' | 'vendor' | 'status'
+export type SortField = 'date' | 'created' | 'gross' | 'wht' | 'net' | 'vendor' | 'status'
 export type SortKey = `${SortField}-${'asc' | 'desc'}`
 // Status filter: an exact status, or a convenience group.
 export type StatusFilter = 'all' | TxnStatus | 'active' | 'done' | 'voided'
@@ -94,7 +94,8 @@ export function emptyFilters(): TransactionFilters {
     maxNet: '',
     vendorId: '',
     attention: false,
-    sort: 'date-desc',
+    // Most-recently-edited first: the register reads like a work queue.
+    sort: 'created-desc',
   }
 }
 
@@ -207,6 +208,13 @@ export function sortTransactions(txns: PaymentTransaction[], sort: SortKey): Pay
   if (field === 'date') {
     arr.sort((a, b) => {
       const by = a.transferDate < b.transferDate ? -1 : a.transferDate > b.transferDate ? 1 : 0
+      return (dir === 'asc' ? by : -by) || a.id.localeCompare(b.id)
+    })
+    return arr
+  }
+  if (field === 'created') {
+    arr.sort((a, b) => {
+      const by = a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0
       return (dir === 'asc' ? by : -by) || a.id.localeCompare(b.id)
     })
     return arr
@@ -379,7 +387,7 @@ export function filtersToParams(f: TransactionFilters): URLSearchParams {
   if (f.maxNet) p.set('max', f.maxNet)
     if (f.vendorId) p.set('vendor', f.vendorId)
     if (f.attention) p.set('attention', '1')
-    if (f.sort !== 'date-desc') p.set('sort', f.sort)
+    if (f.sort !== 'created-desc') p.set('sort', f.sort)
   return p
 }
 
@@ -396,6 +404,6 @@ export function filtersFromParams(sp: URLSearchParams): TransactionFilters {
   f.maxNet = sp.get('max') ?? ''
   f.vendorId = sp.get('vendor') ?? ''
   f.attention = sp.get('attention') === '1'
-  f.sort = (sp.get('sort') as SortKey) || 'date-desc'
+  f.sort = (sp.get('sort') as SortKey) || 'created-desc'
   return f
 }
