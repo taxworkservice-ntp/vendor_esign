@@ -1,6 +1,8 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { CreateTxnInput, PaymentTransaction } from '../lib/types'
 import { calcWht, isDuplicateSlipRef } from '../lib/config'
+import { applyWhtThreshold } from '../lib/wht-calc'
+import { loadSettings } from '../lib/settings'
 import { itemsSummary, itemsTotal } from '../lib/line-items'
 import { normalizeTaxId, taxIdHash, taxIdLast4 } from '../lib/taxid'
 import {
@@ -182,7 +184,11 @@ export function useCreateTransaction() {
         .map((it) => ({ description: it.description.trim(), amount: Number(it.amount) || 0 }))
         .filter((it) => it.description && it.amount > 0)
       if (lineItems.length === 0) throw new Error('กรุณาเพิ่มรายการอย่างน้อย 1 บรรทัด')
-      const { gross, wht, net } = calcWht(itemsTotal(lineItems), input.whtRate, input.whtMode)
+      const base = itemsTotal(lineItems)
+      // มาตรา 50/1 — same rule the server applies, so the mock cannot drift.
+      const s = loadSettings(activeTenant)
+      const eff = applyWhtThreshold(base, input.whtRate, input.paymentType, s.whtMinThreshold, !!input.forceWht)
+      const { gross, wht, net } = calcWht(base, eff.rate, input.whtMode)
       const found = loadVendors(activeTenant).find((v) => v.id === input.vendorId)
       if (!found) throw new Error('กรุณาเลือกผู้ขาย')
       if (found.taxId && normalizeTaxId(found.taxId) !== normalizeTaxId(input.vendorTaxId)) {
@@ -196,12 +202,12 @@ export function useCreateTransaction() {
         id,
         tenantId: activeTenant,
         vendor,
-        paymentType: input.paymentType,
+        paymentType: eff.paymentType,
         description: itemsSummary(lineItems, note),
         note,
         lineItems,
         grossAmount: gross,
-        whtRate: input.whtRate,
+        whtRate: eff.rate,
         whtMode: input.whtMode,
         whtAmount: wht,
         netAmount: net,

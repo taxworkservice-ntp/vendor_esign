@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react'
-import { Plus, Save, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ImagePlus, Loader2, Save, X } from 'lucide-react'
 import { useSettings, useUpdateSettings } from '../hooks/useSettings'
 import { useClientAuth } from '../lib/client-auth'
 import { currentBeYear, type TenantSettings } from '../lib/settings'
+import { signDownload, signUpload, uploadToR2 } from '../lib/r2-assets'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
 import { Button } from '../components/ui/button'
 import { FieldError, Input, Label, Textarea } from '../components/ui/input'
+import { useToast } from '../components/ui/toast'
 
 function Section({ step, title, desc, children }: { step: string; title: string; desc?: string; children: React.ReactNode }) {
   return (
@@ -29,8 +31,8 @@ export function Settings() {
   const { isClientAdmin, ready } = useClientAuth()
   const { data } = useSettings()
   const save = useUpdateSettings()
+  const toast = useToast()
   const [form, setForm] = useState<TenantSettings | null>(null)
-  const [newType, setNewType] = useState('')
   const [msg, setMsg] = useState('')
 
   useEffect(() => {
@@ -41,13 +43,6 @@ export function Settings() {
   if (!form) return <p className="py-10 text-center text-body text-ink-500">กำลังโหลด…</p>
   const readOnly = !isClientAdmin
   const set = (patch: Partial<TenantSettings>) => setForm({ ...form, ...patch })
-
-  const addType = () => {
-    const v = newType.trim()
-    if (!v || form.paymentTypes.includes(v)) return
-    set({ paymentTypes: [...form.paymentTypes, v] })
-    setNewType('')
-  }
 
   const submit = async () => {
     setMsg('')
@@ -113,36 +108,21 @@ export function Settings() {
         <div>
           <Label>ประเภทการจ่าย</Label>
           <div className="flex flex-wrap gap-1.5">
-            {form.paymentTypes.map((p) => (
-              <span key={p} className="inline-flex items-center gap-1 rounded-full bg-ink-100 px-3 py-1.5 text-body font-semibold text-ink-700">
-                {p}
-                {!readOnly && (
-                  <button type="button" onClick={() => set({ paymentTypes: form.paymentTypes.filter((x) => x !== p) })} className="text-ink-400 hover:text-danger">
-                    <Trash2 size={13} />
-                  </button>
-                )}
+            {form.whtRates.map((r) => (
+              <span key={r.paymentType} className="inline-flex items-center gap-1 rounded-full bg-ink-100 px-3 py-1.5 text-body font-semibold text-ink-700">
+                {r.paymentType}
               </span>
             ))}
           </div>
-          {!readOnly && (
-            <div className="mt-2 flex gap-2">
-              <Input value={newType} onChange={(e) => setNewType(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addType()} placeholder="เพิ่มประเภท เช่น ค่าที่ปรึกษา" className="max-w-xs" />
-              <Button variant="secondary" onClick={addType}><Plus size={15} /> เพิ่ม</Button>
-            </div>
-          )}
+          <p className="mt-1.5 text-label text-ink-500">ประเภทการจ่ายตามมาตรฐานกรมสรรพากร (แก้ไขอัตราได้ เพิ่ม/ลบ/เปลี่ยนชื่อไม่ได้)</p>
         </div>
 
         <div>
           <Label hint="%">อัตรา WHT ตามประเภท</Label>
           <div className="space-y-2">
             {form.whtRates.map((r, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <Input
-                  value={r.paymentType}
-                  onChange={(e) => set({ whtRates: form.whtRates.map((x, idx) => (idx === i ? { ...x, paymentType: e.target.value } : x)) })}
-                  disabled={readOnly}
-                  className="flex-1"
-                />
+              <div key={r.paymentType} className="flex items-center gap-2">
+                <p className="flex-1 py-2.5 font-semibold">{r.paymentType}</p>
                 <Input
                   value={String(r.value)}
                   onChange={(e) => set({ whtRates: form.whtRates.map((x, idx) => (idx === i ? { ...x, value: Number(e.target.value) || 0 } : x)) })}
@@ -150,30 +130,24 @@ export function Settings() {
                   inputMode="decimal"
                   className="w-24 text-right tabular-nums"
                 />
-                {!readOnly && (
-                  <button type="button" onClick={() => set({ whtRates: form.whtRates.filter((_, idx) => idx !== i) })} className="grid h-9 w-9 place-items-center rounded-control text-ink-400 hover:bg-ink-100 hover:text-danger">
-                    <Trash2 size={15} />
-                  </button>
-                )}
+                <span className="text-label text-ink-500">%</span>
               </div>
             ))}
           </div>
-          {!readOnly && (
-            <Button variant="secondary" className="mt-2" onClick={() => set({ whtRates: [...form.whtRates, { paymentType: '', value: 0, label: '' }] })}>
-              <Plus size={15} /> เพิ่มอัตรา
-            </Button>
-          )}
         </div>
 
         <div>
-          <Label hint="บาท">เกณฑ์เตือนอากรแสตมป์</Label>
+          <Label hint="บาท · 0 = ปิด">ยอดขั้นต่ำที่ต้องหักภาษี ณ ที่จ่าย</Label>
           <Input
-            value={String(form.stampDutyWarningThreshold)}
-            onChange={(e) => set({ stampDutyWarningThreshold: Number(e.target.value.replace(/[^\d.]/g, '')) || 0 })}
+            value={String(form.whtMinThreshold)}
+            onChange={(e) => set({ whtMinThreshold: Number(e.target.value.replace(/[^\d.]/g, '')) || 0 })}
             disabled={readOnly}
             inputMode="decimal"
             className="max-w-xs text-right tabular-nums"
           />
+          <p className="mt-1.5 text-label text-ink-500">
+            ตามมาตรา 50/1 — หากฐานภาษีต่ำกว่านี้ ระบบจะไม่หักภาษี ณ ที่จ่าย (ยกเว้นสัญญาต่อเนื่องที่ผู้จ่ายเลือกหักได้)
+          </p>
         </div>
       </Section>
 
@@ -219,6 +193,27 @@ export function Settings() {
         </div>
       </Section>
 
+      <Section step="4" title="ลายเซ็นและตราประทับ" desc="ใส่ลายเซ็นและตราประทับบนหนังสือรับรองภาษีหัก ณ ที่จ่าย (WHT)">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <AssetUpload
+            label="ลายเซ็นผู้มีอำนาจ"
+            hint="PNG/JPG — แนะนำพื้นหลังโปร่งใส แนวนอน"
+            storagePath={form.signatureStoragePath}
+            onUploaded={(path) => set({ signatureStoragePath: path })}
+            onError={(e) => toast.show(e, 'error')}
+            disabled={readOnly}
+          />
+          <AssetUpload
+            label="ตราประทับ"
+            hint="PNG — แนะนำพื้นหลังโปร่งใส ขนาด 1:1"
+            storagePath={form.stampStoragePath}
+            onUploaded={(path) => set({ stampStoragePath: path })}
+            onError={(e) => toast.show(e, 'error')}
+            disabled={readOnly}
+          />
+        </div>
+      </Section>
+
       {msg && <p className={`text-body font-medium ${msg === 'บันทึกแล้ว' ? 'text-success' : 'text-danger'}`}>{msg}</p>}
       {!readOnly && (
         <div className="flex justify-end">
@@ -227,6 +222,103 @@ export function Settings() {
           </Button>
         </div>
       )}
+    </div>
+  )
+}
+
+function AssetUpload({
+  label,
+  hint,
+  storagePath,
+  onUploaded,
+  onError,
+  disabled,
+}: {
+  label: string
+  hint?: string
+  storagePath?: string
+  onUploaded: (path: string) => void
+  onError: (msg: string) => void
+  disabled?: boolean
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [preview, setPreview] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+
+  useEffect(() => {
+    if (!storagePath) {
+      setPreview(null)
+      return
+    }
+    let cancelled = false
+    void signDownload(storagePath).then((url) => {
+      if (!cancelled) setPreview(url)
+    }).catch(() => {
+      if (!cancelled) setPreview(null)
+    })
+    return () => { cancelled = true }
+  }, [storagePath])
+
+  const handleFile = (file: File) => {
+    if (!file.type.startsWith('image/')) return
+    if (file.size > 5_000_000) {
+      onError('ไฟล์ใหญ่เกินไป (สูงสุด 5MB)')
+      return
+    }
+    setUploading(true)
+    const fileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+    void signUpload(fileName)
+      .then((sig) => uploadToR2(sig.url, file).then(() => sig))
+      .then((sig) => onUploaded(sig.path))
+      .catch((e) => onError(e instanceof Error ? e.message : 'อัปโหลดไม่สำเร็จ'))
+      .finally(() => setUploading(false))
+  }
+
+  return (
+    <div>
+      <Label hint={hint}>{label}</Label>
+      {storagePath
+        ? (
+          <div className="mt-1 flex items-start gap-3">
+            <div className="relative flex h-20 items-center justify-center rounded-control border border-card-border bg-white px-3">
+              {preview
+                ? <img src={preview} alt={label} className="max-h-16 max-w-24 object-contain" />
+                : <Loader2 size={18} className="animate-spin text-ink-400" />}
+            </div>
+            {!disabled && (
+              <button
+                type="button"
+                onClick={() => onUploaded(undefined as never)}
+                aria-label={`ลบ${label}`}
+                className="grid h-8 w-8 place-items-center rounded-control text-ink-400 transition hover:bg-ink-100 hover:text-danger"
+              >
+                <X size={15} aria-hidden />
+              </button>
+            )}
+          </div>
+        )
+        : (
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={disabled || uploading}
+            className="mt-1 flex h-20 w-full items-center justify-center gap-2 rounded-control border border-dashed border-card-border text-label text-ink-500 transition hover:border-ink-400 hover:text-ink-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {uploading ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <ImagePlus size={18} aria-hidden />}
+            {uploading ? 'กำลังอัปโหลด…' : 'เลือกไฟล์ภาพ'}
+          </button>
+        )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          if (file) handleFile(file)
+          e.target.value = ''
+        }}
+      />
     </div>
   )
 }

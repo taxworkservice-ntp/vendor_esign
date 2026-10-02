@@ -1,17 +1,16 @@
 // [CONFIG] — editable, never hard-coded tax rules in components.
 // Accountant to verify rates + thresholds before pilot sign-off.
+import { DEFAULT_WHT_MIN_THRESHOLD, DEFAULT_WHT_RATES } from './settings-types'
+
 export const PILOT_CONFIG = {
   clientCode: import.meta.env.VITE_APP_CLIENT_CODE ?? 'ABC',
   beYear: import.meta.env.VITE_APP_BE_YEAR ?? '2569',
   linkExpiryDays: 7,
-  stampDutyWarningThreshold: 20000,
-  whtRates: [
-    { value: 0, label: 'ไม่หักภาษี ณ ที่จ่าย — 0%', paymentType: 'ทั่วไป' },
-    { value: 1, label: 'ค่าขนส่ง — 1%', paymentType: 'ค่าขนส่ง' },
-    { value: 3, label: 'ค่าบริการ — 3%', paymentType: 'ค่าบริการ' },
-    { value: 5, label: 'ค่าเช่า — 5%', paymentType: 'ค่าเช่า' },
-  ],
-  paymentTypes: ['ค่าบริการ', 'ค่าเช่า', 'ค่าขนส่ง', 'ทั่วไป'],
+  // มาตรา 50/1 — if gross base is below this, WHT is not required.
+  // 0 = disabled (always withhold per selected type).
+  whtMinThreshold: DEFAULT_WHT_MIN_THRESHOLD,
+  // Revenue Department standard WHT income categories for PND3.
+  whtRates: DEFAULT_WHT_RATES,
 }
 
 // WHT math lives in wht-calc.ts (import-safe for the server). Re-exported here.

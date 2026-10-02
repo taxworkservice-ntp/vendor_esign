@@ -6,7 +6,7 @@ describe('settings', () => {
     const s = defaultSettings('ABC')
     expect(s.clientCode).toBe('ABC')
     expect(s.paymentTypes.length).toBeGreaterThan(0)
-    expect(s.stampDutyWarningThreshold).toBe(20000)
+    expect(s.whtMinThreshold).toBe(1000)
     expect(s.linkExpiryDays).toBe(7)
   })
 
@@ -18,7 +18,8 @@ describe('settings', () => {
     expect(validateSettings({ ...base, clientCode: 'AB' })).toBeNull()
     expect(validateSettings({ ...base, displayName: '' })).toMatch(/ชื่อบริษัท/)
     expect(validateSettings({ ...base, taxId: '123' })).toMatch(/13 หลัก/)
-    expect(validateSettings({ ...base, stampDutyWarningThreshold: 0 })).toMatch(/อากร/)
+    expect(validateSettings({ ...base, whtMinThreshold: -1 })).toMatch(/ขั้นต่ำ/)
+    expect(validateSettings({ ...base, whtMinThreshold: 0 })).toBeNull()
     expect(validateSettings({ ...base, linkExpiryDays: 0 })).toMatch(/อายุลิงก์/)
     expect(validateSettings({ ...base, whtRates: [{ paymentType: 'x', value: -1, label: '' }] })).toMatch(/WHT/)
   })

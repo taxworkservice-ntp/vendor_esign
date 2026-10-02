@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Download, Printer } from 'lucide-react'
 import { fetchWhtByIds, fetchWhtByScope } from '../lib/wht-source'
+import { signDownload } from '../lib/r2-assets'
 import { useClientAuth } from '../lib/client-auth'
 import { loadSettings } from '../lib/settings'
 import {
@@ -10,8 +11,7 @@ import {
   splitTaxId,
   thaiBahtText,
   type WhtFormType,
-  type WhtRecord,
-  type WhtVendor,
+  type WhtRecordWithVendor,
 } from '../lib/wht'
 import { Button } from '../components/ui/button'
 
@@ -54,12 +54,22 @@ interface WhtProfile {
   company_name_th: string
   tax_id: string
   address: string
+  signatureStoragePath?: string
+  stampStoragePath?: string
 }
 
-type RecordWithVendor = WhtRecord & { vendor?: WhtVendor }
+// Signature sits above the sign-date, stamp to its left — both can overlap.
+// date_bottom is at CSS top ~1913; signature bottom ~20px above that.
+const SIGNATURE_TOP = 1893
+const SIGNATURE_LEFT = 964
+const SIGNATURE_W = 186
+const SIGNATURE_H = 70
+const STAMP_TOP = 1893
+const STAMP_LEFT = 815
+const STAMP_SIZE = 139
 
-function buildFields(record: RecordWithVendor, profile: WhtProfile, seq: number): FieldDef[] {
-  const v = record.vendor
+function buildFields(record: WhtRecordWithVendor, profile: WhtProfile, seq: number): FieldDef[] {
+  const v = record
   const month = record.issueDate ? new Date(record.issueDate).getMonth() + 1 : 1
   const whtId = record.certificateNo || (month ? `${record.issueDate.slice(2, 4)}${String(month).padStart(2, '0')}1${String(seq + 1).padStart(3, '0')}` : '')
   const dateStr = fmtWhtDate(record.issueDate)
@@ -74,9 +84,9 @@ function buildFields(record: RecordWithVendor, profile: WhtProfile, seq: number)
     { name: 'payer_name', top: cssTop(279, 32), left: 165, fontSize: 32, width: 583, value: profile.company_name_th || '' },
     { name: 'payer_taxid', top: cssTop(241, 45), left: 961, fontSize: 45, bold: true, value: splitTaxId(profile.tax_id) },
     { name: 'payer_address', top: cssTop(337, 31), left: 166, fontSize: 31, wrap: true, width: 1166, value: profile.address || '' },
-    { name: 'name', top: cssTop(464, 32), left: 169, fontSize: 32, width: 583, value: String(v?.name || '') },
-    { name: 'taxid', top: cssTop(416, 45), left: 961, fontSize: 45, bold: true, value: splitTaxId(v?.taxId) },
-    { name: 'address', top: cssTop(531, 31), left: 171, fontSize: 31, wrap: true, width: 1166, value: String(v?.address || '') },
+    { name: 'name', top: cssTop(464, 32), left: 169, fontSize: 32, width: 583, value: String(v.vendorName || '') },
+    { name: 'taxid', top: cssTop(416, 45), left: 961, fontSize: 45, bold: true, value: splitTaxId(v.vendorTaxId) },
+    { name: 'address', top: cssTop(531, 31), left: 171, fontSize: 31, wrap: true, width: 1166, value: String(v.vendorAddress || '') },
     { name: 'description1', top: cssTop(1624, 33), left: 290, fontSize: 33, width: 480, value: String(record.description || '') },
     { name: 'date1', top: cssTop(1620, 35), left: 857, fontSize: 35, value: dateStr },
     { name: 'amount1', top: cssTop(1620, 35), left: 1175 - AMT_W, fontSize: 35, rightAlign: true, width: AMT_W, value: amtStr },
@@ -88,7 +98,19 @@ function buildFields(record: RecordWithVendor, profile: WhtProfile, seq: number)
   ]
 }
 
-function PndPage({ record, profile, seq }: { record: RecordWithVendor; profile: WhtProfile; seq: number }) {
+function PndPage({
+  record,
+  profile,
+  seq,
+  signatureUrl,
+  stampUrl,
+}: {
+  record: WhtRecordWithVendor
+  profile: WhtProfile
+  seq: number
+  signatureUrl?: string
+  stampUrl?: string
+}) {
   const fields = buildFields(record, profile, seq)
   const check = CHECKMARK_POS[record.formType]
   return (
@@ -128,11 +150,40 @@ function PndPage({ record, profile, seq }: { record: RecordWithVendor; profile: 
           {f.value}
         </div>
       ))}
+      {stampUrl && (
+        <img
+          src={stampUrl}
+          alt=""
+          style={{
+            position: 'absolute',
+            top: STAMP_TOP + 'px',
+            left: STAMP_LEFT + 'px',
+            width: STAMP_SIZE + 'px',
+            height: STAMP_SIZE + 'px',
+            objectFit: 'contain',
+            opacity: 0.85,
+          }}
+        />
+      )}
+      {signatureUrl && (
+        <img
+          src={signatureUrl}
+          alt=""
+          style={{
+            position: 'absolute',
+            top: SIGNATURE_TOP + 'px',
+            left: SIGNATURE_LEFT + 'px',
+            width: SIGNATURE_W + 'px',
+            height: SIGNATURE_H + 'px',
+            objectFit: 'contain',
+          }}
+        />
+      )}
     </div>
   )
 }
 
-function CleanPage({ record, profile }: { record: RecordWithVendor; profile: WhtProfile }) {
+function CleanPage({ record, profile }: { record: WhtRecordWithVendor; profile: WhtProfile }) {
   return (
     <div
       className="print-sheet"
@@ -168,9 +219,9 @@ function CleanPage({ record, profile }: { record: RecordWithVendor; profile: Wht
       <hr style={{ border: 'none', borderTop: '1px solid #ddd', marginBottom: '4mm' }} />
       <div style={{ marginBottom: '3mm' }}>
         <div style={{ fontSize: '10px', color: '#666', marginBottom: '1mm' }}>ผู้ถูกหักภาษี ณ ที่จ่าย</div>
-        <div style={{ fontSize: '13px', fontWeight: 600 }}>{record.vendor?.name || '-'}</div>
-        <div style={{ fontSize: '10px', color: '#666' }}>เลขที่ผู้เสียภาษี: {splitTaxId(record.vendor?.taxId)}</div>
-        <div style={{ fontSize: '10px', color: '#666' }}>{record.vendor?.address || ''}</div>
+        <div style={{ fontSize: '13px', fontWeight: 600 }}>{record.vendorName || '-'}</div>
+        <div style={{ fontSize: '10px', color: '#666' }}>เลขที่ผู้เสียภาษี: {splitTaxId(record.vendorTaxId)}</div>
+        <div style={{ fontSize: '10px', color: '#666' }}>{record.vendorAddress || ''}</div>
       </div>
       <hr style={{ border: 'none', borderTop: '1px solid #ddd', marginBottom: '4mm' }} />
       <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse' }}>
@@ -227,11 +278,13 @@ export function WhtPrint() {
   }, [params])
   const byScope = ids.length === 0
   const layout = params.get('layout') || 'pnd'
-  const [records, setRecords] = useState<RecordWithVendor[]>([])
+  const [records, setRecords] = useState<WhtRecordWithVendor[]>([])
   const [profile, setProfile] = useState<WhtProfile | null>(null)
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
+  const [signatureUrl, setSignatureUrl] = useState<string | null>(null)
+  const [stampUrl, setStampUrl] = useState<string | null>(null)
 
   const { activeTenant } = useClientAuth()
 
@@ -251,7 +304,13 @@ export function WhtPrint() {
           setErr('ไม่พบหนังสือรับรองตามเงื่อนไขที่เลือก')
         }
         const s = loadSettings(tenantId)
-        setProfile({ company_name_th: s.displayName, tax_id: s.taxId, address: s.address })
+        setProfile({
+          company_name_th: s.displayName,
+          tax_id: s.taxId,
+          address: s.address,
+          signatureStoragePath: s.signatureStoragePath,
+          stampStoragePath: s.stampStoragePath,
+        })
       } catch {
         if (!cancelled) setErr('โหลดหนังสือรับรองไม่สำเร็จ — โปรดลองใหม่อีกครั้ง')
       } finally {
@@ -262,6 +321,28 @@ export function WhtPrint() {
       cancelled = true
     }
   }, [ids, byScope, scope, activeTenant])
+
+  // Resolve presigned download URLs for the signature/stamp whenever their
+  // storage paths change. Short-lived URLs are fine — the page renders once.
+  useEffect(() => {
+    if (!profile) {
+      setSignatureUrl(null)
+      setStampUrl(null)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const [sig, stamp] = await Promise.all([
+        profile.signatureStoragePath ? signDownload(profile.signatureStoragePath) : null,
+        profile.stampStoragePath ? signDownload(profile.stampStoragePath) : null,
+      ])
+      if (!cancelled) {
+        setSignatureUrl(sig)
+        setStampUrl(stamp)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [profile?.signatureStoragePath, profile?.stampStoragePath])
 
   const exportPdf = async () => {
     setErr('')
@@ -306,7 +387,9 @@ export function WhtPrint() {
       <div className="flex flex-col items-center gap-6 overflow-auto p-6">
         {profile &&
           records.map((r, i) =>
-            layout === 'pnd' ? <PndPage key={r.id} record={r} profile={profile} seq={i} /> : <CleanPage key={r.id} record={r} profile={profile} />,
+            layout === 'pnd'
+              ? <PndPage key={r.id} record={r} profile={profile} seq={i} signatureUrl={signatureUrl ?? undefined} stampUrl={stampUrl ?? undefined} />
+              : <CleanPage key={r.id} record={r} profile={profile} />,
           )}
       </div>
     </div>

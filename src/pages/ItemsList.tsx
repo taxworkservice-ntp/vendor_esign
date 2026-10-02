@@ -109,7 +109,7 @@ export function ItemsList() {
   const isEmpty = !isLoading && !isError && items.length === 0
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5">
+    <div className="space-y-5">
       <PageHeader
         title="สินค้า / บริการ"
         sub="รายการสินค้าและบริการ สำหรับเรียกใช้เมื่อสร้างธุรกรรม (ชื่อ · หน่วย · ราคา)"

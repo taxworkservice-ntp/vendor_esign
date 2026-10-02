@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Plus, ShieldAlert, ShieldCheck, Sparkles, Trash2, TriangleAlert, UploadCloud, X } from 'lucide-react'
+import { Info, Plus, ShieldAlert, ShieldCheck, Sparkles, Trash2, UploadCloud, X } from 'lucide-react'
 import { PILOT_CONFIG, calcWht, isDuplicateSlipRef } from '../lib/config'
+import { applyWhtThreshold, belowWhtThreshold } from '../lib/wht-calc'
 import { defaultSettings, whtRateFor } from '../lib/settings'
 import { itemsTotal, lineTotal, normalizeLineItem } from '../lib/line-items'
 import { vendorTaxIdMatches } from '../lib/vendor-match'
@@ -80,6 +81,8 @@ export function TransactionNew() {
   const [note, setNote] = useState('')
   const [whtRate, setWhtRate] = useState(0)
   const [whtMode, setWhtMode] = useState<WhtMode>('deduct')
+  // Continuous-contract escape: withhold even when gross < whtMinThreshold.
+  const [forceWht, setForceWht] = useState(false)
   const [transferDate, setTransferDate] = useState(() => todayISO())
   const [slipRef, setSlipRef] = useState('')
   const [slipName, setSlipName] = useState('')
@@ -127,7 +130,7 @@ export function TransactionNew() {
           }))
         : [{ ...EMPTY_ROW }],
     )
-    setPaymentType(last.paymentType || cfg.paymentTypes[0] || PILOT_CONFIG.paymentTypes[0])
+    setPaymentType(last.paymentType || cfg.paymentTypes[0])
     setWhtRate(last.whtRate ?? whtRateFor(last.paymentType, cfg))
     setWhtMode(last.whtMode ?? 'deduct')
     setNote(last.note ?? '')
@@ -164,9 +167,21 @@ export function TransactionNew() {
   )
   const validItems = lineItems.filter((it) => it.description && it.amount > 0)
   const grossNum = itemsTotal(validItems)
-  const { gross, wht, net } = useMemo(() => calcWht(grossNum, whtRate, whtMode), [grossNum, whtRate, whtMode])
+
+  // มาตรา 50/1: below the tenant's minimum, WHT is waived and the income is
+  // reclassified — unless the user forces withholding for a continuous contract.
+  const belowThreshold = belowWhtThreshold(grossNum, cfg.whtMinThreshold)
+  const effective = useMemo(
+    () => applyWhtThreshold(grossNum, whtRate, paymentType, cfg.whtMinThreshold, forceWht),
+    [grossNum, whtRate, paymentType, cfg.whtMinThreshold, forceWht],
+  )
+  const effectiveRate = effective.rate
+  const effectivePaymentType = effective.paymentType
+  const { gross, wht, net } = useMemo(() => calcWht(grossNum, effectiveRate, whtMode), [grossNum, effectiveRate, whtMode])
   const dup = isDuplicateSlipRef(slipRef, existingRefs)
   const whtMismatch = grossNum > 0 && !cfg.whtRates.some((r) => r.value === whtRate)
+  // Show the force control only when the rule is actually zeroing a positive rate.
+  const showForceToggle = belowThreshold && whtRate > 0
   const selectedVendor = vendors.find((v) => v.id === vendorId)
 
   const setRow = (i: number, patch: Partial<Row>) => {
@@ -176,6 +191,7 @@ export function TransactionNew() {
 
   const changePaymentType = (pt: string) => {
     markTouched()
+    setForceWht(false)
     setPaymentType(pt)
     setWhtRate(whtRateFor(pt, cfg))
   }
@@ -244,11 +260,14 @@ export function TransactionNew() {
     create.mutate(
       {
         vendorId,
-        paymentType,
+        // Send the effective values so the stored document matches what was on
+        // screen; `forceWht` lets the server re-derive the same result safely.
+        paymentType: effectivePaymentType,
         note,
         lineItems: validItems,
-        whtRate,
+        whtRate: effectiveRate,
         whtMode,
+        forceWht,
         transferDate,
         slipReference: slipRef,
         slipName,
@@ -463,9 +482,11 @@ export function TransactionNew() {
           <Section step="3" title="การชำระเงิน" desc="ยอดและอัตราภาษีหัก ณ ที่จ่าย">
             <div>
               <Label>ประเภทการจ่าย</Label>
-              <Select value={paymentType} onChange={(e) => changePaymentType(e.target.value)}>
-                {cfg.paymentTypes.map((p) => (
-                  <option key={p}>{p}</option>
+              <Select value={effectivePaymentType} onChange={(e) => changePaymentType(e.target.value)}>
+                {cfg.whtRates.map((r) => (
+                  <option key={r.paymentType} value={r.paymentType}>
+                    {r.paymentType}{r.value > 0 ? ` (${r.value}%)` : ' (ไม่หักภาษี)'}
+                  </option>
                 ))}
               </Select>
             </div>
@@ -493,18 +514,22 @@ export function TransactionNew() {
               </div>
               <p className="mt-1.5 text-label text-ink-500">
                 {whtMode === 'deduct'
-                  ? `หักภาษี ณ ที่จ่าย ${whtRate}% จากยอดชำระ → ผู้ขายได้รับ ${fmtTHB(net)}`
-                  : `ผู้ขายได้รับเต็มจำนวน ${fmtTHB(net)} · บวกภาษีหัก ณ ที่จ่าย ${whtRate}% → ผู้จ่ายจ่ายรวม ${fmtTHB(gross)}`}
+                  ? `หักภาษี ณ ที่จ่าย ${effectiveRate}% จากยอดชำระ → ผู้ขายได้รับ ${fmtTHB(net)}`
+                  : `ผู้ขายได้รับเต็มจำนวน ${fmtTHB(net)} · บวกภาษีหัก ณ ที่จ่าย ${effectiveRate}% → ผู้จ่ายจ่ายรวม ${fmtTHB(gross)}`}
               </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>อัตราภาษีหัก ณ ที่จ่าย (%)</Label>
-                <Select value={whtRate} onChange={(e) => { markTouched(); setWhtRate(Number(e.target.value)) }}>
-                  {cfg.whtRates.map((r) => (
-                    <option key={`${r.paymentType}-${r.value}`} value={r.value}>
-                      {r.label || `${r.paymentType} — ${r.value}%`}
+                <Select
+                  value={effectiveRate}
+                  disabled={belowThreshold && !forceWht}
+                  onChange={(e) => { markTouched(); setWhtRate(Number(e.target.value)) }}
+                >
+                  {Array.from(new Map(cfg.whtRates.map((r) => [r.value, r])).values()).map((r) => (
+                    <option key={r.value} value={r.value}>
+                      {r.value}%{r.value === 0 ? ' (ไม่หักภาษี)' : ''}
                     </option>
                   ))}
                 </Select>
@@ -523,7 +548,7 @@ export function TransactionNew() {
                     <span className="font-semibold tabular-nums">{fmtTHB(gross)}</span>
                   </div>
                   <div className="flex justify-between py-0.5">
-                    <span className="text-ink-500">หัก WHT ({whtRate}%)</span>
+                    <span className="text-ink-500">หัก WHT ({effectiveRate}%)</span>
                     <span className="font-semibold tabular-nums text-ink-500">− {fmtTHB(wht)}</span>
                   </div>
                   <div className="mt-1.5 flex justify-between border-t border-card-border pt-2">
@@ -538,7 +563,7 @@ export function TransactionNew() {
                     <span className="font-semibold tabular-nums">{fmtTHB(net)}</span>
                   </div>
                   <div className="flex justify-between py-0.5">
-                    <span className="text-ink-500">บวก WHT ({whtRate}%)</span>
+                    <span className="text-ink-500">บวก WHT ({effectiveRate}%)</span>
                     <span className="font-semibold tabular-nums text-ink-500">+ {fmtTHB(wht)}</span>
                   </div>
                   <div className="mt-1.5 flex justify-between border-t border-card-border pt-2">
@@ -547,11 +572,24 @@ export function TransactionNew() {
                   </div>
                 </>
               )}
-              {gross >= cfg.stampDutyWarningThreshold && (
-                <p className="mt-3 flex gap-2 rounded-control bg-warning-soft p-3 text-body font-medium text-warning">
-                  <TriangleAlert size={16} className="mt-0.5 shrink-0" />
-                  ยอดเกิน {fmtTHB(cfg.stampDutyWarningThreshold)} — โปรดตรวจสอบอากรแสตมป์กับนักบัญชีก่อนออกเอกสาร
-                </p>
+              {belowThreshold && (
+                <div className="mt-3 rounded-control bg-primary-soft p-3 text-body text-primary-text">
+                  <p className="flex gap-2 font-medium">
+                    <Info size={16} className="mt-0.5 shrink-0" />
+                    ยอด {fmtTHB(gross)} ต่ำกว่าเกณฑ์ {fmtTHB(cfg.whtMinThreshold)} — ไม่หักภาษี ณ ที่จ่าย (มาตรา 50/1)
+                  </p>
+                  {showForceToggle && (
+                    <label className="mt-2 flex cursor-pointer items-center gap-2 text-ink-700">
+                      <input
+                        type="checkbox"
+                        checked={forceWht}
+                        onChange={(e) => { markTouched(); setForceWht(e.target.checked) }}
+                        className="h-4 w-4"
+                      />
+                      หักภาษี ณ ที่จ่ายสำหรับสัญญาต่อเนื่อง
+                    </label>
+                  )}
+                </div>
               )}
               {whtMismatch && <FieldError msg="อัตราภาษีหัก ณ ที่จ่ายไม่อยู่ในค่ามาตรฐาน — ระบบจะทำเครื่องหมายให้ตรวจสอบ" />}
             </div>

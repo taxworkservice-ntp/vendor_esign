@@ -3,7 +3,8 @@ import { randomBytes } from 'node:crypto'
 import { sql, withTenant } from '../../src/server/db'
 import { guard } from './data'
 import { sha256hex } from './auth'
-import { calcWht } from '../../src/lib/wht-calc'
+import { applyWhtThreshold, calcWht } from '../../src/lib/wht-calc'
+import { getTenantSettings } from './settings'
 import { itemsSummary, itemsTotal, normalizeLineItem } from '../../src/lib/line-items'
 import { emptyTotals, type TxnTotals } from '../../src/lib/txn-filters'
 import { parseListQuery } from '../../src/lib/txn-list-query'
@@ -341,14 +342,25 @@ txnRoutes.post('/transactions', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
   const b = (await c.req.json().catch(() => null)) as
-    | { vendorId?: string; paymentType?: string; note?: string; lineItems?: unknown; whtRate?: number; whtMode?: string; transferDate?: string; slipReference?: string; slipName?: string; vendorTaxId?: string }
+    | { vendorId?: string; paymentType?: string; note?: string; lineItems?: unknown; whtRate?: number; whtMode?: string; forceWht?: boolean; transferDate?: string; slipReference?: string; slipName?: string; vendorTaxId?: string }
     | null
   const items = (Array.isArray(b?.lineItems) ? b!.lineItems : [])
     .map((it) => normalizeLineItem(it as never))
     .filter((it) => it.description && it.amount > 0)
   if (!b?.vendorId || items.length === 0) return c.json({ error: 'invalid-body' }, 400)
   const whtMode = b.whtMode === 'grossup' ? 'grossup' : 'deduct'
-  const { gross, wht, net } = calcWht(itemsTotal(items), Number(b.whtRate) || 0, whtMode)
+  const base = itemsTotal(items)
+  // มาตรา 50/1 — server is authoritative: re-derive the effective rate/type
+  // from the tenant threshold rather than trusting the submitted values.
+  const settings = await getTenantSettings(g.ws)
+  const eff = applyWhtThreshold(
+    base,
+    Number(b.whtRate) || 0,
+    b.paymentType ?? 'ค่าบริการ',
+    settings.whtMinThreshold,
+    !!b.forceWht,
+  )
+  const { gross, wht, net } = calcWht(base, eff.rate, whtMode)
   const note = (b.note ?? '').trim()
   const taxId = norm(b.vendorTaxId ?? '')
   const row = await withTenant(g.ws, 'owner', async () => {
@@ -357,9 +369,9 @@ txnRoutes.post('/transactions', async (c) => {
       insert into vendor_payables (user_id, ref, vendor_id, payment_type, description, note, line_items,
         gross_amount, wht_rate, wht_mode, wht_amount, net_amount, transfer_date, slip_reference, status,
         tax_id_hash, tax_id_last4, created_by)
-      values (${g.ws}, ${`TX-${Date.now().toString(36)}`}, ${b!.vendorId}, ${b!.paymentType ?? 'ค่าบริการ'},
+      values (${g.ws}, ${`TX-${Date.now().toString(36)}`}, ${b!.vendorId}, ${eff.paymentType},
         ${itemsSummary(items, note)}, ${note}, ${JSON.stringify(items)}::jsonb,
-        ${gross}, ${Number(b!.whtRate) || 0}, ${whtMode}, ${wht}, ${net},
+        ${gross}, ${eff.rate}, ${whtMode}, ${wht}, ${net},
         ${b!.transferDate ?? new Date().toISOString().slice(0, 10)}, ${b!.slipReference ?? ''}, 'draft',
         ${taxId ? sha256hex(taxId) : null}, ${taxId.slice(-4) || null}, ${g!.u.email})
       returning id`) as unknown as { id: string }[]

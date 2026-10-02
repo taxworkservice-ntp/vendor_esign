@@ -42,6 +42,7 @@ export const WHT_FORM_TITLES: Record<WhtFormType, string> = {
 export type WhtRecordWithVendor = WhtRecord & {
   vendorName?: string
   vendorTaxId?: string
+  vendorAddress?: string
 }
 
 export function whtFormLabel(t: string): string {
@@ -62,7 +63,7 @@ export interface WhtVendor {
   phone?: string
   email?: string
   note?: string
-  vendorType: 'company' | 'individual'
+  vendorType?: 'company' | 'individual'
   isActive: boolean
   createdAt: string
 }
@@ -77,7 +78,10 @@ export interface WhtRecord {
   whtRate: number
   whtAmount: number
   certificateNo?: string
+  /** Payment type label (ประเภทการจ่าย) — the income category printed on the WHT form. */
   description?: string
+  /** Raw payment type key (e.g. "ค่าบริการ") from the source transaction. */
+  paymentType?: string
   note?: string
   status: 'active' | 'done'
   createdAt: string
@@ -85,9 +89,9 @@ export interface WhtRecord {
   sourceTransactionId?: string
 }
 
-// company → pnd53, individual → pnd3 (host rule).
-export function formTypeForVendorType(t: 'company' | 'individual'): WhtFormType {
-  return t === 'company' ? 'pnd53' : 'pnd3'
+// This app serves individual vendors only — every certificate is PND3.
+export function formTypeForVendorType(_t: 'company' | 'individual'): WhtFormType {
+  return 'pnd3'
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100

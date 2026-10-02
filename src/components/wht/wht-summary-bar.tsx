@@ -22,11 +22,7 @@ export function WhtSummaryBar({ summary, loading }: { summary?: WhtSummary; load
       <div className="grid grid-cols-2 gap-px overflow-hidden rounded-card border border-card-border bg-card-border sm:grid-cols-4">
         <Cell label="จำนวนหนังสือรับรอง" value={loading ? '—' : summary.count.toLocaleString('th-TH')} />
         <Cell label="ยอดเงิน (ฐานภาษี)" value={loading ? '—' : fmtTHB(summary.amount)} />
-        <Cell
-          label="ภาษีที่หักไว้"
-          value={loading ? '—' : fmtTHB(summary.whtAmount)}
-          emphasis
-        />
+        <Cell label="ภาษีที่หักไว้" value={loading ? '—' : fmtTHB(summary.whtAmount)} />
         <Cell
           label="ยื่นแล้ว / ค้าง"
           value={loading ? '—' : `${summary.filedCount} / ${summary.activeCount}`}

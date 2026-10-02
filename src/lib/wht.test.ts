@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { calcWhtAmount, filterWhtByMonth, formTypeForVendorType, nextWhtCertificateNo, splitTaxId, thaiBahtText } from './wht'
 
 describe('wht helpers (host parity)', () => {
-  it('maps vendor type → PND form', () => {
-    expect(formTypeForVendorType('company')).toBe('pnd53')
+  it('maps vendor type → PND form (individual-only app → always PND3)', () => {
+    expect(formTypeForVendorType('company')).toBe('pnd3')
     expect(formTypeForVendorType('individual')).toBe('pnd3')
   })
 

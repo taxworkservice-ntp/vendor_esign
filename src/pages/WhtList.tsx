@@ -14,7 +14,8 @@ import {
   Search,
   X,
 } from 'lucide-react'
-import { useWhtList, useSetWhtStatus } from '../hooks/useWht'
+import { useBulkSetWhtStatus, useWhtList, useSetWhtStatus } from '../hooks/useWht'
+import { Checkbox } from '../components/ui/checkbox'
 import { useGlobalMonth } from '../hooks/useGlobalMonth'
 import { useDebounced } from '../hooks/useDebounced'
 import { formatMonthTH } from '../lib/global-month'
@@ -72,6 +73,7 @@ export function WhtList() {
   const [params, setParams] = useSearchParams()
   const toast = useToast()
   const setStatus = useSetWhtStatus()
+  const bulkSetStatus = useBulkSetWhtStatus()
   const searchRef = useRef<HTMLInputElement>(null)
 
   // Seed from the URL (a shared "show me October" link) and the global period.
@@ -87,6 +89,7 @@ export function WhtList() {
   const debouncedSearch = useDebounced(search, 250)
   const [page, setPage] = useState(() => readPage(params))
   const [pageSize, setPageSize] = useState(() => readSize(params))
+  const [selected, setSelected] = useState<Set<string>>(() => new Set())
 
   const effective = useMemo<Omit<WhtListQuery, 'limit' | 'offset'>>(
     () => (query.q === debouncedSearch ? query : { ...query, q: debouncedSearch }),
@@ -112,10 +115,12 @@ export function WhtList() {
     setQuery((q) => (q.month === globalMonth ? q : { ...q, month: globalMonth }))
   }, [globalMonth])
 
-  // Any change to the filter sends the user back to page 1.
+  // Any change to the filter sends the user back to page 1 and drops the
+  // selection — rows selected under the old filter may no longer be visible.
   const signature = JSON.stringify(effective)
   useEffect(() => {
     setPage(0)
+    setSelected(new Set())
   }, [signature]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data, isLoading, isFetching, isError, error, refetch } = useWhtList(full, wire)
@@ -129,6 +134,31 @@ export function WhtList() {
   }, [page, total, pageSize])
 
   const patch = useCallback((p: Partial<typeof query>) => setQuery((q) => ({ ...q, ...p })), [])
+
+  const onToggle = useCallback((id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const onTogglePage = useCallback(() => {
+    setSelected((prev) => {
+      const allSelected = records.every((r) => prev.has(r.id))
+      if (allSelected) {
+        const next = new Set(prev)
+        records.forEach((r) => next.delete(r.id))
+        return next
+      }
+      const next = new Set(prev)
+      records.forEach((r) => next.add(r.id))
+      return next
+    })
+  }, [records])
+
+  const onClearSelection = useCallback(() => setSelected(new Set()), [])
 
   const filtered = effective.q !== '' || effective.formType !== '' || effective.status !== 'all'
   const isEmpty = !isLoading && !isError && records.length === 0
@@ -150,6 +180,17 @@ export function WhtList() {
     downloadCsv(`wht-${effective.month || 'all'}-${exportFilename().replace(/^transactions-/, '')}`, whtToCsv(records))
     toast.show(`ส่งออก ${records.length} ฉบับแล้ว (หน้าที่แสดง)`)
   }, [records, effective.month, toast])
+
+  const onBulkFiled = useCallback(() => {
+    if (selected.size === 0) return
+    bulkSetStatus.mutate(Array.from(selected), {
+      onSuccess: () => {
+        toast.show(`ทำเครื่องหมายยื่นแล้ว ${selected.size} ฉบับ`),
+        setSelected(new Set())
+      },
+      onError: () => toast.show('อัปเดตสถานะไม่สำเร็จ', 'error'),
+    })
+  }, [selected, bulkSetStatus, toast])
 
   const onKey = useCallback((e: React.KeyboardEvent) => {
     const el = e.target as HTMLElement | null
@@ -289,6 +330,29 @@ export function WhtList() {
         </CardBody>
       </Card>
 
+      {selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 border border-card-border bg-ink-50 px-3 py-2.5" role="region" aria-label="เครื่องมือสำหรับรายการที่เลือก">
+          <span className="text-body font-semibold tabular-nums">เลือกแล้ว {selected.size} ฉบับ</span>
+          <div className="ml-auto flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={onBulkFiled}
+              disabled={bulkSetStatus.isPending}
+              className="inline-flex h-8 items-center gap-1.5 rounded-control bg-primary px-3 text-body font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {bulkSetStatus.isPending ? 'กำลังบันทึก…' : 'ทำเครื่องหมายยื่นแล้ว'}
+            </button>
+            <button
+              type="button"
+              onClick={onClearSelection}
+              className="inline-flex h-8 items-center gap-1.5 rounded-control px-2.5 text-body font-semibold text-ink-600 transition hover:bg-ink-100"
+            >
+              ยกเลิกการเลือก
+            </button>
+          </div>
+        </div>
+      )}
+
       <Card className="overflow-hidden">
         {isError ? (
           <ErrorState
@@ -311,33 +375,51 @@ export function WhtList() {
               <div className="max-h-[70vh] overflow-auto">
                 <table className="w-full min-w-[880px] border-collapse text-body">
                   <thead>
-                    <tr>
-                      {th('date', 'วันที่ออก')}
-                      <th scope="col" className={thBase}>
-                        เลขที่หนังสือรับรอง
-                      </th>
-                      {th('vendor', 'ผู้ถูกหักภาษี')}
-                      <th scope="col" className={thBase}>
-                        แบบยื่น
-                      </th>
-                      {th('amount', 'ยอดเงิน (ฐานภาษี)', 'right')}
-                      {th('wht', 'ภาษีที่หักไว้', 'right')}
-                      <th scope="col" className={thBase}>
-                        สถานะ
-                      </th>
-                      <th scope="col" className={cn(thBase, 'w-24 text-right')}>
-                        พิมพ์
-                      </th>
-                    </tr>
+                     <tr>
+                       <th scope="col" className={cn(thBase, 'w-9 pl-3 pr-0')}>
+                         <Checkbox
+                           checked={records.length > 0 && records.every((r) => selected.has(r.id))}
+                           indeterminate={records.some((r) => selected.has(r.id)) && !records.every((r) => selected.has(r.id))}
+                           onChange={onTogglePage}
+                           label="เลือกทั้งหน้านี้"
+                           hideLabel
+                         />
+                       </th>
+                       {th('date', 'วันที่ออก')}
+                       <th scope="col" className={thBase}>
+                         เลขที่หนังสือรับรอง
+                       </th>
+                       {th('vendor', 'ผู้ถูกหักภาษี')}
+                       <th scope="col" className={thBase}>
+                         แบบยื่น
+                       </th>
+                       {th('amount', 'ยอดเงิน (ฐานภาษี)', 'right')}
+                       {th('wht', 'ภาษีที่หักไว้', 'right')}
+                       <th scope="col" className={thBase}>
+                         สถานะ
+                       </th>
+                       <th scope="col" className={cn(thBase, 'w-24 text-right')}>
+                         พิมพ์
+                       </th>
+                     </tr>
                   </thead>
                   <tbody>
                     {isLoading ? (
-                      <TableSkeleton rows={8} cols={7} />
+                      <TableSkeleton rows={8} cols={8} />
                     ) : (
                       records.map((r) => {
                         const filed = r.status === 'done'
+                        const rowSelected = selected.has(r.id)
                         return (
-                          <tr key={r.id} className="border-b border-card-border transition hover:bg-ink-50">
+                          <tr key={r.id} className={cn('border-b border-card-border transition hover:bg-ink-50', rowSelected && 'bg-primary-soft/30')}>
+                            <td className="w-9 border-b border-card-border pl-3 pr-0" onClick={(e) => e.stopPropagation()}>
+                              <Checkbox
+                                checked={rowSelected}
+                                onChange={() => onToggle(r.id)}
+                                label={`เลือก ${r.certificateNo ?? r.id}`}
+                                hideLabel
+                              />
+                            </td>
                             <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">{fmtWhtDate(r.issueDate)}</td>
                             <td className="whitespace-nowrap px-3 py-2.5 font-mono">{r.certificateNo ?? '—'}</td>
                             <td className="max-w-[240px] truncate px-3 py-2.5 font-semibold">

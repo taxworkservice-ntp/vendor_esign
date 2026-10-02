@@ -171,6 +171,9 @@ whtRoutes.post('/wht/records', async (c) => {
   const amount = Number(b.amount) || 0
   const whtRate = Number(b.whtRate) || 0
   const whtAmount = b.whtAmount != null ? Number(b.whtAmount) : Math.round(amount * (whtRate / 100) * 100) / 100
+  // A certificate with nothing withheld is not a form to file — refuse it so
+  // the register only ever holds real withholding.
+  if (!(whtAmount > 0)) return c.json({ error: 'no-wht-to-withhold' }, 422)
   const row = await withTenant(g.ws, 'owner', async () => {
     const db = sql()
     const ins = (await db`insert into wht_records (user_id, vendor_id, form_type, issue_date, amount, wht_rate, wht_amount,

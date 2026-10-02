@@ -1,5 +1,12 @@
 import { sql, withTenant } from '../../src/server/db'
-import { DEFAULT_CONSENT, DEFAULT_INVITE_TEMPLATE, type TenantSettings, type WhtRate } from '../../src/lib/settings-types'
+import {
+  DEFAULT_CONSENT,
+  DEFAULT_INVITE_TEMPLATE,
+  DEFAULT_WHT_MIN_THRESHOLD,
+  DEFAULT_WHT_RATES,
+  type TenantSettings,
+  type WhtRate,
+} from '../../src/lib/settings-types'
 
 // Server-side tenant settings (mirrors src/lib/settings.ts). Reads tenants profile
 // columns + the config table. [VERIFY] on first real DB run.
@@ -14,11 +21,13 @@ export async function getTenantSettings(tenantId: string): Promise<TenantSetting
     const row = tRows[0] ?? {}
     const m = new Map(cfg.map((r) => [r.key, r.value]))
     const ratesRaw = Array.isArray(m.get('wht_rates')) ? (m.get('wht_rates') as Record<string, unknown>[]) : []
-    const whtRates: WhtRate[] = ratesRaw.map((r) => ({
-      paymentType: String(r.paymentType ?? ''),
-      value: Number(r.rate ?? r.value ?? 0),
-      label: String(r.label ?? ''),
-    }))
+    const whtRates: WhtRate[] = ratesRaw.length
+      ? ratesRaw.map((r) => ({
+          paymentType: String(r.paymentType ?? ''),
+          value: Number(r.rate ?? r.value ?? 0),
+          label: String(r.label ?? ''),
+        }))
+      : DEFAULT_WHT_RATES
     return {
       clientCode: String(row.client_code ?? tenantId),
       displayName: String(row.display_name ?? row.name ?? ''),
@@ -26,14 +35,16 @@ export async function getTenantSettings(tenantId: string): Promise<TenantSetting
       taxId: String(row.tax_id ?? ''),
       contactName: String(row.contact_name ?? ''),
       beYear: Number(row.be_year ?? 2569),
-      paymentTypes: Array.isArray(m.get('payment_types')) ? (m.get('payment_types') as string[]) : ['ค่าบริการ', 'ค่าเช่า', 'ค่าขนส่ง', 'ทั่วไป'],
+      paymentTypes: whtRates.map((r) => r.paymentType),
       whtRates,
-      stampDutyWarningThreshold: Number(m.get('stamp_duty_warning_threshold') ?? 20000),
+      whtMinThreshold: Number(m.get('wht_min_threshold') ?? DEFAULT_WHT_MIN_THRESHOLD),
       linkExpiryDays: Number(m.get('link_expiry_days') ?? 7),
       consentTextV1: String((m.get('consent_text_v1') as { th?: string } | undefined)?.th ?? DEFAULT_CONSENT),
       receiptNote: String(m.get('receipt_note') ?? ''),
       showVerifyQr: Boolean(m.get('show_verify_qr') ?? false),
       inviteMessageTemplate: String(m.get('invite_message_template') ?? DEFAULT_INVITE_TEMPLATE),
+      signatureStoragePath: (m.get('signature_storage_path') as string | undefined) || undefined,
+      stampStoragePath: (m.get('stamp_storage_path') as string | undefined) || undefined,
     }
   })
 }
@@ -51,11 +62,13 @@ export async function saveTenantSettings(tenantId: string, s: TenantSettings): P
     }
     await put('wht_rates', s.whtRates.map((r) => ({ paymentType: r.paymentType, rate: r.value, label: r.label })))
     await put('payment_types', s.paymentTypes)
-    await put('stamp_duty_warning_threshold', s.stampDutyWarningThreshold)
+    if (s.whtMinThreshold !== undefined) await put('wht_min_threshold', s.whtMinThreshold)
     await put('link_expiry_days', s.linkExpiryDays)
     await put('consent_text_v1', { th: s.consentTextV1 })
     await put('receipt_note', s.receiptNote)
     await put('show_verify_qr', s.showVerifyQr)
     await put('invite_message_template', s.inviteMessageTemplate)
+    if (s.signatureStoragePath !== undefined) await put('signature_storage_path', s.signatureStoragePath)
+    if (s.stampStoragePath !== undefined) await put('stamp_storage_path', s.stampStoragePath)
   })
 }

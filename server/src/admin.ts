@@ -171,8 +171,8 @@ adminApp.post('/api/admin/tenants', async (c) => {
       ${body?.contactName ?? ''}, 'active', ${beYear}, ${start})
     on conflict (id) do nothing`
   await db`insert into config (user_id, key, value) values
-    (${id}, 'wht_rates', '[{"paymentType":"ค่าบริการ","rate":3},{"paymentType":"ค่าเช่า","rate":5},{"paymentType":"ค่าขนส่ง","rate":1},{"paymentType":"ทั่วไป","rate":0}]'),
-    (${id}, 'stamp_duty_warning_threshold', '20000'),
+    (${id}, 'wht_rates', '[{"paymentType":"ค่าจ้างทำของ","rate":3,"label":"ค่าจ้างทำของ"},{"paymentType":"ค่าวิชาชีพอิสระ","rate":3,"label":"ค่าวิชาชีพอิสระ"},{"paymentType":"ค่าบริการ","rate":3,"label":"ค่าบริการ"},{"paymentType":"ค่าเช่าทรัพย์สิน","rate":5,"label":"ค่าเช่าทรัพย์สิน"},{"paymentType":"ค่านายหน้า","rate":3,"label":"ค่านายหน้า"},{"paymentType":"ค่าขนส่ง","rate":1,"label":"ค่าขนส่ง"},{"paymentType":"ไม่หักภาษี ณ ที่จ่าย","rate":0,"label":"ไม่หักภาษี ณ ที่จ่าย"}]'),
+    (${id}, 'wht_min_threshold', '1000'),
     (${id}, 'link_expiry_days', '7'),
     (${id}, 'consent_text_v1', '{"th": "ข้าพเจ้าได้รับเงินจำนวนดังกล่าวแล้ว และมอบอำนาจให้ลูกค้าออกใบเสร็จรับเงินในนามของข้าพเจ้าเฉพาะธุรกรรมนี้เท่านั้น"}')
     on conflict (user_id, key) do nothing`

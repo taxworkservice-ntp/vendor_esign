@@ -45,7 +45,18 @@ export function useSetWhtStatus() {
   return useMutation({
     mutationFn: (v: { id: string; status: 'active' | 'done' }) => setWhtRecordStatus(activeTenant, v.id, v.status),
     onSuccess: () => {
-      // The record can appear on any page or scope, so invalidate the whole key.
+      qc.invalidateQueries({ queryKey: QK })
+    },
+  })
+}
+
+export function useBulkSetWhtStatus() {
+  const qc = useQueryClient()
+  const { activeTenant } = useClientAuth()
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      Promise.all(ids.map((id) => setWhtRecordStatus(activeTenant, id, 'done'))),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: QK })
     },
   })

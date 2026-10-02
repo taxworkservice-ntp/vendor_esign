@@ -29,7 +29,7 @@ export function SummaryBar({
     { label: 'รายการที่ตรงเงื่อนไข', value: totals.count.toLocaleString('th-TH'), icon: FileText },
     { label: 'ยอดรวม (ฐานภาษี)', value: fmtTHB(totals.payableGross), icon: Coins },
     { label: 'หักภาษี ณ ที่จ่าย', value: fmtTHB(totals.payableWht), icon: Landmark },
-    { label: 'ยอดสุทธิที่ต้องจ่าย', value: fmtTHB(totals.payableNet), icon: Coins, emphasis: true },
+    { label: 'ยอดสุทธิที่ต้องจ่าย', value: fmtTHB(totals.payableNet), icon: Coins },
   ]
 
   return (

@@ -23,7 +23,8 @@ export function whtSearchFields(r: WhtRecordWithVendor): (string | number | unde
 
 /** The mock-side reference filter; the server's SQL builder is the other executor. */
 export function filterWht(records: WhtRecordWithVendor[], q: WhtListQuery): WhtRecordWithVendor[] {
-  let out = records
+  // Mirror the server: 0-WHT rows are not certificates to file.
+  let out = records.filter((r) => r.whtAmount > 0)
   if (q.month) out = filterWhtByMonth(out, q.month)
   if (q.formType) out = out.filter((r) => r.formType === q.formType)
   if (q.status === 'active') out = out.filter((r) => r.status !== 'done')
@@ -33,8 +34,11 @@ export function filterWht(records: WhtRecordWithVendor[], q: WhtListQuery): WhtR
 }
 
 function withVendorNames(bundle: WhtBundle): WhtRecordWithVendor[] {
-  const names = new Map<string, string>(bundle.vendors.map((v) => [v.id, v.name]))
-  return bundle.records.map((r) => ({ ...r, vendorName: names.get(r.vendorId) }))
+  const vendorById = new Map<string, WhtVendor>(bundle.vendors.map((v) => [v.id, v]))
+  return bundle.records.map((r) => {
+    const v = vendorById.get(r.vendorId)
+    return { ...r, vendorName: v?.name, vendorTaxId: v?.taxId, vendorAddress: v?.address }
+  })
 }
 
 export async function fetchWhtList(tenantId: string, q: WhtListQuery, params: URLSearchParams): Promise<WhtListResult> {

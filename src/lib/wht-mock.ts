@@ -1,7 +1,8 @@
-import type { WhtRecord, WhtVendor } from './wht'
+import type { WhtRecord, WhtRecordWithVendor, WhtVendor } from './wht'
 import { formTypeForVendorType, nextWhtCertificateNo } from './wht'
 import type { PaymentTransaction } from './types'
 import { isEntityName, vendorDisplayName } from './vendor-name'
+import { loadSettings } from './settings'
 
 // Per-tenant WHT store (mock). Server parity: wht_vendors + wht_records.
 
@@ -54,11 +55,15 @@ export function loadWht(tenantId?: string): WhtBundle {
   return { vendors: all.vendors.filter((v) => v.tenantId === tenantId), records: all.records.filter((r) => r.tenantId === tenantId) }
 }
 
-export function loadWhtByIds(ids: string[]): { records: (WhtRecord & { vendor?: WhtVendor })[]; tenantId: string | null } {
+export function loadWhtByIds(ids: string[]): { records: WhtRecordWithVendor[]; tenantId: string | null } {
   const all = read()
+  const vendorById = new Map<string, WhtVendor>(all.vendors.map((v) => [v.id, v]))
   const records = all.records
     .filter((r) => ids.includes(r.id))
-    .map((r) => ({ ...r, vendor: all.vendors.find((v) => v.id === r.vendorId) }))
+    .map((r) => {
+      const v = vendorById.get(r.vendorId)
+      return { ...r, vendorName: v?.name, vendorTaxId: v?.taxId, vendorAddress: v?.address }
+    })
   return { records, tenantId: records[0]?.tenantId ?? null }
 }
 
@@ -88,7 +93,7 @@ export function generateWhtForTxn(txn: PaymentTransaction): WhtRecord | null {
       name: vendorName,
       taxId: txn.vendor.taxId ?? '',
       address: txn.vendor.address,
-      vendorType: isEntityName(txn.vendor.name) ? 'company' : 'individual',
+      vendorType: isEntityName(txn.vendor.name) ? 'company' : 'individual' as const,
       isActive: true,
       createdAt: new Date().toISOString(),
     }
@@ -100,17 +105,20 @@ export function generateWhtForTxn(txn: PaymentTransaction): WhtRecord | null {
     all.records.filter((r) => r.tenantId === txn.tenantId).map((r) => r.certificateNo),
     issueDate,
   )
+  const s = loadSettings(txn.tenantId)
+  const paymentTypeLabel = s.whtRates.find((r) => r.paymentType === txn.paymentType)?.label
+    ?? txn.paymentType
   const record: WhtRecord = {
     id: `wr-${txn.id}`,
     tenantId: txn.tenantId,
     vendorId: vendor.id,
-    formType: formTypeForVendorType(vendor.vendorType),
+    formType: formTypeForVendorType(vendor.vendorType ?? 'individual'),
     issueDate,
     amount: txn.grossAmount,
     whtRate: txn.whtRate,
     whtAmount: txn.whtAmount,
     certificateNo,
-    description: txn.note || txn.description,
+    description: paymentTypeLabel,
     status: 'active',
     createdAt: new Date().toISOString(),
     sourceTransactionId: txn.id,

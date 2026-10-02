@@ -35,7 +35,9 @@ const SEARCH_COLUMNS = ['r.certificate_no', 'v.name', 'r.description', 'r.note',
 
 export function whtWhereClause(q: WhtListQuery, userId: string): SqlFragment {
   const b = makeBuilder()
-  const parts: string[] = [`r.user_id = ${b.bind(userId)}`]
+  // Only certificates that actually withheld something belong in the register;
+  // 0-WHT rows (มาตรา 50/1 waivers, imports, legacy) are not forms to file.
+  const parts: string[] = [`r.user_id = ${b.bind(userId)}`, 'r.wht_amount > 0']
 
   if (q.month) {
     const { from, to } = monthRange(q.month)

@@ -102,17 +102,13 @@ export function TxnRow({
           )}
         </div>
         <p className="flex items-center gap-1.5 truncate text-label text-ink-500">
-          <span className="font-mono">{t.id}</span>
           {t.slipReference ? (
-            <>
-              <span aria-hidden>·</span>
-              <span className="inline-flex min-w-0 items-center gap-1 truncate font-mono">
-                <Paperclip size={10} className="shrink-0 text-ink-400" aria-hidden />
-                {t.slipReference}
-              </span>
-            </>
+            <span className="inline-flex min-w-0 items-center gap-1 truncate font-mono">
+              <Paperclip size={10} className="shrink-0 text-ink-400" aria-hidden />
+              {t.slipReference}
+            </span>
           ) : (
-            <span className="text-ink-400">· ไม่มีสลิป</span>
+            <span className="text-ink-400">ไม่มีสลิป</span>
           )}
         </p>
       </td>

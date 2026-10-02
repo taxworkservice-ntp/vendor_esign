@@ -73,6 +73,8 @@ export interface CreateTxnInput {
   lineItems: LineItem[]
   whtRate: number
   whtMode: WhtMode
+  /** Continuous-contract escape: withhold even when gross < whtMinThreshold. */
+  forceWht?: boolean
   transferDate: string
   slipReference: string
   slipName: string

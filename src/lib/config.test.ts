@@ -22,11 +22,14 @@ describe('calcWht', () => {
 })
 
 describe('whtRateForPaymentType', () => {
-  it('maps known payment types from config', () => {
+  it('maps the Revenue Department preset payment types', () => {
+    expect(whtRateForPaymentType('ค่าจ้างทำของ')).toBe(3)
+    expect(whtRateForPaymentType('ค่าวิชาชีพอิสระ')).toBe(3)
     expect(whtRateForPaymentType('ค่าบริการ')).toBe(3)
-    expect(whtRateForPaymentType('ค่าเช่า')).toBe(5)
+    expect(whtRateForPaymentType('ค่าเช่าทรัพย์สิน')).toBe(5)
+    expect(whtRateForPaymentType('ค่านายหน้า')).toBe(3)
     expect(whtRateForPaymentType('ค่าขนส่ง')).toBe(1)
-    expect(whtRateForPaymentType('ทั่วไป')).toBe(0)
+    expect(whtRateForPaymentType('ไม่หักภาษี ณ ที่จ่าย')).toBe(0)
   })
   it('falls back to 0 for unknown types', () => {
     expect(whtRateForPaymentType('ไม่รู้จัก')).toBe(0)

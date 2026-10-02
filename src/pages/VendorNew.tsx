@@ -27,7 +27,7 @@ export function VendorNew() {
       return
     }
     if (prefixRequired(name) && !isVendorPrefix(prefix)) {
-      setErr('กรุณาเลือกคำนำหน้าชื่อ (เว้นว่างได้เฉพาะนิติบุคคล)')
+      setErr('กรุณาเลือกคำนำหน้าชื่อ')
       return
     }
     if (address.trim().length < 4) {

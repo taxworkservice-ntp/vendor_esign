@@ -15,6 +15,7 @@ import { getVendorMemory } from './vendor-memory'
 import { authRoutes, requireClient } from './client-auth'
 import { corsMw } from './cors'
 import { getTenantSettings, saveTenantSettings } from './settings'
+import { r2Configured, signDownload, signUpload } from './r2-storage'
 import { dataRoutes } from './data'
 import { txnRoutes } from './transactions'
 import { whtRoutes } from './wht'
@@ -285,7 +286,7 @@ app.post('/api/transactions/:id/finalize', async (c) => {
   }
 
   const rows = await db`
-    select t.description, t.note, t.line_items, t.gross_amount, t.wht_rate, t.wht_amount, t.net_amount,
+    select t.description, t.note, t.payment_type, t.line_items, t.gross_amount, t.wht_rate, t.wht_amount, t.net_amount,
       t.transfer_date, t.slip_reference,
       a.vendor_prefix, a.vendor_name, a.vendor_address, a.vendor_masked_id, a.signature_image_path,
       a.signed_at, a.verification_method, a.consent_text_version
@@ -293,7 +294,7 @@ app.post('/api/transactions/:id/finalize', async (c) => {
     join vendor_authorizations a on a.transaction_id = t.id
     where t.id = ${txnId} and t.user_id = ${rowTenant}`
   const d = one<{
-    description: string; note: string; line_items: unknown;
+    description: string; note: string; payment_type: string | null; line_items: unknown;
     gross_amount: string; wht_rate: string; wht_amount: string;
     net_amount: string; transfer_date: string; slip_reference: string;
     vendor_prefix: string; vendor_name: string; vendor_address: string; vendor_masked_id: string;
@@ -332,10 +333,19 @@ app.post('/api/transactions/:id/finalize', async (c) => {
         )
       }
       const issueDate = String(d.transfer_date).slice(0, 10)
+      // WHT description is the payment type label (ประเภทการจ่าย) from settings,
+      // not the transaction note — the Revenue Department form expects the
+      // income category, not free text.
+      const whtRatesCfg = (await db`select value from config where user_id = ${rowTenant} and key = 'wht_rates'`) as unknown as { value: unknown }[]
+      const ratesRaw = Array.isArray(whtRatesCfg[0]?.value) ? (whtRatesCfg[0].value as { paymentType?: string; label?: string }[]) : []
+      const whtDescription = ratesRaw.find((r) => r.paymentType === d.payment_type)?.label
+        ?? d.payment_type
+        ?? d.note
+        ?? d.description
       await db`insert into wht_records
         (user_id, vendor_id, form_type, issue_date, amount, wht_rate, wht_amount, description, status, certificate_no, source_transaction_id)
         values (${rowTenant}, ${vendorId}, ${formTypeForVendorType(vType)}, ${issueDate}::date,
-          ${Number(d.gross_amount)}, ${Number(d.wht_rate)}, ${whtAmountNum}, ${d.note || d.description}, 'active',
+          ${Number(d.gross_amount)}, ${Number(d.wht_rate)}, ${whtAmountNum}, ${whtDescription}, 'active',
           generate_wht_certificate_no(${rowTenant}, ${issueDate}::date), ${txnId})`
     })
   }
@@ -424,6 +434,41 @@ app.put('/api/settings', async (c) => {
   } catch {
     return c.json({ error: 'invalid-body' }, 400)
   }
+})
+
+// ── Asset signing (R2) ──────────────────────────────────────────────────────
+// Client-uploaded images (signature, stamp) go to R2. The server never handles
+// the bytes — it only issues presigned URLs so credentials stay server-side.
+app.get('/api/files/r2-status', async (c) => {
+  const u = await requireClient(c)
+  if (!u) return c.json({ error: 'unauthorized' }, 401)
+  return c.json({ configured: r2Configured() })
+})
+
+app.post('/api/files/sign-upload', async (c) => {
+  const u = await requireClient(c)
+  const tenantId = u?.memberships[0]?.tenantId
+  if (!tenantId) return c.json({ error: 'unauthorized' }, 401)
+  if (!r2Configured()) return c.json({ error: 'storage-not-configured' }, 503)
+  const body = (await c.req.json().catch(() => null)) as { fileName?: string } | null
+  if (!body?.fileName) return c.json({ error: 'fileName required' }, 400)
+  const result = await signUpload(body.fileName, tenantId)
+  if (!result) return c.json({ error: 'signing-failed' }, 500)
+  return c.json(result)
+})
+
+app.post('/api/files/sign-download', async (c) => {
+  const u = await requireClient(c)
+  const tenantId = u?.memberships[0]?.tenantId
+  if (!tenantId) return c.json({ error: 'unauthorized' }, 401)
+  if (!r2Configured()) return c.json({ error: 'storage-not-configured' }, 503)
+  const body = (await c.req.json().catch(() => null)) as { path?: string } | null
+  if (!body?.path || !body.path.startsWith(`${tenantId}/`)) {
+    return c.json({ error: 'invalid-path' }, 400)
+  }
+  const url = await signDownload(body.path)
+  if (!url) return c.json({ error: 'signing-failed' }, 500)
+  return c.json({ url })
 })
 
 // ── Cron (protected) ──────────────────────────────────────────────────────

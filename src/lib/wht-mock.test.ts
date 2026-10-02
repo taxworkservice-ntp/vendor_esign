@@ -46,11 +46,11 @@ describe('auto WHT on issued receipt', () => {
     expect(loadWht('ABC').records.some((r) => r.sourceTransactionId === 'TX-1')).toBe(true)
   })
 
-  it('uses pnd53 for an entity vendor', () => {
+  it('uses pnd3 for every vendor in this individual-only app', () => {
     const rec = generateWhtForTxn(
       txn({ id: 'TX-2', vendor: { id: 'v2', prefix: '', name: 'บริษัท ซัพพลาย จำกัด', address: 'y', maskedId: 'm', taxId: '0105566000011' } }),
     )
-    expect(rec?.formType).toBe('pnd53')
+    expect(rec?.formType).toBe('pnd3')
   })
 
   it('is idempotent — re-issuing does not duplicate', () => {
