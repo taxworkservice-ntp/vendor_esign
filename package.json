@@ -25,6 +25,7 @@
     "db:seed": "node scripts/seed.mjs",
     "db:seed-admin": "node scripts/seed-admin.mjs",
     "admin:create": "node scripts/create-platform-admin.mjs",
+    "seed:test-company": "node scripts/seed-test-company.mjs",
     "pdf:preview": "tsx scripts/preview-receipt.ts"
   },
   "dependencies": {
