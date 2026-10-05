@@ -6,7 +6,6 @@
   "outputDirectory": "dist",
   "functions": {
     "api/[...route].ts": {
-      "runtime": "nodejs22.x",
       "maxDuration": 30,
       "includeFiles": "server/assets/fonts/**"
     }
