@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { sql, withTenant } from '../../src/server/db'
 import {
+  ADMIN_COOKIE,
   SESSION_COOKIE,
   clearSessionCookie,
   createSession,
@@ -73,10 +74,10 @@ authRoutes.post('/login', async (c) => {
   if (lockedUntil(email)) return c.json({ error: 'locked' }, 429)
 
   const db = sql()
-  const rows = (await db`select u.id, u.email, c.password_hash, c.must_change_pw, u.status, c.temp_expires_at
+  const rows = (await db`select u.id, u.email, c.password_hash, c.must_change_pw, u.status, c.temp_expires_at, u.is_platform_admin
     from profiles u join auth_credentials c on c.user_id = u.id
     where lower(u.email) = ${email}`) as unknown as
-    { id: string; email: string; password_hash: string; must_change_pw: boolean; status: string; temp_expires_at: string | null }[]
+    { id: string; email: string; password_hash: string; must_change_pw: boolean; status: string; temp_expires_at: string | null; is_platform_admin: boolean }[]
   const u = one<(typeof rows)[number]>(rows)
 
   // Verify even when the user is missing (constant work), then reject generically.
@@ -87,6 +88,19 @@ authRoutes.post('/login', async (c) => {
   }
   if (u.temp_expires_at && new Date(String(u.temp_expires_at)) < new Date() && u.must_change_pw)
     return c.json({ error: 'temp-expired' }, 403)
+
+  // Unified login: the account type decides the session and the landing page.
+  // A platform admin (provider/operator) gets the isolated admin cookie and the
+  // client portal is none the wiser; a client gets the portal session.
+  if (u.is_platform_admin) {
+    fails.delete(email)
+    const { token, expiresAt } = await createSession(String(u.id), ip, c.req.header('user-agent') ?? '', { admin: true })
+    await audit('PLATFORM', 'profiles', String(u.id), 'admin.login', u.email, {}, ip)
+    return new Response(
+      JSON.stringify({ ok: true, kind: 'admin', mustChangePw: Boolean(u.must_change_pw) }),
+      { headers: { 'Content-Type': 'application/json', 'Set-Cookie': sessionCookie(token, expiresAt, ADMIN_COOKIE) } },
+    )
+  }
 
   const mems = (await db`select workspace_user_id, role from client_members where member_user_id = ${String(u.id)}`) as unknown as
     { workspace_user_id: string; role: string }[]
@@ -100,7 +114,7 @@ authRoutes.post('/login', async (c) => {
   await withTenant(tenantId, 'client_user', async () =>
     audit(tenantId, 'profiles', String(u.id), 'user.login', 'user', { channel: 'client' }, ip))
   return new Response(
-    JSON.stringify({ ok: true, email: u.email, mustChangePw: Boolean(u.must_change_pw), memberships }),
+    JSON.stringify({ ok: true, kind: 'client', email: u.email, mustChangePw: Boolean(u.must_change_pw), memberships }),
     { headers: { 'Content-Type': 'application/json', 'Set-Cookie': sessionCookie(token, expiresAt, SESSION_COOKIE) } },
   )
 })

@@ -68680,7 +68680,7 @@ authRoutes.post("/login", async (c) => {
   if (!email || !body?.password) return c.json({ error: "invalid-body" }, 400);
   if (lockedUntil(email)) return c.json({ error: "locked" }, 429);
   const db = sql();
-  const rows = await db`select u.id, u.email, c.password_hash, c.must_change_pw, u.status, c.temp_expires_at
+  const rows = await db`select u.id, u.email, c.password_hash, c.must_change_pw, u.status, c.temp_expires_at, u.is_platform_admin
     from profiles u join auth_credentials c on c.user_id = u.id
     where lower(u.email) = ${email}`;
   const u = one(rows);
@@ -68691,6 +68691,15 @@ authRoutes.post("/login", async (c) => {
   }
   if (u.temp_expires_at && new Date(String(u.temp_expires_at)) < /* @__PURE__ */ new Date() && u.must_change_pw)
     return c.json({ error: "temp-expired" }, 403);
+  if (u.is_platform_admin) {
+    fails.delete(email);
+    const { token: token2, expiresAt: expiresAt2 } = await createSession(String(u.id), ip, c.req.header("user-agent") ?? "", { admin: true });
+    await audit("PLATFORM", "profiles", String(u.id), "admin.login", u.email, {}, ip);
+    return new Response(
+      JSON.stringify({ ok: true, kind: "admin", mustChangePw: Boolean(u.must_change_pw) }),
+      { headers: { "Content-Type": "application/json", "Set-Cookie": sessionCookie(token2, expiresAt2, ADMIN_COOKIE) } }
+    );
+  }
   const mems = await db`select workspace_user_id, role from client_members where member_user_id = ${String(u.id)}`;
   const memberships = mems.map((m2) => ({ tenantId: String(m2.workspace_user_id), role: String(m2.role) }));
   if (!memberships.some((m2) => m2.role === "client_user" || m2.role === "client_admin" || m2.role === "owner" || m2.role === "manager" || m2.role === "officer"))
@@ -68700,7 +68709,7 @@ authRoutes.post("/login", async (c) => {
   const tenantId = memberships[0]?.tenantId ?? PILOT_TENANT;
   await withTenant(tenantId, "client_user", async () => audit(tenantId, "profiles", String(u.id), "user.login", "user", { channel: "client" }, ip));
   return new Response(
-    JSON.stringify({ ok: true, email: u.email, mustChangePw: Boolean(u.must_change_pw), memberships }),
+    JSON.stringify({ ok: true, kind: "client", email: u.email, mustChangePw: Boolean(u.must_change_pw), memberships }),
     { headers: { "Content-Type": "application/json", "Set-Cookie": sessionCookie(token, expiresAt, SESSION_COOKIE) } }
   );
 });

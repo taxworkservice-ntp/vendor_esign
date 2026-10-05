@@ -30,7 +30,6 @@ import { ClientChangePassword } from './pages/ClientChangePassword'
 import { ClientsList } from './pages/admin/ClientsList'
 import { ClientNew } from './pages/admin/ClientNew'
 import { ClientDetail } from './pages/admin/ClientDetail'
-import { Login } from './pages/admin/Login'
 import { ChangePassword } from './pages/admin/ChangePassword'
 import { Dashboard as AdminDashboard } from './pages/admin/Dashboard'
 import { Users as AdminUsers } from './pages/admin/Users'
@@ -72,7 +71,7 @@ function RequireClient({ children }: { children: React.ReactNode }) {
 function RequireAdmin({ children }: { children: React.ReactNode }) {
   const { ready, email, mustChangePw, isPlatformAdmin } = useAuth()
   if (!ready) return <Loading />
-  if (!email || !isPlatformAdmin) return <Navigate to="/admin/login" replace />
+  if (!email || !isPlatformAdmin) return <Navigate to="/login" replace />
   if (mustChangePw) return <Navigate to="/admin/change-password" replace />
   return <>{children}</>
 }
@@ -92,7 +91,8 @@ export default function App() {
           {/* Auth pages: standalone, no portal chrome */}
           <Route path="/login" element={<AuthShell><ClientLogin /></AuthShell>} />
           <Route path="/change-password" element={<AuthShell><ClientChangePassword /></AuthShell>} />
-          <Route path="/admin/login" element={<AuthShell><Login /></AuthShell>} />
+          {/* Unified login: /admin/login is kept only as a redirect */}
+          <Route path="/admin/login" element={<Navigate to="/login" replace />} />
           <Route path="/admin/change-password" element={<AuthShell><ChangePassword /></AuthShell>} />
 
           {/* Provider / operator workspace — its own shell, not the client Layout */}
