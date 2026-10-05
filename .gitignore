@@ -6,9 +6,9 @@ dist
 storage/
 backups/
 
-# generated Vercel function bundle (scripts/build-api.mjs)
-api/entry.js
-api/entry.js.map
+# generated Vercel function bundle (api/entry.js) is committed on purpose:
+# Vercel validates the `functions` pattern against tracked files before the
+# build runs. Regenerate with `npm run build:api` whenever the server changes.
 
 # embedded postgres (db:live, db:list)
 .pgdata-live/
