@@ -1,7 +1,6 @@
 import {
   fmtWhtDate,
   fmtWhtNum,
-  splitTaxId,
   thaiBahtText,
   type WhtFormType,
   type WhtRecordWithVendor,
@@ -64,6 +63,43 @@ export interface WhtProfile {
   stampStoragePath?: string
 }
 
+// ── Tax-ID digit boxes ───────────────────────────────────────────────────────
+// The form pre-prints 13 digit cells in the Thai standard 1-4-5-2-1 grouping.
+// Literal spaces could never hit them (font-dependent), so each digit is centred
+// in its printed cell. Geometry measured from public/wht/form_page_final.png in
+// the 1512-wide design space: per-group left edge + width (the groups are
+// separated by gaps of varying size, so one pitch/gap pair cannot fit all 13).
+const TAX_GROUPS = [1, 4, 5, 2, 1]
+const TAX_GROUP_LEFT = [951.75, 997.25, 1135.75, 1303.5, 1383.75]
+const TAX_GROUP_W = [30, 122, 153.75, 62.25, 30]
+// The vendor (ผู้ถูกหักภาษี) row sits ~1px right of the payer row in the scan.
+const TAX_VENDOR_DX = 1.25
+const TAX_FONT_SIZE = 45
+// Digit advance width at TAX_FONT_SIZE in Cordia New Bold (1493/4096 em), used
+// to centre the glyph box on the cell centre.
+const TAX_DIGIT_ADV = 16.4
+
+function taxIdFields(name: string, configTop: number, value: string | null | undefined, dx = 0): FieldDef[] {
+  const digits = String(value || '').replace(/\D/g, '').slice(0, 13)
+  const out: FieldDef[] = []
+  let i = 0
+  TAX_GROUPS.forEach((count, g) => {
+    const left = TAX_GROUP_LEFT[g] + dx
+    const step = TAX_GROUP_W[g] / count
+    for (let k = 0; k < count; k++, i++) {
+      out.push({
+        name: `${name}-${i}`,
+        top: cssTop(configTop, TAX_FONT_SIZE),
+        left: Math.round(left + step * (k + 0.5) - TAX_DIGIT_ADV / 2),
+        fontSize: TAX_FONT_SIZE,
+        bold: true,
+        value: digits[i] ?? '',
+      })
+    }
+  })
+  return out
+}
+
 export function buildFields(record: WhtRecordWithVendor, profile: WhtProfile, seq: number): FieldDef[] {
   const v = record
   const month = record.issueDate ? new Date(record.issueDate).getMonth() + 1 : 1
@@ -78,10 +114,10 @@ export function buildFields(record: WhtRecordWithVendor, profile: WhtProfile, se
   return [
     { name: 'wht_id', top: cssTop(187, 33), left: 1317, fontSize: 33, value: whtId },
     { name: 'payer_name', top: cssTop(279, 32), left: 165, fontSize: 32, width: 583, value: profile.company_name_th || '' },
-    { name: 'payer_taxid', top: cssTop(241, 45), left: 961, fontSize: 45, bold: true, value: splitTaxId(profile.tax_id) },
+    ...taxIdFields('payer_taxid', 241, profile.tax_id),
     { name: 'payer_address', top: cssTop(337, 31), left: 166, fontSize: 31, wrap: true, width: 1166, value: profile.address || '' },
     { name: 'name', top: cssTop(464, 32), left: 169, fontSize: 32, width: 583, value: String(v.vendorName || '') },
-    { name: 'taxid', top: cssTop(416, 45), left: 961, fontSize: 45, bold: true, value: splitTaxId(v.vendorTaxId) },
+    ...taxIdFields('taxid', 416, v.vendorTaxId, TAX_VENDOR_DX),
     { name: 'address', top: cssTop(531, 31), left: 171, fontSize: 31, wrap: true, width: 1166, value: String(v.vendorAddress || '') },
     { name: 'description1', top: cssTop(1624, 33), left: 290, fontSize: 33, width: 480, value: String(record.description || '') },
     { name: 'date1', top: cssTop(1620, 35), left: 857, fontSize: 35, value: dateStr },

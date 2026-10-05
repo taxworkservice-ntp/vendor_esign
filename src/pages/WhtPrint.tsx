@@ -4,10 +4,10 @@ import { Download, Move } from 'lucide-react'
 import { fetchWhtByIds, fetchWhtByScope } from '../lib/wht-source'
 import { signDownload } from '../lib/r2-assets'
 import { documentFileName, stamp } from '../lib/download-name'
-import { sheetToA4PdfBytes } from '../lib/sheet-to-a4-pdf'
+import { loadBgDataUrl, sheetToA4PdfBytes } from '../lib/sheet-to-a4-pdf'
 import { saveBlob } from '../lib/api-client'
 import { useClientAuth } from '../lib/client-auth'
-import { defaultSettings } from '../lib/settings'
+import { defaultSettings, type TenantSettings } from '../lib/settings'
 import { useSettings, useUpdateSettings } from '../hooks/useSettings'
 import {
   BG_IMAGE,
@@ -43,6 +43,7 @@ function PndPage({
   record,
   profile,
   seq,
+  bgSrc,
   signatureUrl,
   stampUrl,
   signaturePlacement,
@@ -54,6 +55,7 @@ function PndPage({
   record: WhtRecordWithVendor
   profile: WhtProfile
   seq: number
+  bgSrc: string
   signatureUrl?: string
   stampUrl?: string
   signaturePlacement: Placement
@@ -66,7 +68,7 @@ function PndPage({
   const check = CHECKMARK_POS[record.formType]
   return (
     <div className="print-sheet" style={{ width: PAGE_W + 'px', height: PAGE_H + 'px', position: 'relative', overflow: 'hidden', fontFamily: FONT_FAMILY }}>
-      <img alt="form" src={BG_IMAGE} style={{ position: 'absolute', inset: 0, width: PAGE_W + 'px', height: PAGE_H + 'px' }} />
+      <img alt="form" src={bgSrc} style={{ position: 'absolute', inset: 0, width: PAGE_W + 'px', height: PAGE_H + 'px' }} />
       {check && (
         <svg
           aria-label={record.formType}
@@ -221,6 +223,10 @@ export function WhtPrint() {
   const layout = params.get('layout') || 'pnd'
   const [records, setRecords] = useState<WhtRecordWithVendor[]>([])
   const [profile, setProfile] = useState<WhtProfile | null>(null)
+  // The settings object the rendered `profile` was derived from. `profile` lags
+  // `settings` by a render (it is copied across in an effect), so the auto-export
+  // gate compares this to the loaded settings to avoid exporting defaults.
+  const [profileSource, setProfileSource] = useState<TenantSettings | null>(null)
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
@@ -229,6 +235,9 @@ export function WhtPrint() {
   const [signaturePlacement, setSignaturePlacement] = useState<Placement>(DEFAULT_SIGNATURE_PLACEMENT)
   const [stampPlacement, setStampPlacement] = useState<Placement>(DEFAULT_STAMP_PLACEMENT)
   const [editing, setEditing] = useState(false)
+  // The form image inlined as a data URL, so a capture never races its first
+  // load (falls back to the file path until it resolves).
+  const [bgUrl, setBgUrl] = useState<string | undefined>(undefined)
   const autoExported = useRef(false)
   // `?download=1` (the list's "ดาวน์โหลดทั้งหมด" action) exports as soon as the
   // records + settings + signature/stamp are ready, instead of only previewing.
@@ -238,6 +247,14 @@ export function WhtPrint() {
   const { data: settings } = useSettings()
   const saveSettings = useUpdateSettings()
   const toast = useToast()
+
+  useEffect(() => {
+    void loadBgDataUrl()
+      .then(setBgUrl)
+      .catch(() => {
+        /* keep the file-path fallback */
+      })
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -278,6 +295,7 @@ export function WhtPrint() {
       signatureStoragePath: s.signatureStoragePath,
       stampStoragePath: s.stampStoragePath,
     })
+    setProfileSource(settings ?? null)
     // Placement is a saved per-workspace preference; seed the editor from it.
     setSignaturePlacement(s.signaturePlacement ?? DEFAULT_SIGNATURE_PLACEMENT)
     setStampPlacement(s.stampPlacement ?? DEFAULT_STAMP_PLACEMENT)
@@ -370,8 +388,14 @@ export function WhtPrint() {
 
       // Rasterise the actual preview sheets (html-to-image → SVG foreignObject)
       // so the PDF is the browser's own rendering, exactly as shown — including
-      // the signature/stamp placement. Turn the editor outline off first.
+      // the signature/stamp placement. Turn the editor outline off and inline the
+      // (large) form image first, so the first download has the background.
       setEditing(false)
+      try {
+        setBgUrl(await loadBgDataUrl())
+      } catch {
+        /* keep whatever background is already shown */
+      }
       await new Promise<void>((res) => requestAnimationFrame(() => requestAnimationFrame(() => res())))
       const sheets = Array.from(document.querySelectorAll<HTMLElement>('.print-sheet'))
       if (!sheets.length) throw new Error('no-sheets')
@@ -400,14 +424,19 @@ export function WhtPrint() {
   // the records, settings and the signature/stamp URLs are ready, once.
   useEffect(() => {
     if (!download || autoExported.current) return
+    // Wait for the rendered `profile` to be derived from the loaded settings. On
+    // the render where `settings` first arrives, `profile` still holds the
+    // defaultSettings seed (no signature/stamp paths), so checking `profile` here
+    // would pass vacuously and export before the assets exist.
+    if (!settings || profileSource !== settings) return
     if (loading || !profile || records.length === 0) return
     // A configured asset must have resolved to a URL before we render.
-    if (profile.signatureStoragePath && !signatureUrl) return
-    if (profile.stampStoragePath && !stampUrl) return
+    if (settings.signatureStoragePath && !signatureUrl) return
+    if (settings.stampStoragePath && !stampUrl) return
     autoExported.current = true
     void exportPdf()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [download, loading, profile, records, signatureUrl, stampUrl])
+  }, [download, settings, profileSource, loading, profile, records, signatureUrl, stampUrl])
 
   return (
     // Self-capped: this page used to inherit `max-w-screen-2xl` from the shell's
@@ -460,6 +489,7 @@ export function WhtPrint() {
                   record={r}
                   profile={profile}
                   seq={i}
+                  bgSrc={bgUrl ?? BG_IMAGE}
                   signatureUrl={signatureUrl ?? undefined}
                   stampUrl={stampUrl ?? undefined}
                   signaturePlacement={signaturePlacement}

@@ -1,4 +1,26 @@
 import { toCanvas } from 'html-to-image'
+import { BG_IMAGE } from './wht-form'
+
+// The form image is large (~3.3 MB). Fetch it once and inline it as a data URL
+// so a capture never races its first load (the bug where the first download had
+// no background). Shared across exports and preview.
+let bgPromise: Promise<string> | null = null
+export function loadBgDataUrl(): Promise<string> {
+  if (!bgPromise) {
+    bgPromise = fetch(BG_IMAGE)
+      .then((r) => r.blob())
+      .then(
+        (blob) =>
+          new Promise<string>((resolve, reject) => {
+            const fr = new FileReader()
+            fr.onload = () => resolve(String(fr.result))
+            fr.onerror = () => reject(fr.error)
+            fr.readAsDataURL(blob)
+          }),
+      )
+  }
+  return bgPromise
+}
 
 // Snapshot a DOM sheet onto one A4 page, using the browser's own layout engine
 // (SVG foreignObject via html-to-image) so the PDF is pixel-for-pixel the same
@@ -16,14 +38,21 @@ async function ready(el: HTMLElement): Promise<void> {
   }
   const images = Array.from(el.querySelectorAll('img'))
   await Promise.all(
-    images.map((img) =>
-      img.complete
-        ? Promise.resolve()
-        : new Promise<void>((resolve) => {
-            img.addEventListener('load', () => resolve(), { once: true })
-            img.addEventListener('error', () => resolve(), { once: true })
-          }),
-    ),
+    images.map(async (img) => {
+      if (!img.complete) {
+        await new Promise<void>((resolve) => {
+          img.addEventListener('load', () => resolve(), { once: true })
+          img.addEventListener('error', () => resolve(), { once: true })
+        })
+      }
+      // `complete` means bytes arrived; `decode()` means it is ready to draw —
+      // required so the first capture is not blank.
+      try {
+        await img.decode?.()
+      } catch {
+        /* decode unsupported or failed; draw anyway */
+      }
+    }),
   )
 }
 
