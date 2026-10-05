@@ -2,6 +2,8 @@
 
 This is the trimmed version for a pilot with **one client**. Build only what is listed here. Anything under "Not in the pilot" must not be built, even if it seems easy.
 
+> For the WHT withholding certificate form (ใบรับรองการหักภาษี ณ ที่จ่าย) — its exact coordinates, tax-ID cell geometry, print/PDF pipeline, and download races — see **`master-prompt-wht-form.md`**.
+
 ## 0. How to work
 
 - **Read before you write.** Before any change, read the whole existing codebase that this module touches: auth, tenant/role model, existing tables and RLS policies, storage buckets, UI components, routing, and naming conventions. Read each relevant file in full. Follow the conventions you find. Do not refactor unrelated code.

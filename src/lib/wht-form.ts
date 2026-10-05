@@ -14,9 +14,10 @@ export {
   type Placement,
 } from './settings-types'
 
-// The WHT (ใบรับรองการหักภาษี ณ ที่จ่าย) form model — one source of truth shared
-// by the on-screen preview (WhtPrint.tsx) and the vector PDF renderer
-// (wht-pdf.ts), so the download can never drift from what the operator saw.
+// The WHT (ใบรับรองการหักภาษี ณ ที่จ่าย) form model — one source of truth for the
+// on-screen preview (WhtPrint.tsx). The PDF is a raster of that same DOM
+// (sheet-to-a4-pdf.ts), so the download can never drift from what the operator saw.
+// See master-prompt-wht-form.md for the full geometry and pipeline.
 //
 // A 1512×2138 Revenue-Department form image with absolutely-positioned fields.
 // Coordinates are in that 1512×2138 space; `top` is the CSS box top for a div
