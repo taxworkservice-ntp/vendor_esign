@@ -79,8 +79,18 @@ function decryptLast4(enc: string | null): string {
   }
 }
 
+function decryptFull(enc: string | null | undefined): string | undefined {
+  if (!enc) return undefined
+  try {
+    return decryptId(enc) ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
 function toVendor(r: Record<string, unknown>) {
-  const last4 = decryptLast4(r.id_number_encrypted as string | null)
+  const enc = r.id_number_encrypted as string | null
+  const last4 = decryptLast4(enc)
   return {
     id: String(r.id),
     tenantId: String(r.user_id),
@@ -88,6 +98,9 @@ function toVendor(r: Record<string, unknown>) {
     prefix: String(r.prefix ?? ''),
     name: String(r.name),
     address: String(r.address ?? ''),
+    // The client owns this data: the portal shows the full tax ID (the same value
+    // it can already read via /vendors/:id/tax-id). Masking is for the vendor PDF.
+    taxId: decryptFull(enc),
     maskedId: maskTaxId(last4),
     taxLast4: last4 || undefined,
     lineUserId: (r.line_user_id as string | null) ?? undefined,

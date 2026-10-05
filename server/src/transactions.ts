@@ -10,6 +10,7 @@ import { emptyTotals, type TxnTotals } from '../../src/lib/txn-filters'
 import { parseListQuery } from '../../src/lib/txn-list-query'
 import { limitClause, orderByClause, totalsClause, whereClause } from './txn-sql'
 import { readStoredDurable } from './storage'
+import { decryptId } from './crypto'
 import { isoDay } from './dates'
 import { contentDisposition, documentFileName } from '../../src/lib/download-name'
 import type { PaymentTransaction } from '../../src/lib/types'
@@ -29,6 +30,7 @@ const SELECT = `
     p.gross_amount, p.wht_rate, p.wht_mode, p.wht_amount, p.net_amount, p.transfer_date,
     p.slip_reference, p.slip_file_path, p.status, p.void_reason, p.tax_id_last4, p.created_at,
     v.name as vendor_name, v.address as vendor_address, v.prefix as vendor_prefix, v.vendor_no as vendor_no,
+    v.id_number_encrypted as vendor_id_encrypted,
     (select row_to_json(x) from (
        select number, issue_date from vendor_receipts rr where rr.transaction_id = p.id
        order by rr.issue_date desc limit 1) x) as receipt,
@@ -108,6 +110,12 @@ export function toTxn(r: Record<string, unknown>): PaymentTransaction {
   const live = req ? new Date(String(req.expires_at ?? 0)) > new Date() : false
   const inviteToken = req && !req.used_at && !req.revoked_at && live ? String(req.token ?? '') || undefined : undefined
   const life = sub(r.life)
+  // The client owns this data — the portal shows the full tax ID, not the mask.
+  let vendorTaxId: string | undefined
+  const encVendor = r.vendor_id_encrypted as string | null
+  if (encVendor) {
+    try { vendorTaxId = decryptId(encVendor) ?? undefined } catch { vendorTaxId = undefined }
+  }
 
   return {
     id: String(r.id),
@@ -118,6 +126,7 @@ export function toTxn(r: Record<string, unknown>): PaymentTransaction {
       prefix: String(r.vendor_prefix ?? ''),
       name: String(r.vendor_name ?? ''),
       address: String(r.vendor_address ?? ''),
+      taxId: vendorTaxId,
       maskedId: maskFromLast4(last4),
     },
     paymentType: String(r.payment_type ?? ''),

@@ -68952,8 +68952,17 @@ function decryptLast4(enc) {
     return "";
   }
 }
+function decryptFull(enc) {
+  if (!enc) return void 0;
+  try {
+    return decryptId(enc) ?? void 0;
+  } catch {
+    return void 0;
+  }
+}
 function toVendor(r) {
-  const last4 = decryptLast4(r.id_number_encrypted);
+  const enc = r.id_number_encrypted;
+  const last4 = decryptLast4(enc);
   return {
     id: String(r.id),
     tenantId: String(r.user_id),
@@ -68961,6 +68970,9 @@ function toVendor(r) {
     prefix: String(r.prefix ?? ""),
     name: String(r.name),
     address: String(r.address ?? ""),
+    // The client owns this data: the portal shows the full tax ID (the same value
+    // it can already read via /vendors/:id/tax-id). Masking is for the vendor PDF.
+    taxId: decryptFull(enc),
     maskedId: maskTaxId(last4),
     taxLast4: last4 || void 0,
     lineUserId: r.line_user_id ?? void 0,
@@ -69537,6 +69549,7 @@ var SELECT = `
     p.gross_amount, p.wht_rate, p.wht_mode, p.wht_amount, p.net_amount, p.transfer_date,
     p.slip_reference, p.slip_file_path, p.status, p.void_reason, p.tax_id_last4, p.created_at,
     v.name as vendor_name, v.address as vendor_address, v.prefix as vendor_prefix, v.vendor_no as vendor_no,
+    v.id_number_encrypted as vendor_id_encrypted,
     (select row_to_json(x) from (
        select number, issue_date from vendor_receipts rr where rr.transaction_id = p.id
        order by rr.issue_date desc limit 1) x) as receipt,
@@ -69589,6 +69602,15 @@ function toTxn(r) {
   const live = req ? new Date(String(req.expires_at ?? 0)) > /* @__PURE__ */ new Date() : false;
   const inviteToken = req && !req.used_at && !req.revoked_at && live ? String(req.token ?? "") || void 0 : void 0;
   const life = sub(r.life);
+  let vendorTaxId;
+  const encVendor = r.vendor_id_encrypted;
+  if (encVendor) {
+    try {
+      vendorTaxId = decryptId(encVendor) ?? void 0;
+    } catch {
+      vendorTaxId = void 0;
+    }
+  }
   return {
     id: String(r.id),
     tenantId: String(r.user_id),
@@ -69598,6 +69620,7 @@ function toTxn(r) {
       prefix: String(r.vendor_prefix ?? ""),
       name: String(r.vendor_name ?? ""),
       address: String(r.vendor_address ?? ""),
+      taxId: vendorTaxId,
       maskedId: maskFromLast4(last4)
     },
     paymentType: String(r.payment_type ?? ""),

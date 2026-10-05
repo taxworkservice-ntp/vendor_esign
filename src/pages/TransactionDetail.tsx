@@ -16,6 +16,7 @@ import { defaultSettings, renderInviteMessage } from '../lib/settings'
 import { itemsTotal, normalizeLineItem } from '../lib/line-items'
 import { vendorDisplayName } from '../lib/vendor-name'
 import { fmtTHB, fmtDateTH } from '../lib/format'
+import { NextActionBand } from '../components/transactions/transaction-stage'
 
 export function TransactionDetail() {
   const { id } = useParams()
@@ -129,10 +130,6 @@ export function TransactionDetail() {
     setTimeout(() => setCopiedKind(''), 1600)
   }
 
-  // A receipt exists once it's been issued (or the document was voided after issue).
-  const canViewReceipt = !!t.receiptNumber && t.status !== 'signed'
-  const canIssue = t.status === 'signed'
-
   const attachSlip = async () => {
     setSlipErr('')
     setSlipBusy(true)
@@ -146,6 +143,48 @@ export function TransactionDetail() {
     }
   }
 
+  // The document panel. The primary "issue" action lives in the band above, so
+  // this card only reports the document state and owns the (secondary) void flow.
+  const receiptCard = (
+    <Card>
+      <CardBody className="space-y-3">
+        <h2 className="font-semibold">เอกสารใบเสร็จ</h2>
+        {t.receiptNumber ? (
+          <>
+            <p className="text-body">
+              <span className="text-ink-500">เลขที่ใบเสร็จ: </span>
+              <span className="font-mono font-semibold">{t.receiptNumber}</span>
+            </p>
+            <Link to={`/receipts/${t.id}`} className="block">
+              <Button variant="secondary" className="w-full">
+                <ExternalLink size={15} /> เปิดใบเสร็จ · ดาวน์โหลด PDF
+              </Button>
+            </Link>
+          </>
+        ) : t.status === 'signed' ? (
+          <p className="text-body text-ink-500">ผู้ขายลงนามแล้ว — ใช้ปุ่ม “ออกใบเสร็จและออกเลขที่” ด้านบนเพื่อออกเอกสาร</p>
+        ) : (
+          <p className="text-body text-ink-500">จะออกใบเสร็จได้หลังผู้ขายลงนามแล้ว</p>
+        )}
+        {t.status !== 'void' &&
+          (!showVoid ? (
+            <Button variant="ghost" onClick={() => setShowVoid(true)}>ยกเลิกเอกสาร…</Button>
+          ) : (
+            <div className="space-y-2">
+              <Label>เหตุผลการยกเลิก (จำเป็น)</Label>
+              <Input value={voidReason} onChange={(e) => setVoidReason(e.target.value)} placeholder="เช่น ยอดรวมก่อนหักภาษีไม่ถูกต้อง…" />
+              <div className="flex gap-2">
+                <Button variant="danger" disabled={!voidReason.trim()} onClick={() => setConfirmVoid(true)}>
+                  ยกเลิกเอกสาร
+                </Button>
+                <Button variant="ghost" onClick={() => setShowVoid(false)}>ปิด</Button>
+              </div>
+            </div>
+          ))}
+      </CardBody>
+    </Card>
+  )
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -154,6 +193,15 @@ export function TransactionDetail() {
         </button>
         <StatusBadge status={t.status} />
       </div>
+
+      <NextActionBand
+        t={t}
+        copiedLink={copiedKind === 'link'}
+        onSend={() => { void acts.send(t.id) }}
+        onIssue={() => setConfirmIssue(true)}
+        onCopyLink={() => void copyText(link, 'link')}
+        receiptHref={`/receipts/${t.id}`}
+      />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <div className="space-y-4">
@@ -257,6 +305,8 @@ export function TransactionDetail() {
         </div>
 
         <div className="space-y-4">
+          {receiptCard}
+
           <Card>
             <CardBody className="space-y-3">
               <h2 className="flex items-center gap-2 font-semibold"><Link2 size={16} /> ส่งลิงก์ให้ผู้ขาย</h2>
@@ -300,10 +350,7 @@ export function TransactionDetail() {
                   </Button>
                 </>
               ) : (
-                <p className="text-body text-ink-500">ยังไม่มีลิงก์ — เลือก “สร้างลิงก์ให้ผู้ขาย” จากนั้นคัดลอกข้อความไปวางในแชท</p>
-              )}
-              {t.status === 'draft' && (
-                <Button className="w-full" onClick={() => { acts.send(t.id) }}>สร้างลิงก์ให้ผู้ขาย</Button>
+                <p className="text-body text-ink-500">ยังไม่มีลิงก์ — ใช้ปุ่ม “สร้างลิงก์ให้ผู้ขาย” ด้านบน จากนั้นคัดลอกข้อความไปวางในแชท</p>
               )}
             </CardBody>
           </Card>
@@ -326,49 +373,6 @@ export function TransactionDetail() {
                     {slipBusy ? 'กำลังบันทึก…' : 'บันทึกสลิป'}
                   </Button>
                 </div>
-              )}
-            </CardBody>
-          </Card>
-
-          <Card>
-            <CardBody className="space-y-3">
-              <h2 className="font-semibold">เอกสารใบเสร็จ</h2>
-              {canViewReceipt ? (
-                <Link to={`/receipts/${t.id}`} className="block">
-                  <Button className="w-full">
-                    <ExternalLink size={15} /> เปิดใบเสร็จ · ดาวน์โหลด PDF
-                  </Button>
-                </Link>
-              ) : canIssue ? (
-                <>
-                  <Button className="w-full" onClick={() => setConfirmIssue(true)}>
-                    ออกใบเสร็จ
-                  </Button>
-                  <p className="text-label text-ink-400">
-                    ผู้ขายลงนามแล้ว — ออกเลขที่ใบเสร็จและสร้างเอกสารสำหรับรายการนี้ (ดำเนินการแล้วแก้ไขไม่ได้)
-                  </p>
-                </>
-              ) : (
-                <>
-                  <Button className="w-full" disabled title="จะออกใบเสร็จได้หลังผู้ขายลงนามแล้ว">ออกใบเสร็จ</Button>
-                  <p className="text-label text-ink-400">จะออกใบเสร็จได้หลังผู้ขายลงนามแล้ว</p>
-                </>
-              )}
-              {t.status !== 'void' && (
-                !showVoid ? (
-                  <Button variant="ghost" onClick={() => setShowVoid(true)}>ยกเลิกเอกสาร…</Button>
-                ) : (
-                  <div className="space-y-2">
-                    <Label>เหตุผลการยกเลิก (จำเป็น)</Label>
-                    <Input value={voidReason} onChange={(e) => setVoidReason(e.target.value)} placeholder="เช่น ยอดรวมก่อนหักภาษีไม่ถูกต้อง…" />
-                    <div className="flex gap-2">
-                      <Button variant="danger" disabled={!voidReason.trim()} onClick={() => setConfirmVoid(true)}>
-                        ยกเลิกเอกสาร
-                      </Button>
-                      <Button variant="ghost" onClick={() => setShowVoid(false)}>ปิด</Button>
-                    </div>
-                  </div>
-                )
               )}
             </CardBody>
           </Card>
