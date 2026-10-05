@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { deleteItem, loadItems, saveItem, type CatalogItem } from '../lib/items-mock'
+import { deleteItem, loadItems, nextItemNo, saveItem, type CatalogItem } from '../lib/items-mock'
 import { apiGet, apiSend, hasServer } from '../lib/api-client'
 import { useClientAuth } from '../lib/client-auth'
 import { isDuplicateItemName, itemSearchFields, matchesSearch } from '../lib/search-match'
@@ -96,6 +96,7 @@ export function useSaveItem() {
       const row: CatalogItem = {
         id: input.id ?? `it-${Date.now().toString(36)}`,
         tenantId: activeTenant,
+        itemNo: prev?.itemNo ?? nextItemNo(activeTenant),
         name,
         unit,
         unitPrice,

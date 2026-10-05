@@ -69026,6 +69026,7 @@ dataRoutes.delete("/vendors/:id", async (c) => {
 var toItem = (r) => ({
   id: String(r.id),
   tenantId: String(r.user_id),
+  itemNo: Number(r.item_no ?? 0),
   name: String(r.name),
   unit: String(r.unit ?? "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23"),
   unitPrice: Number(r.unit_price ?? 0),
@@ -69039,9 +69040,9 @@ dataRoutes.get("/items", async (c) => {
   const rows = await withTenant(g.ws, "client", async () => {
     const db = sql();
     return await db.query(
-      `select id, user_id, name, unit, unit_price, is_active, created_at
+      `select id, user_id, item_no, name, unit, unit_price, is_active, created_at
        from items where user_id = $1 ${includeArchived ? "" : "and is_active"}
-       order by created_at desc`,
+       order by item_no desc`,
       [g.ws]
     );
   });
@@ -69064,9 +69065,11 @@ dataRoutes.post("/items", async (c) => {
   if (dup) return c.json({ error: "duplicate-item", existing: dup }, 409);
   const row = await withTenant(g.ws, "client", async () => {
     const db = sql();
-    const ins = await db`insert into items (user_id, name, unit, unit_price)
-      values (${g.ws}, ${name}, ${(b2?.unit ?? "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23").trim() || "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23"}, ${Math.max(0, Number(b2?.unitPrice) || 0)})
-      returning id, user_id, name, unit, unit_price, is_active, created_at`;
+    const ins = await db`insert into items (user_id, item_no, name, unit, unit_price)
+      values (${g.ws},
+        (select coalesce(max(item_no), 0) + 1 from items where user_id = ${g.ws}),
+        ${name}, ${(b2?.unit ?? "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23").trim() || "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23"}, ${Math.max(0, Number(b2?.unitPrice) || 0)})
+      returning id, user_id, item_no, name, unit, unit_price, is_active, created_at`;
     return ins[0];
   });
   return c.json({ ok: true, item: toItem(row) });

@@ -11,6 +11,8 @@
 // a match — the server builder uses the same escaping rules via
 // server/src/sql-builder.ts.
 
+import { itemCode, vendorCode } from './ids'
+
 export type SearchField = string | number | null | undefined
 
 export function normalizeSearch(q: string): string {
@@ -38,14 +40,16 @@ export function vendorSearchFields(v: {
   taxLast4?: string
   maskedId?: string
 }): SearchField[] {
-  // vendorNo is matched on its zero-padded form too, so "001" finds #001.
+  // vendorNo is matched raw, zero-padded, and as the displayed code (VEN-001),
+  // so "1", "001" and "VEN-001" all find the same supplier.
   const no = v.vendorNo ?? 0
-  return [v.name, v.address, v.phone, v.email, v.lineUserId, String(no), String(no).padStart(3, '0'), v.taxLast4, v.maskedId]
+  return [v.name, v.address, v.phone, v.email, v.lineUserId, String(no), String(no).padStart(3, '0'), vendorCode(no), v.taxLast4, v.maskedId]
 }
 
 /** Every field a catalog item can be found by. */
-export function itemSearchFields(i: { name?: string; unit?: string }): SearchField[] {
-  return [i.name, i.unit]
+export function itemSearchFields(i: { name?: string; unit?: string; itemNo?: number }): SearchField[] {
+  const no = i.itemNo ?? 0
+  return [i.name, i.unit, String(no), String(no).padStart(3, '0'), itemCode(no)]
 }
 
 /** True when two catalog item names collide, ignoring case and surrounding space. */

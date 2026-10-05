@@ -62,9 +62,10 @@ describe('vendorSearchFields', () => {
     expect(matchesSearch(vendorSearchFields(v), '6789')).toBe(true)
   })
 
-  it('finds by vendor number, padded or not', () => {
+  it('finds by vendor number, padded, raw or as the displayed code', () => {
     expect(matchesSearch(vendorSearchFields(v), '007')).toBe(true)
     expect(matchesSearch(vendorSearchFields(v), '7')).toBe(true)
+    expect(matchesSearch(vendorSearchFields(v), 'VEN-007')).toBe(true)
   })
 
   it('finds by phone, address, email and LINE id', () => {
@@ -84,6 +85,13 @@ describe('itemSearchFields', () => {
   it('searches the unit as well as the name', () => {
     expect(matchesSearch(itemSearchFields({ name: 'ค่าจ้าง', unit: 'ชั่วโมง' }), 'ชั่วโมง')).toBe(true)
     expect(matchesSearch(itemSearchFields({ name: 'ค่าจ้าง', unit: 'ชั่วโมง' }), 'ค่า')).toBe(true)
+  })
+
+  it('finds by item number, padded, raw or as the displayed code', () => {
+    const it = { name: 'ค่าจ้าง', unit: 'ชั่วโมง', itemNo: 3 }
+    expect(matchesSearch(itemSearchFields(it), 'ITM-003')).toBe(true)
+    expect(matchesSearch(itemSearchFields(it), '003')).toBe(true)
+    expect(matchesSearch(itemSearchFields(it), '3')).toBe(true)
   })
 })
 

@@ -1,0 +1,2 @@
+DROP INDEX IF EXISTS uq_items_user_no;
+ALTER TABLE items DROP COLUMN IF EXISTS item_no;

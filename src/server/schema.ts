@@ -160,6 +160,7 @@ export const whtRecords = pgTable('wht_records', {
 export const items = pgTable('items', {
   id: uuid('id').defaultRandom().primaryKey(),
   userId: text('user_id').notNull(),
+  itemNo: integer('item_no').notNull().default(0),
   name: text('name').notNull(),
   unit: text('unit').notNull().default('รายการ'),
   unitPrice: numeric('unit_price', { precision: 12, scale: 2 }).notNull().default('0'),

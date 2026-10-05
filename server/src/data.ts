@@ -229,7 +229,7 @@ dataRoutes.delete('/vendors/:id', async (c) => {
 // no longer offered without deleting it. Archived entries drop out of the
 // default list and come back with includeArchived=1.
 const toItem = (r: Record<string, unknown>) => ({
-  id: String(r.id), tenantId: String(r.user_id), name: String(r.name),
+  id: String(r.id), tenantId: String(r.user_id), itemNo: Number(r.item_no ?? 0), name: String(r.name),
   unit: String(r.unit ?? 'รายการ'), unitPrice: Number(r.unit_price ?? 0),
   isActive: r.is_active === undefined ? true : Boolean(r.is_active),
   createdAt: new Date(String(r.created_at ?? Date.now())).toISOString(),
@@ -242,9 +242,9 @@ dataRoutes.get('/items', async (c) => {
   const rows = await withTenant(g.ws, 'client', async () => {
     const db = sql()
     return (await db.query(
-      `select id, user_id, name, unit, unit_price, is_active, created_at
+      `select id, user_id, item_no, name, unit, unit_price, is_active, created_at
        from items where user_id = $1 ${includeArchived ? '' : 'and is_active'}
-       order by created_at desc`,
+       order by item_no desc`,
       [g.ws],
     )) as unknown as Record<string, unknown>[]
   })
@@ -272,9 +272,11 @@ dataRoutes.post('/items', async (c) => {
   if (dup) return c.json({ error: 'duplicate-item', existing: dup }, 409)
   const row = await withTenant(g.ws, 'client', async () => {
     const db = sql()
-    const ins = (await db`insert into items (user_id, name, unit, unit_price)
-      values (${g.ws}, ${name}, ${(b?.unit ?? 'รายการ').trim() || 'รายการ'}, ${Math.max(0, Number(b?.unitPrice) || 0)})
-      returning id, user_id, name, unit, unit_price, is_active, created_at`) as unknown as Record<string, unknown>[]
+    const ins = (await db`insert into items (user_id, item_no, name, unit, unit_price)
+      values (${g.ws},
+        (select coalesce(max(item_no), 0) + 1 from items where user_id = ${g.ws}),
+        ${name}, ${(b?.unit ?? 'รายการ').trim() || 'รายการ'}, ${Math.max(0, Number(b?.unitPrice) || 0)})
+      returning id, user_id, item_no, name, unit, unit_price, is_active, created_at`) as unknown as Record<string, unknown>[]
     return ins[0]
   })
   return c.json({ ok: true, item: toItem(row) })

@@ -4,6 +4,7 @@ import { Archive, ArchiveRestore, ChevronLeft, ReceiptText, Users } from 'lucide
 import { useDeleteVendor, useForgetVendorId, useSetVendorActive, useUpdateVendor, useVendor } from '../hooks/useVendors'
 import { useTransactions } from '../hooks/useTransactions'
 import { displayTaxId } from '../lib/vendors-mock'
+import { vendorCode } from '../lib/ids'
 import { VENDOR_PREFIXES, isVendorPrefix, prefixRequired, vendorDisplayName } from '../lib/vendor-name'
 import { emptyFilters } from '../lib/txn-filters'
 import { fmtDateTH, fmtTHB } from '../lib/format'
@@ -186,7 +187,7 @@ export function VendorDetail() {
       )}
       <PageHeader
         title={vendorDisplayName(v.prefix, v.name)}
-        sub={`รหัสผู้ขาย ${String(v.vendorNo ?? 0).padStart(3, '0')} · ${displayTaxId(v)} · ผู้ขายรายย่อย (ไม่จด VAT)`}
+        sub={`รหัสผู้ขาย ${vendorCode(v.vendorNo)} · ${displayTaxId(v)} · ผู้ขายรายย่อย (ไม่จด VAT)`}
         actions={
           editing
             ? <Button onClick={save} loading={update.isPending}>{update.isPending ? 'กำลังบันทึก…' : 'บันทึก'}</Button>
