@@ -61,11 +61,12 @@ function toRecord(r: Record<string, unknown>): WhtRecordWithVendor {
     // return is filed against.
     vendorName: r.vendor_name === null || r.vendor_name === undefined ? undefined : String(r.vendor_name),
     vendorTaxId: r.vendor_tax_id === null || r.vendor_tax_id === undefined ? undefined : String(r.vendor_tax_id),
+    vendorAddress: r.vendor_address === null || r.vendor_address === undefined ? undefined : String(r.vendor_address),
   }
 }
 
 const RECORD_SELECT = `
-  select r.*, v.name as vendor_name, v.tax_id as vendor_tax_id
+  select r.*, v.name as vendor_name, v.tax_id as vendor_tax_id, v.address as vendor_address
   from wht_records r
   join wht_vendors v on v.id = r.vendor_id`
 

@@ -34,7 +34,9 @@ export async function sheetToA4PdfBytes(el: HTMLElement): Promise<Uint8Array> {
   const canvas = await toCanvas(el, {
     pixelRatio: 2,
     backgroundColor: '#ffffff',
-    cacheBust: true,
+    // Must stay off: a cache-bust query appended after a presigned URL's
+    // X-Amz-Signature invalidates the signature (R2 then 403s without CORS).
+    cacheBust: false,
   })
   const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' })
   pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 595.28, 841.89)

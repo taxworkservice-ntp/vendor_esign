@@ -293,10 +293,11 @@ export function WhtPrint() {
     }
   }
 
-  // Resolve presigned download URLs for the signature/stamp whenever their
-  // storage paths change. Short-lived URLs are fine — the page renders once.
-  // The auto-download waits on these URLs (see below), so a signature is never
-  // missed because the batch raced the fetch.
+  // Resolve the signature/stamp to data URLs whenever their storage paths
+  // change. We fetch the presigned URL once here (as-is) and inline the bytes, so
+  // html-to-image never has to fetch a cross-origin R2 URL during export — which
+  // was appending a cache-buster that broke the signature and surfaced as a CORS
+  // error. The preview and the PDF both use these data URLs.
   useEffect(() => {
     if (!profile) {
       setSignatureUrl(null)
@@ -304,10 +305,28 @@ export function WhtPrint() {
       return
     }
     let cancelled = false
+    const toDataUrl = async (path?: string): Promise<string | null> => {
+      if (!path) return null
+      const signed = await signDownload(path)
+      if (!signed) return null
+      try {
+        const r = await fetch(signed)
+        if (!r.ok) return null
+        const blob = await r.blob()
+        return await new Promise<string>((resolve) => {
+          const fr = new FileReader()
+          fr.onload = () => resolve(String(fr.result))
+          fr.onerror = () => resolve('')
+          fr.readAsDataURL(blob)
+        })
+      } catch {
+        return null
+      }
+    }
     void (async () => {
       const [sig, stamp] = await Promise.all([
-        profile.signatureStoragePath ? signDownload(profile.signatureStoragePath) : null,
-        profile.stampStoragePath ? signDownload(profile.stampStoragePath) : null,
+        toDataUrl(profile.signatureStoragePath),
+        toDataUrl(profile.stampStoragePath),
       ])
       if (!cancelled) {
         setSignatureUrl(sig)

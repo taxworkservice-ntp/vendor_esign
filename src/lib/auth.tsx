@@ -26,6 +26,26 @@ const Ctx = createContext<AuthCtx | null>(null)
 // public API base, then to mock mode when both are empty.
 const API = ((import.meta.env.VITE_ADMIN_API_BASE ?? '') || (import.meta.env.VITE_API_BASE ?? '')) as string
 const LS_KEY = 'taxwork-auth-v1'
+// Set once an admin logs in on this browser. Client pages only probe the admin
+// session when this hint (or an /admin route) is present, so a normal client
+// user never requests /api/me-admin and logs a 401 on every page load.
+const HINT_KEY = 'taxwork-admin-hint'
+
+function hasAdminHint(): boolean {
+  try {
+    return localStorage.getItem(HINT_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+function setAdminHint(on: boolean): void {
+  try {
+    if (on) localStorage.setItem(HINT_KEY, '1')
+    else localStorage.removeItem(HINT_KEY)
+  } catch {
+    /* private mode */
+  }
+}
 
 export const MOCK_MODE = !API
 
@@ -51,6 +71,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refresh = useCallback(async () => {
     if (!API) {
       setState(localSession())
+      return
+    }
+    // Probe the admin session only on admin routes or after an admin logged in
+    // here; otherwise skip the request entirely (no 401 noise on client pages).
+    const onAdminRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')
+    if (!onAdminRoute && !hasAdminHint()) {
+      setState(loggedOut())
       return
     }
     try {
@@ -90,6 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ready: true,
         }
         localStorage.setItem(LS_KEY, JSON.stringify(next))
+        setAdminHint(true)
         setState(next)
         return { mustChangePw: false }
       }
@@ -101,6 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
       const j = (await r.json().catch(() => null)) as { mustChangePw?: boolean; error?: string } | null
       if (!r.ok) throw new Error(j?.error ?? 'login-failed')
+      setAdminHint(true)
       await refresh()
       return { mustChangePw: !!j?.mustChangePw }
     },
@@ -108,6 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 
   const logout = useCallback(async () => {
+    setAdminHint(false)
     if (!API) {
       localStorage.removeItem(LS_KEY)
       setState(loggedOut())

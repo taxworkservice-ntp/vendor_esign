@@ -70096,11 +70096,12 @@ function toRecord(r) {
     // come along because a register export has to carry the payee details the
     // return is filed against.
     vendorName: r.vendor_name === null || r.vendor_name === void 0 ? void 0 : String(r.vendor_name),
-    vendorTaxId: r.vendor_tax_id === null || r.vendor_tax_id === void 0 ? void 0 : String(r.vendor_tax_id)
+    vendorTaxId: r.vendor_tax_id === null || r.vendor_tax_id === void 0 ? void 0 : String(r.vendor_tax_id),
+    vendorAddress: r.vendor_address === null || r.vendor_address === void 0 ? void 0 : String(r.vendor_address)
   };
 }
 var RECORD_SELECT = `
-  select r.*, v.name as vendor_name, v.tax_id as vendor_tax_id
+  select r.*, v.name as vendor_name, v.tax_id as vendor_tax_id, v.address as vendor_address
   from wht_records r
   join wht_vendors v on v.id = r.vendor_id`;
 whtRoutes.get("/wht/vendors", async (c) => {
