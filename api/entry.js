@@ -70232,10 +70232,11 @@ app.get("/api/vendor/:token", async (c) => {
   const db = sql();
   const rows = await db`
     select vr.id as req_id, vr.user_id, vr.expires_at, vr.used_at, vr.revoked_at, vr.unlocked_at,
-      t.id, t.ref, t.description, t.payment_type, t.gross_amount, t.wht_rate,
+      t.id, t.ref, t.description, t.note, t.line_items, t.payment_type, t.gross_amount, t.wht_rate,
       t.wht_amount, t.net_amount, t.transfer_date, t.slip_reference, t.status,
       t.tax_id_hash, t.tax_id_last4,
-      v.prefix as vendor_prefix, v.name as vendor_name, v.address as vendor_address
+      v.prefix as vendor_prefix, v.name as vendor_name, v.address as vendor_address,
+      (select client_code from client_profiles where id = vr.user_id) as client_code
     from vendor_requests vr
     join vendor_payables t on t.id = vr.transaction_id
     join vendor_payees v on v.id = t.vendor_id
@@ -70251,8 +70252,13 @@ app.get("/api/vendor/:token", async (c) => {
     await withTenant(rowTenant, "client", async () => audit(rowTenant, "vendor_payables", String(r.id), "vendor.opened", "vendor", {}, ip));
   }
   return c.json({
+    id: r.id,
+    tenantId: rowTenant,
+    clientCode: r.client_code ?? null,
     ref: r.ref,
     description: r.description,
+    note: r.note,
+    lineItems: r.line_items,
     paymentType: r.payment_type,
     grossAmount: r.gross_amount,
     whtRate: r.wht_rate,

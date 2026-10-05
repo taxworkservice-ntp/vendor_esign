@@ -1,10 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import type { PaymentTransaction } from '../lib/types'
+import type { LineItem, PaymentTransaction, TxnStatus } from '../lib/types'
 import { loadTxns, saveTxns } from '../lib/mock'
+import { normalizeLineItem } from '../lib/line-items'
 import { normalizeTaxId, taxIdHash } from '../lib/taxid'
 import { currentBeYear } from '../lib/settings'
 import { nextReceiptNumber } from '../lib/receipt-number'
 import { putSignature } from '../lib/sig-store'
+import { hasServer } from '../lib/api-client'
 
 export interface VendorCorrection {
   field: 'prefix' | 'name' | 'address'
@@ -30,6 +32,7 @@ export interface VendorAuth extends VendorAuthMeta {
 
 const AUTH_KEY = 'taxwork-pilot-auth-v1'
 const QK = ['transactions'] as const
+const API = (import.meta.env.VITE_API_BASE ?? '') as string
 
 type StoredAuth = VendorAuthMeta
 
@@ -61,17 +64,97 @@ export function getAuthMeta(txnId: string): VendorAuthMeta | undefined {
   return readAuth()[txnId]
 }
 
+// ── Server vendor view ──────────────────────────────────────────────────────
+// The public vendor endpoint returns a masked, gate-aware projection of the
+// transaction. Map it onto the shape the signing page already consumes.
+
+interface ServerVendor {
+  id: string
+  tenantId: string
+  clientCode?: string | null
+  ref?: string
+  description?: string
+  note?: string
+  lineItems?: unknown
+  paymentType?: string
+  grossAmount?: unknown
+  whtRate?: unknown
+  whtAmount?: unknown
+  netAmount?: unknown
+  transferDate?: string
+  slipReference?: string
+  status?: TxnStatus
+  gated?: boolean
+  idLast4?: string | null
+  vendorPrefix?: string
+  vendorName?: string
+  vendorAddress?: string
+  unlocked?: boolean
+}
+
+function maskFromLast4(last4: string | null | undefined): string {
+  const d = String(last4 ?? '').replace(/\D/g, '').slice(-4)
+  return d.length === 4 ? `x-xxxx-xxxxx-${d.slice(0, 2)}-${d.slice(2)}` : ''
+}
+
+async function fetchServerVendor(token: string): Promise<PaymentTransaction | undefined> {
+  const r = await fetch(`${API}/api/vendor/${encodeURIComponent(token)}`, { credentials: 'include' })
+  // 404 (unknown) and 410 (used/revoked/expired) are the "invalid link" states.
+  if (r.status === 404 || r.status === 410) return undefined
+  if (!r.ok) throw new Error('vendor-fetch-failed')
+  const j = (await r.json()) as ServerVendor
+  const items: LineItem[] = Array.isArray(j.lineItems)
+    ? (j.lineItems as Record<string, unknown>[]).map((it) => normalizeLineItem(it as never))
+    : []
+  return {
+    id: j.id,
+    tenantId: j.tenantId,
+    clientCode: j.clientCode ?? undefined,
+    vendor: {
+      id: '',
+      vendorNo: 0,
+      prefix: j.vendorPrefix ?? '',
+      name: j.vendorName ?? '',
+      address: j.vendorAddress ?? '',
+      maskedId: maskFromLast4(j.idLast4),
+    },
+    paymentType: j.paymentType ?? '',
+    description: j.description ?? '',
+    note: j.note ?? '',
+    lineItems: items,
+    grossAmount: Number(j.grossAmount ?? 0),
+    whtRate: Number(j.whtRate ?? 0),
+    whtMode: 'deduct',
+    whtAmount: Number(j.whtAmount ?? 0),
+    netAmount: Number(j.netAmount ?? 0),
+    transferDate: String(j.transferDate ?? ''),
+    slipReference: j.slipReference ?? '',
+    slipName: '',
+    status: (j.status as TxnStatus) ?? 'sent',
+    receiptNumber: undefined,
+    createdAt: '',
+    timeline: [],
+    inviteToken: token,
+    // The gate is enforced server-side; a truthy marker is all the page needs.
+    taxIdHash: j.gated ? 'server' : undefined,
+    taxIdLast4: j.idLast4 ?? undefined,
+    checks: [],
+  }
+}
+
 export function useVendorTxn(token?: string) {
   return useQuery({
     queryKey: [...QK, 'vendor', token],
     enabled: !!token,
-    queryFn: async () =>
-      loadTxns().find((t) => t.inviteToken === token) as PaymentTransaction | undefined,
+    queryFn: async (): Promise<PaymentTransaction | undefined> =>
+      hasServer
+        ? fetchServerVendor(token!)
+        : (loadTxns().find((t) => t.inviteToken === token) as PaymentTransaction | undefined),
   })
 }
 
-// Tax ID gate (mock mirror of POST /api/vendor/:token/unlock).
-// Legacy rows without taxIdHash skip the gate with a notice.
+// Tax ID gate (server: POST /api/vendor/:token/unlock; mock: local hash compare).
+// Legacy rows without a stored hash skip the gate with a notice.
 export const GATE_MAX_TRIES = 5
 const gateFails = new Map<string, { n: number; until: number }>()
 
@@ -99,6 +182,29 @@ export async function tryGateUnlock(
   idPlain: string,
 ): Promise<{ ok: boolean; remaining: number }> {
   if (!txn.taxIdHash) return { ok: true, remaining: GATE_MAX_TRIES } // legacy row
+
+  if (hasServer) {
+    try {
+      const r = await fetch(`${API}/api/vendor/${encodeURIComponent(token)}/unlock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idNumber: idPlain }),
+      })
+      const j = (await r.json().catch(() => ({}))) as { remaining?: number }
+      if (r.ok) {
+        try {
+          sessionStorage.setItem(`taxwork-gate-${token}`, '1')
+        } catch {
+          /* private mode — gate re-asks on reload */
+        }
+        return { ok: true, remaining: GATE_MAX_TRIES }
+      }
+      return { ok: false, remaining: Number(j?.remaining ?? 0) }
+    } catch {
+      return { ok: false, remaining: GATE_MAX_TRIES }
+    }
+  }
+
   const remaining = gateRemaining(token)
   if (remaining <= 0) return { ok: false, remaining: 0 }
   const match = (await taxIdHash(idPlain)) === txn.taxIdHash
@@ -129,6 +235,8 @@ export function useVendorActions() {
   const refresh = () => qc.invalidateQueries({ queryKey: QK })
   return {
     markOpened(id: string) {
+      // Server mode: opening already stamps opened_at in GET /api/vendor/:token.
+      if (hasServer) return
       touch(id, (t) =>
         t.status === 'sent'
           ? { ...t, status: 'opened', timeline: [...t.timeline, { at: new Date().toISOString(), label: 'ผู้ขายเปิดลิงก์' }] }
@@ -136,7 +244,29 @@ export function useVendorActions() {
       )
       refresh()
     },
-    submit(id: string, auth: VendorAuth) {
+    async submit(id: string, auth: VendorAuth, token?: string): Promise<{ ok: boolean; error?: string }> {
+      if (hasServer) {
+        if (!token) return { ok: false, error: 'invalid-link' }
+        const r = await fetch(`${API}/api/vendor/${encodeURIComponent(token)}/sign`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            vendorPrefix: auth.vendorPrefix,
+            vendorName: auth.vendorName,
+            vendorAddress: auth.vendorAddress,
+            idLast4: auth.vendorIdLast4,
+            signaturePng: auth.signaturePng,
+            consentVersion: 'v1',
+          }),
+        })
+        if (!r.ok) {
+          const j = (await r.json().catch(() => null)) as { error?: string } | null
+          return { ok: false, error: j?.error ?? 'sign-failed' }
+        }
+        return { ok: true }
+      }
+
+      // Mock mode: local store (kept for `npm run dev` without an API).
       // Fire-and-forget: the PNG is already in hand, and blocking the status
       // flip on an IndexedDB write would only add latency to the vendor.
       void putSignature(id, auth.signaturePng)
@@ -180,6 +310,7 @@ export function useVendorActions() {
         }
       })
       refresh()
+      return { ok: true }
     },
   }
 }

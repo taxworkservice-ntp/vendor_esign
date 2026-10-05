@@ -61,6 +61,8 @@ export function VendorSign() {
   const [done, setDone] = useState(false)
   const [signedId, setSignedId] = useState<string>()
   const [tried, setTried] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitErr, setSubmitErr] = useState('')
 
   // Tax ID gate: wrong-recipient guard. Legacy rows without a stored hash
   // skip the gate with a notice.
@@ -195,30 +197,50 @@ export function VendorSign() {
       </Shell>
     )
 
-  const submit = () => {
+  const submit = async () => {
     setTried(true)
+    setSubmitErr('')
     if (!valid || !padRef.current) return
-    acts.submit(t.id, {
-      vendorPrefix: isVendorPrefix(prefix) ? prefix : '',
-      vendorName: name.trim(),
-      vendorAddress: address.trim(),
-      vendorIdLast4: tid.replace(/\D/g, '').slice(-4) || (t.taxIdLast4 ?? ''),
-      signaturePng: padRef.current.toPng(),
-      verificationMethod: 'stub-deferred',
-      consentVersion: 'v1',
-      signedAt: new Date().toISOString(),
-      corrections: [], // computed at submit (diff vs client records)
-    })
-    // Allow this browser to open the receipt copy right after signing (the
-    // single-use invite token is consumed, so a URL flag is the only handle).
+    setSubmitting(true)
     try {
-      sessionStorage.setItem(`taxwork-vendor-signed-${t.id}`, '1')
-    } catch {
-      /* private mode */
+      const res = await acts.submit(
+        t.id,
+        {
+          vendorPrefix: isVendorPrefix(prefix) ? prefix : '',
+          vendorName: name.trim(),
+          vendorAddress: address.trim(),
+          vendorIdLast4: tid.replace(/\D/g, '').slice(-4) || (t.taxIdLast4 ?? ''),
+          signaturePng: padRef.current.toPng(),
+          verificationMethod: 'stub-deferred',
+          consentVersion: 'v1',
+          signedAt: new Date().toISOString(),
+          corrections: [], // computed at submit (diff vs client records)
+        },
+        token,
+      )
+      if (!res.ok) {
+        setSubmitErr(
+          res.error === 'not-unlocked'
+            ? 'ยังไม่ได้ยืนยันตัวตน — โปรดยืนยันเลขบัตรประชาชนก่อนลงนาม'
+            : res.error === 'already-signed'
+              ? 'ลิงก์นี้ถูกลงนามไปแล้ว'
+              : 'ส่งข้อมูลไม่สำเร็จ โปรดลองอีกครั้งหรือติดต่อลูกค้าผู้จ่าย',
+        )
+        return
+      }
+      // Allow this browser to open the receipt copy right after signing (the
+      // single-use invite token is consumed, so a URL flag is the only handle).
+      try {
+        sessionStorage.setItem(`taxwork-vendor-signed-${t.id}`, '1')
+      } catch {
+        /* private mode */
+      }
+      setSignedId(t.id)
+      setDone(true)
+      window.scrollTo(0, 0)
+    } finally {
+      setSubmitting(false)
     }
-    setSignedId(t.id)
-    setDone(true)
-    window.scrollTo(0, 0)
   }
 
   return (
@@ -343,13 +365,14 @@ export function VendorSign() {
             <label className="flex gap-3 rounded-control bg-ink-50 p-4 text-body leading-relaxed active:bg-ink-100">
               <input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-ink-900" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
               <span>
-                ข้าพเจ้าได้รับเงินจำนวนดังกล่าวแล้ว และมอบอำนาจให้ <b>{loadSettings(t.tenantId).clientCode}</b> ออกใบเสร็จรับเงิน
+                ข้าพเจ้าได้รับเงินจำนวนดังกล่าวแล้ว และมอบอำนาจให้ <b>{t.clientCode ?? loadSettings(t.tenantId).clientCode}</b> ออกใบเสร็จรับเงิน
                ในนามของข้าพเจ้า <b>เฉพาะธุรกรรมนี้เท่านั้น</b>
               </span>
             </label>
             {tried && !consent && <FieldError msg="กรุณายืนยันความยินยอมก่อนส่ง" />}
-            <Button className="w-full py-3.5 text-base" onClick={submit}>
-              ลงนามรับเงินและส่งข้อมูล
+            {submitErr && <FieldError msg={submitErr} />}
+            <Button className="w-full py-3.5 text-base" onClick={submit} loading={submitting}>
+              {submitting ? 'กำลังส่งข้อมูล…' : 'ลงนามรับเงินและส่งข้อมูล'}
             </Button>
             <p className="text-label leading-relaxed text-ink-400">
               ข้อมูลที่เก็บ: ชื่อ ที่อยู่ เลขบัตรประชาชน (เข้ารหัส) ลายเซ็น และเวลายืนยัน — ใช้เพื่อออกใบเสร็จสำหรับธุรกรรมนี้เท่านั้น

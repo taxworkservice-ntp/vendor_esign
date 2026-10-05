@@ -63,6 +63,8 @@ export interface PaymentTransaction {
   // Tax ID gate: hash-only. Full ID is never stored (mock or server).
   taxIdHash?: string
   taxIdLast4?: string
+  /** Client workspace code — shown in the vendor consent text (server mode). */
+  clientCode?: string
   checks: { key: string; label: string; state: 'pass' | 'warn' | 'fail' }[]
 }
 
