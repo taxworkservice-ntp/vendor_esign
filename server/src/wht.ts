@@ -11,7 +11,7 @@ import {
   whtTotalsClause,
   whtWhereClause,
 } from './wht-sql'
-import type { WhtFormType, WhtVendor } from '../../src/lib/wht'
+import { whtFormLabel, type WhtFormType, type WhtVendor } from '../../src/lib/wht'
 import type { WhtRecordWithVendor } from '../../src/lib/wht'
 
 // ── Client WHT API (certificate templates render client-side; this is storage) ──
@@ -144,6 +144,9 @@ whtRoutes.get('/wht/records', async (c) => {
         : undefined,
       byForm: (byForm as unknown as { form_type: WhtFormType; count: number; amount: number; wht_amount: number }[]).map((r) => ({
         formType: r.form_type,
+        // The register's "แบบยื่น" column renders this label; without it the
+        // server path showed a blank form-type cell (the mock set it).
+        label: whtFormLabel(r.form_type),
         count: Number(r.count),
         amount: Number(r.amount),
         whtAmount: Number(r.wht_amount),

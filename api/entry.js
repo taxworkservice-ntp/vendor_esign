@@ -67691,6 +67691,18 @@ var DEFAULT_INVITE_TEMPLATE = `\u0E40\u0E23\u0E35\u0E22\u0E19 \u0E04\u0E38\u0E13
 
 // src/lib/wht.ts
 var WHT_FORM_TYPES = ["pnd1", "pnd1_special", "pnd2", "pnd2a", "pnd3", "pnd3a", "pnd53"];
+var WHT_FORM_LABELS = {
+  pnd1: "\u0E20.\u0E07.\u0E14.1",
+  pnd1_special: "\u0E20.\u0E07.\u0E14.1 (\u0E1E\u0E34\u0E40\u0E28\u0E29)",
+  pnd2: "\u0E20.\u0E07.\u0E14.2",
+  pnd2a: "\u0E20.\u0E07.\u0E14.2/53",
+  pnd3: "\u0E20.\u0E07.\u0E14.3",
+  pnd3a: "\u0E20.\u0E07.\u0E14.3/54",
+  pnd53: "\u0E20.\u0E07.\u0E14.53"
+};
+function whtFormLabel(t) {
+  return WHT_FORM_LABELS[t] ?? String(t).toUpperCase();
+}
 function formTypeForVendorType(_t3) {
   return "pnd3";
 }
@@ -70152,6 +70164,9 @@ whtRoutes.get("/wht/records", async (c) => {
       } : void 0,
       byForm: byForm.map((r) => ({
         formType: r.form_type,
+        // The register's "แบบยื่น" column renders this label; without it the
+        // server path showed a blank form-type cell (the mock set it).
+        label: whtFormLabel(r.form_type),
         count: Number(r.count),
         amount: Number(r.amount),
         whtAmount: Number(r.wht_amount)

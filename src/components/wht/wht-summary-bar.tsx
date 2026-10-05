@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import type { WhtSummary } from '../../lib/wht-summary'
+import { whtFormLabel } from '../../lib/wht'
 import { fmtTHB } from '../../lib/format'
 
 /**
@@ -54,7 +55,7 @@ export function WhtSummaryBar({ summary, loading }: { summary?: WhtSummary; load
               {forms.map((f) => (
                 <tr key={f.formType} className="border-b border-card-border last:border-0">
                   <th scope="row" className="px-3 py-2 text-left font-semibold">
-                    {f.label}
+                    {f.label || whtFormLabel(f.formType)}
                   </th>
                   <td className="px-3 py-2 text-right tabular-nums text-ink-600">{f.count.toLocaleString('th-TH')}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{loading ? '—' : fmtTHB(f.amount)}</td>

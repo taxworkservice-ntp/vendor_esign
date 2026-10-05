@@ -173,6 +173,7 @@ export function WhtList() {
   const printHref = (layout: 'pnd' | 'clean') => {
     const p = whtQueryToParams({ ...effective, limit: 0, offset: 0 })
     p.set('layout', layout)
+    p.set('download', '1')
     p.delete('limit')
     return `/wht/print?${p.toString()}`
   }
@@ -246,8 +247,8 @@ export function WhtList() {
               <Download size={16} aria-hidden /> ส่งออก CSV
             </Button>
             <Link to={printHref('pnd')} target="_blank" rel="noopener noreferrer">
-              <Button disabled={total === 0} title={`พิมพ์หนังสือรับรองทั้งหมด ${total} ฉบับที่ตรองเงื่อนไข`}>
-                <Printer size={16} aria-hidden /> พิมพ์ทั้งหมด ({total})
+              <Button disabled={total === 0} title={`ดาวน์โหลดหนังสือรับรองทั้งหมด ${total} ฉบับที่ตรงเงื่อนไข (PDF แยกต่อฉบับ)`}>
+                <Download size={16} aria-hidden /> ดาวน์โหลดทั้งหมด ({total})
               </Button>
             </Link>
           </>

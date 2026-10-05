@@ -1,106 +1,45 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Download, Printer } from 'lucide-react'
+import { Download } from 'lucide-react'
 import { fetchWhtByIds, fetchWhtByScope } from '../lib/wht-source'
 import { signDownload } from '../lib/r2-assets'
 import { documentFileName, stamp } from '../lib/download-name'
 import { elementToA4PdfBytes } from '../lib/receipt-pdf'
 import { saveBlob } from '../lib/api-client'
 import { useClientAuth } from '../lib/client-auth'
-import { loadSettings } from '../lib/settings'
+import { defaultSettings } from '../lib/settings'
+import { useSettings } from '../hooks/useSettings'
+import {
+  BG_IMAGE,
+  CHECKMARK_POS,
+  FONT_FAMILY,
+  PAGE_H,
+  PAGE_W,
+  SIGNATURE_H,
+  SIGNATURE_LEFT,
+  SIGNATURE_TOP,
+  SIGNATURE_W,
+  STAMP_LEFT,
+  STAMP_SIZE,
+  STAMP_TOP,
+  buildFields,
+  cssTop,
+  type WhtProfile,
+} from '../lib/wht-form'
 import {
   fmtWhtDate,
   fmtWhtNum,
   splitTaxId,
   thaiBahtText,
-  type WhtFormType,
   type WhtRecordWithVendor,
 } from '../lib/wht'
 import { Button } from '../components/ui/button'
 
 // Pixel-exact port of invoice-system's WHT print template
 // (src/app/(client)/wht/print.tsx): a 1512×2138 Revenue-Department form image
-// with absolutely-positioned fields, plus a clean A4 layout. Assets live in
-// public/wht/form_page_final.png and public/fonts (Cordia New/Sarabun/Noto).
-
-const PAGE_W = 1512
-const PAGE_H = 2138
-const BG_IMAGE = '/wht/form_page_final.png'
-const FONT_FAMILY = "'Cordia New', 'Sarabun', 'Noto Sans Thai', sans-serif"
-
-interface FieldDef {
-  name: string
-  top: number
-  left: number
-  fontSize: number
-  bold?: boolean
-  rightAlign?: boolean
-  width?: number
-  wrap?: boolean
-  value: string
-}
-
-const CHECKMARK_POS: Record<WhtFormType, { top: number; left: number; fs: number }> = {
-  pnd1: { top: 605, left: 535, fs: 32 },
-  pnd1_special: { top: 605, left: 733, fs: 32 },
-  pnd2: { top: 605, left: 1007, fs: 32 },
-  pnd3: { top: 605, left: 1203, fs: 32 },
-  pnd2a: { top: 657, left: 535, fs: 32 },
-  pnd3a: { top: 657, left: 733, fs: 32 },
-  pnd53: { top: 655, left: 1005, fs: 32 },
-}
-
-const FIELD_TOP_OFFSET = 3
-const cssTop = (configTop: number, fs: number) => configTop - fs + FIELD_TOP_OFFSET
-
-interface WhtProfile {
-  company_name_th: string
-  tax_id: string
-  address: string
-  clientCode?: string
-  signatureStoragePath?: string
-  stampStoragePath?: string
-}
-
-// Signature sits above the sign-date, stamp to its left — both can overlap.
-// date_bottom is at CSS top ~1913; signature bottom ~20px above that.
-const SIGNATURE_TOP = 1893
-const SIGNATURE_LEFT = 964
-const SIGNATURE_W = 186
-const SIGNATURE_H = 70
-const STAMP_TOP = 1893
-const STAMP_LEFT = 815
-const STAMP_SIZE = 139
-
-function buildFields(record: WhtRecordWithVendor, profile: WhtProfile, seq: number): FieldDef[] {
-  const v = record
-  const month = record.issueDate ? new Date(record.issueDate).getMonth() + 1 : 1
-  const whtId = record.certificateNo || (month ? `${record.issueDate.slice(2, 4)}${String(month).padStart(2, '0')}1${String(seq + 1).padStart(3, '0')}` : '')
-  const dateStr = fmtWhtDate(record.issueDate)
-  const amtStr = fmtWhtNum(record.amount)
-  const whtStr = fmtWhtNum(record.whtAmount)
-  const thaiStr = thaiBahtText(record.whtAmount)
-  const AMT_W = 260
-  const WHT_W = 180
-
-  return [
-    { name: 'wht_id', top: cssTop(187, 33), left: 1317, fontSize: 33, value: whtId },
-    { name: 'payer_name', top: cssTop(279, 32), left: 165, fontSize: 32, width: 583, value: profile.company_name_th || '' },
-    { name: 'payer_taxid', top: cssTop(241, 45), left: 961, fontSize: 45, bold: true, value: splitTaxId(profile.tax_id) },
-    { name: 'payer_address', top: cssTop(337, 31), left: 166, fontSize: 31, wrap: true, width: 1166, value: profile.address || '' },
-    { name: 'name', top: cssTop(464, 32), left: 169, fontSize: 32, width: 583, value: String(v.vendorName || '') },
-    { name: 'taxid', top: cssTop(416, 45), left: 961, fontSize: 45, bold: true, value: splitTaxId(v.vendorTaxId) },
-    { name: 'address', top: cssTop(531, 31), left: 171, fontSize: 31, wrap: true, width: 1166, value: String(v.vendorAddress || '') },
-    { name: 'description1', top: cssTop(1624, 33), left: 290, fontSize: 33, width: 480, value: String(record.description || '') },
-    { name: 'date1', top: cssTop(1620, 35), left: 857, fontSize: 35, value: dateStr },
-    { name: 'amount1', top: cssTop(1620, 35), left: 1175 - AMT_W, fontSize: 35, rightAlign: true, width: AMT_W, value: amtStr },
-    { name: 'wht1', top: cssTop(1620, 35), left: 1370 - WHT_W, fontSize: 35, rightAlign: true, width: WHT_W, value: whtStr },
-    { name: 'amount2', top: cssTop(1680, 35), left: 1175 - AMT_W, fontSize: 35, rightAlign: true, width: AMT_W, value: amtStr },
-    { name: 'wht2', top: cssTop(1680, 35), left: 1370 - WHT_W, fontSize: 35, rightAlign: true, width: WHT_W, value: whtStr },
-    { name: 'thai_amount', top: cssTop(1726, 36), left: 503, fontSize: 36, value: thaiStr },
-    { name: 'date_bottom', top: cssTop(1945, 35), left: 972, fontSize: 35, value: dateStr },
-  ]
-}
+// with absolutely-positioned fields, plus a clean A4 layout. The form model
+// (coordinates, fields, fonts) lives in src/lib/wht-form.ts and is shared with
+// the vector PDF renderer (src/lib/wht-pdf.ts) so print and download cannot drift.
 
 function PndPage({
   record,
@@ -289,8 +228,13 @@ export function WhtPrint() {
   const [err, setErr] = useState('')
   const [signatureUrl, setSignatureUrl] = useState<string | null>(null)
   const [stampUrl, setStampUrl] = useState<string | null>(null)
+  const autoExported = useRef(false)
+  // `?download=1` (the list's "ดาวน์โหลดทั้งหมด" action) exports as soon as the
+  // records + settings + signature/stamp are ready, instead of only previewing.
+  const download = params.get('download') === '1'
 
   const { activeTenant } = useClientAuth()
+  const { data: settings } = useSettings()
 
   useEffect(() => {
     let cancelled = false
@@ -303,19 +247,9 @@ export function WhtPrint() {
           : await fetchWhtByIds(ids)
         if (cancelled) return
         setRecords(res.records)
-        const tenantId = res.tenantId ?? activeTenant
         if (records.length === 0 && res.records.length === 0) {
           setErr('ไม่พบหนังสือรับรองตามเงื่อนไขที่เลือก')
         }
-        const s = loadSettings(tenantId)
-        setProfile({
-          company_name_th: s.displayName,
-          tax_id: s.taxId,
-          address: s.address,
-          clientCode: s.clientCode,
-          signatureStoragePath: s.signatureStoragePath,
-          stampStoragePath: s.stampStoragePath,
-        })
       } catch {
         if (!cancelled) setErr('โหลดหนังสือรับรองไม่สำเร็จ — โปรดลองใหม่อีกครั้ง')
       } finally {
@@ -327,8 +261,26 @@ export function WhtPrint() {
     }
   }, [ids, byScope, scope, activeTenant])
 
+  // Company identity + the uploaded signature/stamp come from the workspace
+  // settings (server-backed when wired). Built in its own effect so it fills in
+  // when settings arrive after the records — the old code read localStorage and
+  // so never saw them.
+  useEffect(() => {
+    const s = settings ?? defaultSettings(activeTenant)
+    setProfile({
+      company_name_th: s.displayName,
+      tax_id: s.taxId,
+      address: s.address,
+      clientCode: s.clientCode,
+      signatureStoragePath: s.signatureStoragePath,
+      stampStoragePath: s.stampStoragePath,
+    })
+  }, [settings, activeTenant])
+
   // Resolve presigned download URLs for the signature/stamp whenever their
   // storage paths change. Short-lived URLs are fine — the page renders once.
+  // The auto-download waits on these URLs (see below), so a signature is never
+  // missed because the batch raced the fetch.
   useEffect(() => {
     if (!profile) {
       setSignatureUrl(null)
@@ -349,16 +301,15 @@ export function WhtPrint() {
     return () => { cancelled = true }
   }, [profile?.signatureStoragePath, profile?.stampStoragePath])
 
-  // One Revenue-Department form per certificate. A single record downloads as
-  // a plain PDF named by its number/vendor/amount; several records are zipped,
-  // one file each — accountants file them per vendor, not as one long PDF.
+  // One Revenue-Department form per certificate. A single record downloads as a
+  // plain PDF; several are zipped, one file each — accountants file them per
+  // vendor, not as one long PDF. The PND government form is drawn as vector text
+  // over the form image (src/lib/wht-pdf.ts) so it matches the preview exactly;
+  // the 'clean' sheet is flow-layout HTML and stays an html2canvas snapshot.
   const exportPdf = async () => {
     setErr('')
     setBusy(true)
     try {
-      const sheets = Array.from(document.querySelectorAll<HTMLElement>('.print-sheet'))
-      if (!sheets.length) throw new Error('no-sheets')
-
       const used = new Set<string>()
       const uniqueName = (r: WhtRecordWithVendor): string => {
         const base = documentFileName({
@@ -381,9 +332,27 @@ export function WhtPrint() {
       }
 
       const files: Record<string, Uint8Array> = {}
-      for (let i = 0; i < sheets.length; i++) {
-        const bytes = await elementToA4PdfBytes(sheets[i])
-        files[uniqueName(records[i])] = bytes
+
+      if (layout === 'pnd') {
+        if (!profile) throw new Error('no-profile')
+        const { buildWhtPdfBytes, loadWhtBaseAssets, fetchPngBytes } = await import('../lib/wht-pdf')
+        const [base, signature, stampPng] = await Promise.all([
+          loadWhtBaseAssets(),
+          fetchPngBytes(signatureUrl),
+          fetchPngBytes(stampUrl),
+        ])
+        const assets = { ...base, signature, stamp: stampPng }
+        for (let i = 0; i < records.length; i++) {
+          const bytes = await buildWhtPdfBytes(records[i], profile, i, assets)
+          files[uniqueName(records[i])] = bytes
+        }
+      } else {
+        const sheets = Array.from(document.querySelectorAll<HTMLElement>('.print-sheet'))
+        if (!sheets.length) throw new Error('no-sheets')
+        for (let i = 0; i < sheets.length; i++) {
+          const bytes = await elementToA4PdfBytes(sheets[i])
+          files[uniqueName(records[i])] = bytes
+        }
       }
 
       if (records.length === 1) {
@@ -403,6 +372,19 @@ export function WhtPrint() {
     }
   }
 
+  // The list's "ดาวน์โหลดทั้งหมด" lands here with ?download=1: export as soon as
+  // the records, settings and the signature/stamp URLs are ready, once.
+  useEffect(() => {
+    if (!download || autoExported.current) return
+    if (loading || !profile || records.length === 0) return
+    // A configured asset must have resolved to a URL before we render.
+    if (profile.signatureStoragePath && !signatureUrl) return
+    if (profile.stampStoragePath && !stampUrl) return
+    autoExported.current = true
+    void exportPdf()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [download, loading, profile, records, signatureUrl, stampUrl])
+
   return (
     // Self-capped: this page used to inherit `max-w-screen-2xl` from the shell's
     // <main>, which was widened to the full viewport. The forms below are a fixed
@@ -417,7 +399,6 @@ export function WhtPrint() {
           <Button variant="secondary" onClick={exportPdf} loading={busy}>
             <Download size={15} /> {busy ? 'กำลังสร้าง…' : 'ดาวน์โหลด PDF'}
           </Button>
-          <Button variant="secondary" onClick={() => window.print()}><Printer size={15} /> พิมพ์</Button>
         </div>
       </div>
       {err && <p className="no-print px-4 py-3 text-sm font-medium text-danger">{err}</p>}
