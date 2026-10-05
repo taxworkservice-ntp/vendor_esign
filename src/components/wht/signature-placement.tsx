@@ -17,6 +17,7 @@ export function PositionableImage({
   placement,
   editable,
   opacity,
+  dataRole,
   onChange,
 }: {
   url: string
@@ -24,6 +25,8 @@ export function PositionableImage({
   placement: Placement
   editable: boolean
   opacity?: number
+  /** Marks the image so the exporter can draw it itself instead of inlining it. */
+  dataRole?: string
   onChange: (p: Placement) => void
 }) {
   const onPointerDown = (e: React.PointerEvent<HTMLImageElement>) => {
@@ -54,6 +57,7 @@ export function PositionableImage({
     <img
       src={url}
       alt={label}
+      data-role={dataRole}
       draggable={false}
       onPointerDown={onPointerDown}
       style={{

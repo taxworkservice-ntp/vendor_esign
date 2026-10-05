@@ -4,7 +4,7 @@ import { Download, Move } from 'lucide-react'
 import { fetchWhtByIds, fetchWhtByScope } from '../lib/wht-source'
 import { signDownload } from '../lib/r2-assets'
 import { documentFileName, stamp } from '../lib/download-name'
-import { composeSheetToA4Pdf, loadBgImage } from '../lib/sheet-to-a4-pdf'
+import { composeSheetToA4Pdf, loadBgImage, type OverlayImage } from '../lib/sheet-to-a4-pdf'
 import { saveBlob } from '../lib/api-client'
 import { useClientAuth } from '../lib/client-auth'
 import { defaultSettings, type TenantSettings } from '../lib/settings'
@@ -109,6 +109,7 @@ function PndPage({
           placement={stampPlacement}
           editable={editable}
           opacity={0.85}
+          dataRole="overlay"
           onChange={onStampPlacement}
         />
       )}
@@ -118,6 +119,7 @@ function PndPage({
           label="ลายเซ็นผู้มีอำนาจ"
           placement={signaturePlacement}
           editable={editable}
+          dataRole="overlay"
           onChange={onSignaturePlacement}
         />
       )}
@@ -383,10 +385,15 @@ export function WhtPrint() {
       setEditing(false)
       await new Promise<void>((res) => requestAnimationFrame(() => requestAnimationFrame(() => res())))
       const bg = await loadBgImage()
+      // Signature/stamp are drawn by the compositor too (stamp first, so the
+      // signature sits on top, matching the preview's DOM order).
+      const overlays: OverlayImage[] = []
+      if (stampUrl) overlays.push({ src: stampUrl, ...stampPlacement, opacity: 0.85 })
+      if (signatureUrl) overlays.push({ src: signatureUrl, ...signaturePlacement })
       const sheets = Array.from(document.querySelectorAll<HTMLElement>('.print-sheet'))
       if (!sheets.length) throw new Error('no-sheets')
       for (let i = 0; i < sheets.length && i < records.length; i++) {
-        files[uniqueName(records[i])] = await composeSheetToA4Pdf(sheets[i], bg)
+        files[uniqueName(records[i])] = await composeSheetToA4Pdf(sheets[i], bg, overlays)
       }
 
       if (records.length === 1) {

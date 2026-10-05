@@ -38,6 +38,37 @@ export function loadBgImage(): Promise<HTMLImageElement> {
   return bgPromise
 }
 
+/** A signature/stamp drawn by us on the canvas (never inlined into the SVG). */
+export interface OverlayImage {
+  src: string
+  x: number
+  y: number
+  w: number
+  h: number
+  opacity?: number
+}
+
+const imageCache = new Map<string, Promise<HTMLImageElement>>()
+function loadImage(src: string): Promise<HTMLImageElement> {
+  let p = imageCache.get(src)
+  if (!p) {
+    p = (async () => {
+      const img = new Image()
+      img.decoding = 'async'
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve()
+        img.onerror = () => reject(new Error('image-load-failed'))
+        img.src = src
+      })
+      await img.decode?.().catch(() => undefined)
+      return img
+    })()
+    p.catch(() => imageCache.delete(src))
+    imageCache.set(src, p)
+  }
+  return p
+}
+
 /** Load an SVG data URL as a decoded HTMLImageElement. */
 function svgToImage(svg: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -80,13 +111,33 @@ async function ready(el: HTMLElement): Promise<void> {
   )
 }
 
+/** Draw an image with object-fit: contain inside a box (default 50% 50% anchor). */
+function drawContain(ctx: CanvasRenderingContext2D, img: HTMLImageElement, box: OverlayImage, ratio: number) {
+  if (!img.naturalWidth || !img.naturalHeight) return
+  const bw = box.w * ratio
+  const bh = box.h * ratio
+  const scale = Math.min(bw / img.naturalWidth, bh / img.naturalHeight)
+  const dw = img.naturalWidth * scale
+  const dh = img.naturalHeight * scale
+  const dx = box.x * ratio + (bw - dw) / 2
+  const dy = box.y * ratio + (bh - dh) / 2
+  const prev = ctx.globalAlpha
+  if (box.opacity != null) ctx.globalAlpha = box.opacity
+  ctx.drawImage(img, dx, dy, dw, dh)
+  ctx.globalAlpha = prev
+}
+
 /**
- * Rasterise `el` onto one A4 page. The sheet is captured without its background
- * image (`data-role="form-bg"` is filtered out) and the background is drawn
- * underneath from a pre-decoded image, so it is present on the very first
- * capture in every browser.
+ * Rasterise `el` onto one A4 page. The form background and the signature/stamp
+ * (`data-role="form-bg"` / `"overlay"`) are filtered out of the captured SVG and
+ * drawn by us from pre-decoded images, so a large nested-data-URL image can never
+ * be dropped by Safari on the first capture.
  */
-export async function composeSheetToA4Pdf(el: HTMLElement, bg: HTMLImageElement): Promise<Uint8Array> {
+export async function composeSheetToA4Pdf(
+  el: HTMLElement,
+  bg: HTMLImageElement,
+  overlays: OverlayImage[] = [],
+): Promise<Uint8Array> {
   const { jsPDF } = await import('jspdf')
   await ready(el)
   const width = el.clientWidth || PAGE_W
@@ -95,9 +146,13 @@ export async function composeSheetToA4Pdf(el: HTMLElement, bg: HTMLImageElement)
     // Must stay off: a cache-bust query appended after a presigned URL's
     // X-Amz-Signature invalidates the signature (R2 then 403s without CORS).
     cacheBust: false,
-    filter: (node) => node.dataset?.role !== 'form-bg',
+    filter: (node) => {
+      const role = node.dataset?.role
+      return role !== 'form-bg' && role !== 'overlay'
+    },
   })
   const sheet = await svgToImage(svg)
+  const resolved = await Promise.all(overlays.map(async (o) => ({ o, img: await loadImage(o.src) })))
 
   const ratio = 2
   const canvas = document.createElement('canvas')
@@ -107,6 +162,7 @@ export async function composeSheetToA4Pdf(el: HTMLElement, bg: HTMLImageElement)
   if (!ctx) throw new Error('no-2d-context')
   ctx.drawImage(bg, 0, 0, canvas.width, canvas.height)
   ctx.drawImage(sheet, 0, 0, canvas.width, canvas.height)
+  for (const { o, img } of resolved) drawContain(ctx, img, o, ratio)
 
   const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' })
   pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 595.28, 841.89)

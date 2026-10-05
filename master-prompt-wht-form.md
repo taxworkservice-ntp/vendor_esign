@@ -38,7 +38,7 @@ Non-negotiables:
 | File | Responsibility |
 | --- | --- |
 | `src/lib/wht-form.ts` | **Single source of truth**: page size, background path, font stack, `FieldDef`, `buildFields()` (all field coordinates), tax-ID geometry, check-mark positions, `cssTop()`. |
-| `src/lib/sheet-to-a4-pdf.ts` | `loadBgDataUrl()` (module-cached background data URL) + `ready()` + `sheetToA4PdfBytes()` (html-to-image → jsPDF A4). |
+| `src/lib/sheet-to-a4-pdf.ts` | `loadBgImage()` (module-cached decoded background) + `ready()` + `composeSheetToA4Pdf()` (html-to-image `toSvg`, then our own canvas compositor → jsPDF A4). |
 | `src/pages/WhtPrint.tsx` | Preview (`PndPage`/`CleanPage`), signature/stamp resolution to data URLs, drag editor, `exportPdf()` (single/ZIP), the `?download=1` auto-export effect. |
 | `src/components/wht/signature-placement.tsx` | `PositionableImage` (drag/resize) + `SignaturePlacementPanel`. |
 | `src/lib/settings-types.ts` | `Placement` type, `DEFAULT_SIGNATURE_PLACEMENT`, `DEFAULT_STAMP_PLACEMENT`, `signatureStoragePath`/`stampStoragePath`. |
@@ -191,26 +191,44 @@ Verify visually by overlaying the computed cells on the form before committing.
 - Rendered by `PositionableImage` inside `.print-sheet`; `editable` toggles the
   drag/resize outline. The editor is off during capture (`setEditing(false)`).
 - The stamp is drawn at `opacity: 0.85`.
-- The image bytes must be **data URLs in the DOM before capture** — the
-  container fetches each presigned R2 URL and inlines it (`signDownload(path)` →
-  `fetch` → `FileReader`). Do not hand html-to-image a cross-origin URL.
+- The image bytes are resolved to **data URLs** (`signDownload(path)` → `fetch`
+  → `FileReader`); the preview renders them from those. **They are not inlined
+  into the capture** — `PositionableImage` tags them `data-role="overlay"`, the
+  exporter filters them out of the SVG and draws them itself (see §7). This is
+  what stopped Safari dropping them on the first capture.
 
 ---
 
-## 7. Background image pipeline
+## 7. Background + overlay compositor (why Safari is fixed)
 
-- `BG_IMAGE = '/wht/form_page_final.png'` (3024×4276, ~3.3 MB).
-- `loadBgDataUrl()` in `sheet-to-a4-pdf.ts` fetches it once (module-level cached
-  promise) and inlines it as a data URL. `WhtPrint` sets `bgUrl` from it on
-  mount and again (awaited) inside `exportPdf`, and renders
-  `<img src={bgUrl ?? BG_IMAGE}>`.
-- `ready()` awaits `document.fonts.ready`, then for every `<img>` awaits its
-  `load`/`error` event **and** `img.decode()`. `complete` is not enough for a
-  first paint; the missing `decode()` was the "first download has no
-  background" bug.
-- `toCanvas` options: `pixelRatio: 2`, `backgroundColor: '#ffffff'`,
-  **`cacheBust: false`**. A cache-buster appended after `X-Amz-Signature`
-  invalidates a presigned URL (R2 → 403 with no CORS header).
+**Never inline a large image into the html-to-image SVG.** html-to-image
+serialises a sheet into an SVG data URL (`svgToDataURL` percent-encodes, it does
+not base64). A 3.3 MB form scan inlined as a ~4.4 MB data URL becomes a ~5 MB
+data URL with a nested image data URL; Safari cannot reliably decode that while
+rasterising, so the image is dropped **on the first capture only** (later
+captures hit the browser's decoded cache). This hit the background first; the
+signature/stamp data URLs had the same flaw, smaller and rarer.
+
+The fix (in `composeSheetToA4Pdf`):
+
+- `loadBgImage()` fetches `BG_IMAGE = '/wht/form_page_final.png'` (3024×4276,
+  ~3.3 MB) once and returns a **decoded `HTMLImageElement`** (module-cached;
+  retries on failure). `loadImage(src)` does the same for the overlays.
+- Mark images to draw ourselves: the background `<img data-role="form-bg">` and
+  the signature/stamp `<img data-role="overlay">`.
+- `toSvg(el, { cacheBust: false, filter })` where `filter` drops both roles, so
+  the SVG is small and contains only text/vector.
+- Draw onto one canvas at `pixelRatio = 2` in order: **background → sheet →
+  overlays**. Overlays use object-fit `contain` maths (`drawContain`) and the
+  stamp's `opacity: 0.85`.
+- `cacheBust` must stay `false`: a cache-bust query appended after a presigned
+  URL's `X-Amz-Signature` invalidates it (R2 → 403 with no CORS).
+- `ready()` still awaits `document.fonts.ready` and every `<img>`'s `decode()`
+  before `toSvg`, so Thai text is shaped with the loaded face.
+
+`WhtPrint.exportPdf` calls `loadBgImage()` once and builds `overlays` from
+`signatureUrl`/`stampUrl` + their placements, then calls
+`composeSheetToA4Pdf(sheet, bg, overlays)` per sheet.
 
 ---
 
@@ -218,10 +236,13 @@ Verify visually by overlaying the computed cells on the form before committing.
 
 **`exportPdf()`** (in `WhtPrint.tsx`):
 
-1. `setEditing(false)`; `setBgUrl(await loadBgDataUrl())`; wait two
-   `requestAnimationFrame`s (let React commit + paint).
-2. `document.querySelectorAll('.print-sheet')`; snapshot each with
-   `sheetToA4PdfBytes`. `i < records.length` bounds the loop.
+1. `setEditing(false)`; wait two `requestAnimationFrame`s (let React commit +
+   paint the editor outline off).
+2. `const bg = await loadBgImage()`; build `overlays` (stamp then signature) from
+   the resolved data URLs + placements.
+3. `document.querySelectorAll('.print-sheet')`; snapshot each with
+   `composeSheetToA4Pdf(sheet, bg, overlays)`. `i < records.length` bounds the
+   loop.
 3. One record → single PDF via `saveBlob`. Several → `fflate.zipSync(files,
    { level: 0 })` (PDFs are already compressed) named
    `wht-certificates-{period}-{n}-docs-{stamp}.zip`.
@@ -252,8 +273,8 @@ the correct retry. Fix = track `profileSource` (set with `profile` in the same
 effect) and require `profileSource === settings`; check the asset paths against
 `settings` (source of truth), not `profile`.
 
-Background is separate: `exportPdf` itself awaits `loadBgDataUrl()`, so the
-first click always has the background.
+Background and signature/stamp are separate: `exportPdf` itself awaits
+`loadBgImage()` and decodes the overlays, so the first click always has both.
 
 ---
 
@@ -335,11 +356,14 @@ deployment to reach `READY`, then repeat check 3 on
 
 - Do **not** reintroduce a server-side/vector WHT PDF renderer. Raster the DOM.
 - Do **not** remove `cacheBust: false`.
-- Do **not** drop `img.decode()` from `ready()` or the awaited
-  `loadBgDataUrl()` in `exportPdf`.
+- Do **not** drop `img.decode()` from `ready()`, or the `await loadBgImage()` /
+  overlay decode in `exportPdf`.
+- Do **not** inline the background or the signature/stamp into the captured SVG
+  (i.e. do not remove the `data-role` filter). Composite them on the canvas.
 - Do **not** gate auto-export on `profile.*` asset paths alone, and do **not**
   remove `profileSource === settings`.
-- Do **not** pass a cross-origin R2 URL to html-to-image; inline to a data URL.
+- Do **not** pass a cross-origin R2 URL to html-to-image; resolve it to a data
+  URL / decoded image first.
 - Do **not** use `splitTaxId()` on the `pnd` sheet; it is for the `clean` sheet.
 - Do **not** change the vertical `configTop` values; only horizontal tax-ID
   geometry was ever wrong.
