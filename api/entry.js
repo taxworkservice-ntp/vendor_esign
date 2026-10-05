@@ -68910,7 +68910,9 @@ async function getTenantSettings(tenantId) {
       showVerifyQr: Boolean(m2.get("show_verify_qr") ?? false),
       inviteMessageTemplate: String(m2.get("invite_message_template") ?? DEFAULT_INVITE_TEMPLATE),
       signatureStoragePath: m2.get("signature_storage_path") || void 0,
-      stampStoragePath: m2.get("stamp_storage_path") || void 0
+      stampStoragePath: m2.get("stamp_storage_path") || void 0,
+      signaturePlacement: m2.get("signature_placement") || void 0,
+      stampPlacement: m2.get("stamp_placement") || void 0
     };
   });
 }
@@ -68935,6 +68937,8 @@ async function saveTenantSettings(tenantId, s) {
     await put("invite_message_template", s.inviteMessageTemplate);
     if (s.signatureStoragePath !== void 0) await put("signature_storage_path", s.signatureStoragePath);
     if (s.stampStoragePath !== void 0) await put("stamp_storage_path", s.stampStoragePath);
+    if (s.signaturePlacement !== void 0) await put("signature_placement", s.signaturePlacement);
+    if (s.stampPlacement !== void 0) await put("stamp_placement", s.stampPlacement);
   });
 }
 

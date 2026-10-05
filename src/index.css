@@ -15,8 +15,10 @@
 /* Printed receipt / WHT form faces. */
 @font-face { font-family: 'Sarabun'; src: url('/fonts/Sarabun-Regular.ttf') format('truetype'); font-weight: 400; font-display: swap; }
 @font-face { font-family: 'Sarabun'; src: url('/fonts/Sarabun-Bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
-@font-face { font-family: 'Cordia New'; src: url('/fonts/cordia.ttc#0') format('truetype'); font-weight: 400; font-display: swap; }
-@font-face { font-family: 'Cordia New'; src: url('/fonts/cordia.ttc#1') format('truetype'); font-weight: 700; font-display: swap; }
+/* Extracted from cordia.ttc (scripts/extract-cordia-fonts.py) so the face is a
+   plain TTF that html-to-image can fetch and embed when rasterising the WHT form. */
+@font-face { font-family: 'Cordia New'; src: url('/fonts/CordiaNew-Regular.ttf') format('truetype'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Cordia New'; src: url('/fonts/CordiaNew-Bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
 @font-face { font-family: 'Noto Sans Thai'; src: url('/fonts/NotoSansThai.ttf') format('truetype'); font-weight: 400; font-display: swap; }
 
 @tailwind base;

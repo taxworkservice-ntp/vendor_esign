@@ -41,6 +41,7 @@
     "drizzle-orm": "^0.45.3",
     "fflate": "^0.8.3",
     "hono": "^4.13.9",
+    "html-to-image": "^1.11.13",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "lucide-react": "^0.454.0",

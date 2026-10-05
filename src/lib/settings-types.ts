@@ -24,6 +24,20 @@ export const DEFAULT_WHT_RATES: WhtRate[] = [
 /** มาตรา 50/1 default minimum (baht) before WHT applies. */
 export const DEFAULT_WHT_MIN_THRESHOLD = 1000
 
+/** Position + size in the WHT form's 1512×2138 coordinate space. */
+export interface Placement {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+// Signature sits above the sign-date; the stamp sits to its right. Both are
+// user-adjustable on the WHT preview page and persisted here, so one placement
+// applies to every WHT certificate for the workspace.
+export const DEFAULT_SIGNATURE_PLACEMENT: Placement = { x: 964, y: 1883, w: 186, h: 70 }
+export const DEFAULT_STAMP_PLACEMENT: Placement = { x: 1170, y: 1883, w: 139, h: 139 }
+
 export interface TenantSettings {
   clientCode: string // required — receipt prefix + brand, e.g. ABC
   displayName: string // buyer name on the receipt
@@ -44,6 +58,10 @@ export interface TenantSettings {
   signatureStoragePath?: string
   /** R2 storage path for the company stamp image (PNG with transparency preferred). */
   stampStoragePath?: string
+  /** Where the signature is placed on the WHT form (falls back to the default). */
+  signaturePlacement?: Placement
+  /** Where the stamp is placed on the WHT form (falls back to the default). */
+  stampPlacement?: Placement
 }
 
 export const DEFAULT_CONSENT =

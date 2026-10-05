@@ -1,29 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Download } from 'lucide-react'
+import { Download, Move } from 'lucide-react'
 import { fetchWhtByIds, fetchWhtByScope } from '../lib/wht-source'
 import { signDownload } from '../lib/r2-assets'
 import { documentFileName, stamp } from '../lib/download-name'
-import { elementToA4PdfBytes } from '../lib/receipt-pdf'
+import { sheetToA4PdfBytes } from '../lib/sheet-to-a4-pdf'
 import { saveBlob } from '../lib/api-client'
 import { useClientAuth } from '../lib/client-auth'
 import { defaultSettings } from '../lib/settings'
-import { useSettings } from '../hooks/useSettings'
+import { useSettings, useUpdateSettings } from '../hooks/useSettings'
 import {
   BG_IMAGE,
   CHECKMARK_POS,
+  DEFAULT_SIGNATURE_PLACEMENT,
+  DEFAULT_STAMP_PLACEMENT,
   FONT_FAMILY,
   PAGE_H,
   PAGE_W,
-  SIGNATURE_H,
-  SIGNATURE_LEFT,
-  SIGNATURE_TOP,
-  SIGNATURE_W,
-  STAMP_LEFT,
-  STAMP_SIZE,
-  STAMP_TOP,
   buildFields,
   cssTop,
+  type Placement,
   type WhtProfile,
 } from '../lib/wht-form'
 import {
@@ -34,6 +30,8 @@ import {
   type WhtRecordWithVendor,
 } from '../lib/wht'
 import { Button } from '../components/ui/button'
+import { useToast } from '../components/ui/toast'
+import { PositionableImage, SignaturePlacementPanel } from '../components/wht/signature-placement'
 
 // Pixel-exact port of invoice-system's WHT print template
 // (src/app/(client)/wht/print.tsx): a 1512×2138 Revenue-Department form image
@@ -47,12 +45,22 @@ function PndPage({
   seq,
   signatureUrl,
   stampUrl,
+  signaturePlacement,
+  stampPlacement,
+  editable,
+  onSignaturePlacement,
+  onStampPlacement,
 }: {
   record: WhtRecordWithVendor
   profile: WhtProfile
   seq: number
   signatureUrl?: string
   stampUrl?: string
+  signaturePlacement: Placement
+  stampPlacement: Placement
+  editable: boolean
+  onSignaturePlacement: (p: Placement) => void
+  onStampPlacement: (p: Placement) => void
 }) {
   const fields = buildFields(record, profile, seq)
   const check = CHECKMARK_POS[record.formType]
@@ -94,32 +102,22 @@ function PndPage({
         </div>
       ))}
       {stampUrl && (
-        <img
-          src={stampUrl}
-          alt=""
-          style={{
-            position: 'absolute',
-            top: STAMP_TOP + 'px',
-            left: STAMP_LEFT + 'px',
-            width: STAMP_SIZE + 'px',
-            height: STAMP_SIZE + 'px',
-            objectFit: 'contain',
-            opacity: 0.85,
-          }}
+        <PositionableImage
+          url={stampUrl}
+          label="ตราประทับ"
+          placement={stampPlacement}
+          editable={editable}
+          opacity={0.85}
+          onChange={onStampPlacement}
         />
       )}
       {signatureUrl && (
-        <img
-          src={signatureUrl}
-          alt=""
-          style={{
-            position: 'absolute',
-            top: SIGNATURE_TOP + 'px',
-            left: SIGNATURE_LEFT + 'px',
-            width: SIGNATURE_W + 'px',
-            height: SIGNATURE_H + 'px',
-            objectFit: 'contain',
-          }}
+        <PositionableImage
+          url={signatureUrl}
+          label="ลายเซ็นผู้มีอำนาจ"
+          placement={signaturePlacement}
+          editable={editable}
+          onChange={onSignaturePlacement}
         />
       )}
     </div>
@@ -228,6 +226,9 @@ export function WhtPrint() {
   const [err, setErr] = useState('')
   const [signatureUrl, setSignatureUrl] = useState<string | null>(null)
   const [stampUrl, setStampUrl] = useState<string | null>(null)
+  const [signaturePlacement, setSignaturePlacement] = useState<Placement>(DEFAULT_SIGNATURE_PLACEMENT)
+  const [stampPlacement, setStampPlacement] = useState<Placement>(DEFAULT_STAMP_PLACEMENT)
+  const [editing, setEditing] = useState(false)
   const autoExported = useRef(false)
   // `?download=1` (the list's "ดาวน์โหลดทั้งหมด" action) exports as soon as the
   // records + settings + signature/stamp are ready, instead of only previewing.
@@ -235,6 +236,8 @@ export function WhtPrint() {
 
   const { activeTenant } = useClientAuth()
   const { data: settings } = useSettings()
+  const saveSettings = useUpdateSettings()
+  const toast = useToast()
 
   useEffect(() => {
     let cancelled = false
@@ -275,7 +278,20 @@ export function WhtPrint() {
       signatureStoragePath: s.signatureStoragePath,
       stampStoragePath: s.stampStoragePath,
     })
+    // Placement is a saved per-workspace preference; seed the editor from it.
+    setSignaturePlacement(s.signaturePlacement ?? DEFAULT_SIGNATURE_PLACEMENT)
+    setStampPlacement(s.stampPlacement ?? DEFAULT_STAMP_PLACEMENT)
   }, [settings, activeTenant])
+
+  const savePlacement = async () => {
+    const base = settings ?? defaultSettings(activeTenant)
+    try {
+      await saveSettings.mutateAsync({ ...base, signaturePlacement, stampPlacement })
+      toast.show('บันทึกตำแหน่งลายเซ็น/ตราประทับแล้ว')
+    } catch {
+      toast.show('บันทึกตำแหน่งไม่สำเร็จ', 'error')
+    }
+  }
 
   // Resolve presigned download URLs for the signature/stamp whenever their
   // storage paths change. Short-lived URLs are fine — the page renders once.
@@ -333,26 +349,15 @@ export function WhtPrint() {
 
       const files: Record<string, Uint8Array> = {}
 
-      if (layout === 'pnd') {
-        if (!profile) throw new Error('no-profile')
-        const { buildWhtPdfBytes, loadWhtBaseAssets, fetchPngBytes } = await import('../lib/wht-pdf')
-        const [base, signature, stampPng] = await Promise.all([
-          loadWhtBaseAssets(),
-          fetchPngBytes(signatureUrl),
-          fetchPngBytes(stampUrl),
-        ])
-        const assets = { ...base, signature, stamp: stampPng }
-        for (let i = 0; i < records.length; i++) {
-          const bytes = await buildWhtPdfBytes(records[i], profile, i, assets)
-          files[uniqueName(records[i])] = bytes
-        }
-      } else {
-        const sheets = Array.from(document.querySelectorAll<HTMLElement>('.print-sheet'))
-        if (!sheets.length) throw new Error('no-sheets')
-        for (let i = 0; i < sheets.length; i++) {
-          const bytes = await elementToA4PdfBytes(sheets[i])
-          files[uniqueName(records[i])] = bytes
-        }
+      // Rasterise the actual preview sheets (html-to-image → SVG foreignObject)
+      // so the PDF is the browser's own rendering, exactly as shown — including
+      // the signature/stamp placement. Turn the editor outline off first.
+      setEditing(false)
+      await new Promise<void>((res) => requestAnimationFrame(() => requestAnimationFrame(() => res())))
+      const sheets = Array.from(document.querySelectorAll<HTMLElement>('.print-sheet'))
+      if (!sheets.length) throw new Error('no-sheets')
+      for (let i = 0; i < sheets.length && i < records.length; i++) {
+        files[uniqueName(records[i])] = await sheetToA4PdfBytes(sheets[i])
       }
 
       if (records.length === 1) {
@@ -396,18 +401,55 @@ export function WhtPrint() {
       <div className="no-print sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2.5">
         <Link to="/wht" className="text-sm font-semibold text-ink-600">← กลับรายการ WHT</Link>
         <div className="flex gap-2">
+          {(signatureUrl || stampUrl) && (
+            <Button variant={editing ? 'primary' : 'secondary'} onClick={() => setEditing((v) => !v)}>
+              <Move size={15} /> ปรับตำแหน่งลายเซ็น/ตราประทับ
+            </Button>
+          )}
           <Button variant="secondary" onClick={exportPdf} loading={busy}>
             <Download size={15} /> {busy ? 'กำลังสร้าง…' : 'ดาวน์โหลด PDF'}
           </Button>
         </div>
       </div>
+      {editing && (
+        <div className="no-print mx-auto max-w-screen-xl px-4 py-3">
+          <SignaturePlacementPanel
+            signature={signaturePlacement}
+            stamp={stampPlacement}
+            hasSignature={!!signatureUrl}
+            hasStamp={!!stampUrl}
+            onChangeSignature={setSignaturePlacement}
+            onChangeStamp={setStampPlacement}
+            onReset={() => {
+              setSignaturePlacement(DEFAULT_SIGNATURE_PLACEMENT)
+              setStampPlacement(DEFAULT_STAMP_PLACEMENT)
+            }}
+            onSave={savePlacement}
+            saving={saveSettings.isPending}
+          />
+        </div>
+      )}
       {err && <p className="no-print px-4 py-3 text-sm font-medium text-danger">{err}</p>}
       {loading && <p className="no-print px-4 py-3 text-sm text-ink-500">กำลังโหลดหนังสือรับรอง…</p>}
       <div className="flex flex-col items-center gap-6 overflow-auto p-6">
         {profile &&
           records.map((r, i) =>
             layout === 'pnd'
-              ? <PndPage key={r.id} record={r} profile={profile} seq={i} signatureUrl={signatureUrl ?? undefined} stampUrl={stampUrl ?? undefined} />
+              ? (
+                <PndPage
+                  key={r.id}
+                  record={r}
+                  profile={profile}
+                  seq={i}
+                  signatureUrl={signatureUrl ?? undefined}
+                  stampUrl={stampUrl ?? undefined}
+                  signaturePlacement={signaturePlacement}
+                  stampPlacement={stampPlacement}
+                  editable={editing}
+                  onSignaturePlacement={setSignaturePlacement}
+                  onStampPlacement={setStampPlacement}
+                />
+              )
               : <CleanPage key={r.id} record={r} profile={profile} />,
           )}
       </div>

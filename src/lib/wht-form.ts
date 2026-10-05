@@ -7,6 +7,14 @@ import {
   type WhtRecordWithVendor,
 } from './wht'
 
+// Placement defaults + type live in settings-types.ts (they are persisted per
+// tenant); re-exported here so the preview/PDF import one module.
+export {
+  DEFAULT_SIGNATURE_PLACEMENT,
+  DEFAULT_STAMP_PLACEMENT,
+  type Placement,
+} from './settings-types'
+
 // The WHT (ใบรับรองการหักภาษี ณ ที่จ่าย) form model — one source of truth shared
 // by the on-screen preview (WhtPrint.tsx) and the vector PDF renderer
 // (wht-pdf.ts), so the download can never drift from what the operator saw.
@@ -55,16 +63,6 @@ export interface WhtProfile {
   signatureStoragePath?: string
   stampStoragePath?: string
 }
-
-// Signature sits above the sign-date, stamp to its left — both can overlap.
-// date_bottom is at CSS top ~1913; signature bottom ~20px above that.
-export const SIGNATURE_TOP = 1893
-export const SIGNATURE_LEFT = 964
-export const SIGNATURE_W = 186
-export const SIGNATURE_H = 70
-export const STAMP_TOP = 1893
-export const STAMP_LEFT = 815
-export const STAMP_SIZE = 139
 
 export function buildFields(record: WhtRecordWithVendor, profile: WhtProfile, seq: number): FieldDef[] {
   const v = record

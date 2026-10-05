@@ -1,6 +1,13 @@
 import { PILOT_CONFIG } from './config'
 import { clientFor } from './mock-clients'
-import { DEFAULT_CONSENT, DEFAULT_INVITE_TEMPLATE, currentBeYear, type TenantSettings } from './settings-types'
+import {
+  DEFAULT_CONSENT,
+  DEFAULT_INVITE_TEMPLATE,
+  DEFAULT_SIGNATURE_PLACEMENT,
+  DEFAULT_STAMP_PLACEMENT,
+  currentBeYear,
+  type TenantSettings,
+} from './settings-types'
 
 // Per-tenant settings runtime: defaults (seed from the current hard-coded
 // PILOT_CONFIG so behaviour is unchanged until edited) + a localStorage store.
@@ -27,6 +34,8 @@ export function defaultSettings(tenantId?: string): TenantSettings {
     receiptNote: '',
     showVerifyQr: false,
     inviteMessageTemplate: DEFAULT_INVITE_TEMPLATE,
+    signaturePlacement: DEFAULT_SIGNATURE_PLACEMENT,
+    stampPlacement: DEFAULT_STAMP_PLACEMENT,
   }
 }
 
