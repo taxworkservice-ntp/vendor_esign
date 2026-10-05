@@ -7,6 +7,13 @@ touching `src/lib/wht-form.ts`, `src/lib/sheet-to-a4-pdf.ts`, or
 and the races that already caused production bugs. Follow it and the form will
 be correct the first time.
 
+> **Status — verified on Safari (2026-10-05, commit `9491465`).** The first page
+> of a `ดาวน์โหลดทั้งหมด` ZIP and the first single download now both include the
+> form background _and_ the signature/stamp. Two fixes got there and must not be
+> reverted: the canvas compositor (§7) draws the background and overlays from
+> decoded images instead of nesting them in the SVG, and the auto-export waits
+> for real settings + resolved asset URLs (§8).
+
 ---
 
 ## 0. Goal and non-negotiables
@@ -47,7 +54,7 @@ Non-negotiables:
 | `public/wht/form_page_final.png` | The blank form scan. **3024×4276 = 2× the 1512×2138 design space** (3024 = 1512×2, 4276 = 2138×2). |
 | `scripts/measure-wht-taxid-boxes.py` | Re-derives the tax-ID cell geometry from the form image (Pillow). Run it if the form image ever changes. |
 
-There is **one** renderer (the DOM) and one rasteriser (`sheetToA4PdfBytes`).
+There is **one** renderer (the DOM) and one rasteriser (`composeSheetToA4Pdf`).
 `buildFields()` feeds both the on-screen `PndPage` divs and the PDF (the PDF is
 a snapshot of those divs), so they cannot drift.
 
@@ -328,7 +335,10 @@ Checks:
 3. **`ดาวน์โหลดทั้งหมด`** (new tab, `?download=1`): the ZIP has background +
    signature + stamp on every page, identical to a manual download.
 4. **Move + save** the signature/stamp, reload, confirm persistence.
-5. Re-run `npm run lint`, `npm test` (351+ tests), `npm run build`.
+5. **Safari specifically:** repeat checks 2 and 3. This is the browser that
+   dropped the background and the signature/stamp on the first capture; it is the
+   regression that matters most.
+6. Re-run `npm run lint`, `npm test` (359+ tests), `npm run build`.
 
 Verify the asset chain without a browser:
 
