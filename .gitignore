@@ -6,6 +6,10 @@ dist
 storage/
 backups/
 
+# generated Vercel function bundle (scripts/build-api.mjs)
+api/entry.js
+api/entry.js.map
+
 # embedded postgres (db:live, db:list)
 .pgdata-live/
 .pgdata-list/
