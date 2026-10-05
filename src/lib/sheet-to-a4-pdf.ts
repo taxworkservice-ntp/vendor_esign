@@ -1,33 +1,57 @@
-import { toCanvas } from 'html-to-image'
-import { BG_IMAGE } from './wht-form'
+import { toSvg } from 'html-to-image'
+import { BG_IMAGE, PAGE_H, PAGE_W } from './wht-form'
 
-// The form image is large (~3.3 MB). Fetch it once and inline it as a data URL
-// so a capture never races its first load (the bug where the first download had
-// no background). Shared across exports and preview.
-let bgPromise: Promise<string> | null = null
-export function loadBgDataUrl(): Promise<string> {
+// The WHT form scan is a 3.3 MB PNG. Fetch it once and keep a *decoded*
+// HTMLImageElement that the exporter draws straight onto the output canvas.
+//
+// It must never be inlined into the html-to-image SVG. html-to-image serialises
+// the sheet into an SVG data URL (percent-encoded, not base64); a ~4.4 MB image
+// data URL nested inside it produces a ~5 MB data URL that Safari cannot
+// reliably decode while rasterising, so only Safari dropped the background — and
+// only on the first capture, before the browser's decoded cache was warm.
+// Compositing the background ourselves removes the race entirely and keeps the
+// SVG small.
+let bgPromise: Promise<HTMLImageElement> | null = null
+export function loadBgImage(): Promise<HTMLImageElement> {
   if (!bgPromise) {
-    bgPromise = fetch(BG_IMAGE)
-      .then((r) => r.blob())
-      .then(
-        (blob) =>
-          new Promise<string>((resolve, reject) => {
-            const fr = new FileReader()
-            fr.onload = () => resolve(String(fr.result))
-            fr.onerror = () => reject(fr.error)
-            fr.readAsDataURL(blob)
-          }),
-      )
+    bgPromise = (async () => {
+      const res = await fetch(BG_IMAGE)
+      if (!res.ok) throw new Error('bg-fetch-failed')
+      // Keep the object URL alive for the page's lifetime: some engines can drop
+      // a decoded image's backing store if its blob URL is revoked.
+      const url = URL.createObjectURL(await res.blob())
+      const img = new Image()
+      img.decoding = 'async'
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve()
+        img.onerror = () => reject(new Error('bg-load-failed'))
+        img.src = url
+      })
+      await img.decode?.().catch(() => undefined)
+      return img
+    })()
+    // Let a later call retry if the first load failed.
+    bgPromise.catch(() => {
+      bgPromise = null
+    })
   }
   return bgPromise
 }
 
-// Snapshot a DOM sheet onto one A4 page, using the browser's own layout engine
-// (SVG foreignObject via html-to-image) so the PDF is pixel-for-pixel the same
-// as the preview — including Thai shaping and the exact text baseline.
-//
-// The previous html2canvas path re-drew text itself and drifted vertically on
-// the WHT form; this does not.
+/** Load an SVG data URL as a decoded HTMLImageElement. */
+function svgToImage(svg: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.decoding = 'async'
+    img.onload = () => {
+      Promise.resolve(img.decode?.())
+        .catch(() => undefined)
+        .then(() => resolve(img))
+    }
+    img.onerror = () => reject(new Error('svg-load-failed'))
+    img.src = svg
+  })
+}
 
 /** Wait for web fonts + in-document <img>s so nothing renders blank. */
 async function ready(el: HTMLElement): Promise<void> {
@@ -56,17 +80,34 @@ async function ready(el: HTMLElement): Promise<void> {
   )
 }
 
-/** Rasterise `el` onto a single A4 page and return the PDF bytes. */
-export async function sheetToA4PdfBytes(el: HTMLElement): Promise<Uint8Array> {
+/**
+ * Rasterise `el` onto one A4 page. The sheet is captured without its background
+ * image (`data-role="form-bg"` is filtered out) and the background is drawn
+ * underneath from a pre-decoded image, so it is present on the very first
+ * capture in every browser.
+ */
+export async function composeSheetToA4Pdf(el: HTMLElement, bg: HTMLImageElement): Promise<Uint8Array> {
   const { jsPDF } = await import('jspdf')
   await ready(el)
-  const canvas = await toCanvas(el, {
-    pixelRatio: 2,
-    backgroundColor: '#ffffff',
+  const width = el.clientWidth || PAGE_W
+  const height = el.clientHeight || PAGE_H
+  const svg = await toSvg(el, {
     // Must stay off: a cache-bust query appended after a presigned URL's
     // X-Amz-Signature invalidates the signature (R2 then 403s without CORS).
     cacheBust: false,
+    filter: (node) => node.dataset?.role !== 'form-bg',
   })
+  const sheet = await svgToImage(svg)
+
+  const ratio = 2
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(width * ratio)
+  canvas.height = Math.round(height * ratio)
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('no-2d-context')
+  ctx.drawImage(bg, 0, 0, canvas.width, canvas.height)
+  ctx.drawImage(sheet, 0, 0, canvas.width, canvas.height)
+
   const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' })
   pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 595.28, 841.89)
   return new Uint8Array(pdf.output('arraybuffer'))

@@ -4,7 +4,7 @@ import { Download, Move } from 'lucide-react'
 import { fetchWhtByIds, fetchWhtByScope } from '../lib/wht-source'
 import { signDownload } from '../lib/r2-assets'
 import { documentFileName, stamp } from '../lib/download-name'
-import { loadBgDataUrl, sheetToA4PdfBytes } from '../lib/sheet-to-a4-pdf'
+import { composeSheetToA4Pdf, loadBgImage } from '../lib/sheet-to-a4-pdf'
 import { saveBlob } from '../lib/api-client'
 import { useClientAuth } from '../lib/client-auth'
 import { defaultSettings, type TenantSettings } from '../lib/settings'
@@ -43,7 +43,6 @@ function PndPage({
   record,
   profile,
   seq,
-  bgSrc,
   signatureUrl,
   stampUrl,
   signaturePlacement,
@@ -55,7 +54,6 @@ function PndPage({
   record: WhtRecordWithVendor
   profile: WhtProfile
   seq: number
-  bgSrc: string
   signatureUrl?: string
   stampUrl?: string
   signaturePlacement: Placement
@@ -68,7 +66,8 @@ function PndPage({
   const check = CHECKMARK_POS[record.formType]
   return (
     <div className="print-sheet" style={{ width: PAGE_W + 'px', height: PAGE_H + 'px', position: 'relative', overflow: 'hidden', fontFamily: FONT_FAMILY }}>
-      <img alt="form" src={bgSrc} style={{ position: 'absolute', inset: 0, width: PAGE_W + 'px', height: PAGE_H + 'px' }} />
+      {/* Excluded from the capture (data-role); the exporter draws it underneath. */}
+      <img data-role="form-bg" alt="form" src={BG_IMAGE} style={{ position: 'absolute', inset: 0, width: PAGE_W + 'px', height: PAGE_H + 'px' }} />
       {check && (
         <svg
           aria-label={record.formType}
@@ -235,9 +234,6 @@ export function WhtPrint() {
   const [signaturePlacement, setSignaturePlacement] = useState<Placement>(DEFAULT_SIGNATURE_PLACEMENT)
   const [stampPlacement, setStampPlacement] = useState<Placement>(DEFAULT_STAMP_PLACEMENT)
   const [editing, setEditing] = useState(false)
-  // The form image inlined as a data URL, so a capture never races its first
-  // load (falls back to the file path until it resolves).
-  const [bgUrl, setBgUrl] = useState<string | undefined>(undefined)
   const autoExported = useRef(false)
   // `?download=1` (the list's "ดาวน์โหลดทั้งหมด" action) exports as soon as the
   // records + settings + signature/stamp are ready, instead of only previewing.
@@ -247,14 +243,6 @@ export function WhtPrint() {
   const { data: settings } = useSettings()
   const saveSettings = useUpdateSettings()
   const toast = useToast()
-
-  useEffect(() => {
-    void loadBgDataUrl()
-      .then(setBgUrl)
-      .catch(() => {
-        /* keep the file-path fallback */
-      })
-  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -388,19 +376,17 @@ export function WhtPrint() {
 
       // Rasterise the actual preview sheets (html-to-image → SVG foreignObject)
       // so the PDF is the browser's own rendering, exactly as shown — including
-      // the signature/stamp placement. Turn the editor outline off and inline the
-      // (large) form image first, so the first download has the background.
+      // the signature/stamp placement. Turn the editor outline off, then
+      // pre-decode the form scan and draw it ourselves underneath each sheet, so
+      // the background is present on the very first capture (Safari previously
+      // dropped a large image nested as a data URL inside the SVG).
       setEditing(false)
-      try {
-        setBgUrl(await loadBgDataUrl())
-      } catch {
-        /* keep whatever background is already shown */
-      }
       await new Promise<void>((res) => requestAnimationFrame(() => requestAnimationFrame(() => res())))
+      const bg = await loadBgImage()
       const sheets = Array.from(document.querySelectorAll<HTMLElement>('.print-sheet'))
       if (!sheets.length) throw new Error('no-sheets')
       for (let i = 0; i < sheets.length && i < records.length; i++) {
-        files[uniqueName(records[i])] = await sheetToA4PdfBytes(sheets[i])
+        files[uniqueName(records[i])] = await composeSheetToA4Pdf(sheets[i], bg)
       }
 
       if (records.length === 1) {
@@ -489,7 +475,6 @@ export function WhtPrint() {
                   record={r}
                   profile={profile}
                   seq={i}
-                  bgSrc={bgUrl ?? BG_IMAGE}
                   signatureUrl={signatureUrl ?? undefined}
                   stampUrl={stampUrl ?? undefined}
                   signaturePlacement={signaturePlacement}
