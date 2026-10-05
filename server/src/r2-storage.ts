@@ -79,7 +79,10 @@ export async function putObject(path: string, bytes: Uint8Array, contentType?: s
   if (!c) return false
   const res = await c.fetch(objectUrl(path), {
     method: 'PUT',
-    body: bytes,
+    // The DOM lib rejects Uint8Array<ArrayBufferLike> as a body; the server
+    // tsconfig has no DOM lib at all, so cast through the init's own type to
+    // satisfy both. At runtime this is a valid fetch body.
+    body: bytes as unknown as RequestInit['body'],
     headers: contentType ? { 'Content-Type': contentType } : undefined,
   })
   return res.ok
