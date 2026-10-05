@@ -6,5 +6,5 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["server", "src/lib/thai-words.ts", "src/server"]
+  "include": ["server", "src/lib/thai-words.ts", "src/server", "api"]
 }

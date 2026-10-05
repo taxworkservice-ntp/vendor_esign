@@ -101,6 +101,14 @@ export async function saveBytesDurable(
     await putObject(relPath, bytes, contentType)
     return relPath
   }
+  // Serverless hosts (Vercel) have an ephemeral, per-instance disk: a file
+  // written here is gone before it can be read back. Fail loudly instead of
+  // silently losing a signature or a receipt PDF.
+  if (process.env.VERCEL) {
+    throw new Error(
+      'Object storage is not configured (set R2_ACCOUNT_ID/R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY) — refusing to write to ephemeral disk on Vercel.',
+    )
+  }
   return saveBytes(area, name, bytes, tenantId)
 }
 

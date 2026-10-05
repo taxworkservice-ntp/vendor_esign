@@ -3,8 +3,7 @@ import fontkit from '@pdf-lib/fontkit'
 import QRCode from 'qrcode'
 import { createHash } from 'node:crypto'
 import { readFileSync as readFs } from 'node:fs'
-import { join, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import { normalizeLineItem } from '../../src/lib/line-items'
 import { vendorDisplayName } from '../../src/lib/vendor-name'
 
@@ -76,7 +75,10 @@ const BOTTOM_LIMIT = M + 92 // keep room here for totals + bottom signature
 const SIG_Y = M + 48
 
 function fontsDir(): string {
-  return join(dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'fonts')
+  // Bundlers (Vercel) rewrite import.meta.url, so resolve from the project root
+  // instead. `includeFiles` in vercel.json ships server/assets/fonts to the
+  // function's working directory. FONTS_DIR overrides for other layouts.
+  return process.env.FONTS_DIR ?? join(process.cwd(), 'server', 'assets', 'fonts')
 }
 
 async function loadDoc(): Promise<{ doc: PDFDocument; fonts: Fonts }> {

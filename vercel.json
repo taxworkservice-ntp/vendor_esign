@@ -1,0 +1,26 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/[...route].ts": {
+      "runtime": "nodejs22.x",
+      "maxDuration": 30,
+      "includeFiles": "server/assets/fonts/**"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/vendor-link-expiry",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}
