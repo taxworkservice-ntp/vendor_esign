@@ -74,7 +74,7 @@ export function VendorsList() {
   const [search, setSearch] = useState('')
   const [showArchived, setShowArchived] = useState(false)
   const [pendingArchive, setPendingArchive] = useState<{ id: string; name: string } | null>(null)
-  const { key: sortKey, dir: sortDir, onSort } = useColumnSort()
+  const { key: sortKey, dir: sortDir, onSort } = useColumnSort('code', 'asc')
   const debouncedSearch = useDebounced(search, 250)
   const { data, isLoading, isFetching, isError, error, refetch } = useVendors(debouncedSearch, 'recent', showArchived)
   const setActive = useSetVendorActive()

@@ -45,7 +45,7 @@ export function ItemsList() {
   const [search, setSearch] = useState('')
   const [showArchived, setShowArchived] = useState(false)
   const [showForm, setShowForm] = useState(false)
-  const { key: sortKey, dir: sortDir, onSort } = useColumnSort()
+  const { key: sortKey, dir: sortDir, onSort } = useColumnSort('code', 'asc')
   const debouncedSearch = useDebounced(search, 250)
   const { data, isLoading, isFetching, isError, error, refetch } = useItems(debouncedSearch, 'recent', showArchived)
   const save = useSaveItem()
