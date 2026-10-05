@@ -6,6 +6,7 @@ import { isVendorPrefix, prefixRequired, isEntityName, vendorDisplayName } from 
 import { currentBeYear } from '../../src/lib/settings-types'
 import { formTypeForVendorType } from '../../src/lib/wht'
 import { decryptId } from './crypto'
+import { isoDay } from './dates'
 import { readStoredDurable, saveBytesDurable } from './storage'
 import { buildReceiptPdf } from './pdf'
 import { sha256hex, sessionUser } from './auth'
@@ -337,7 +338,7 @@ app.post('/api/transactions/:id/finalize', async (c) => {
             values (${rowTenant}, ${vName}, ${taxId}, ${d.vendor_address}, ${vType}) returning id`)?.id,
         )
       }
-      const issueDate = String(d.transfer_date).slice(0, 10)
+      const issueDate = isoDay(d.transfer_date)
       // The printed description is the payment type NAME (ประเภทการจ่าย), not
       // the transaction note and not a stored label — older labels carried a
       // rate suffix ("ค่าบริการ — 3%") which must not appear on the form.
@@ -376,7 +377,7 @@ app.post('/api/transactions/:id/finalize', async (c) => {
     whtAmount: Number(d.wht_amount),
     netAmount: Number(d.net_amount),
     amountWords: amountToThaiWords(Number(d.net_amount)),
-    transferDate: String(d.transfer_date).slice(0, 10),
+    transferDate: isoDay(d.transfer_date),
     slipReference: d.slip_reference,
     signaturePng: sig,
   })

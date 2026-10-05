@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { sql, withTenant } from '../../src/server/db'
 import { guard } from './data'
 import { parseMonthParam } from './month'
+import { isoDay } from './dates'
 import { parseWhtListQuery } from '../../src/lib/wht-list-query'
 import {
   whtByFormClause,
@@ -44,7 +45,7 @@ function toRecord(r: Record<string, unknown>): WhtRecordWithVendor {
     tenantId: String(r.user_id),
     vendorId: String(r.vendor_id),
     formType: (FORMS.includes(String(r.form_type)) ? String(r.form_type) : 'pnd3') as WhtFormType,
-    issueDate: String(r.issue_date ?? '').slice(0, 10),
+    issueDate: isoDay(r.issue_date),
     amount: Number(r.amount ?? 0),
     whtRate: Number(r.wht_rate ?? 0),
     whtAmount: Number(r.wht_amount ?? 0),

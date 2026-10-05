@@ -67725,6 +67725,20 @@ function decryptId(payload) {
   }
 }
 
+// server/src/dates.ts
+function isoDay(v2) {
+  if (v2 == null) return "";
+  if (v2 instanceof Date) {
+    if (Number.isNaN(v2.getTime())) return "";
+    const y = v2.getFullYear();
+    const m2 = String(v2.getMonth() + 1).padStart(2, "0");
+    const d2 = String(v2.getDate()).padStart(2, "0");
+    return `${y}-${m2}-${d2}`;
+  }
+  const s = String(v2);
+  return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : s;
+}
+
 // server/src/storage.ts
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -69490,7 +69504,7 @@ function toTxn(r) {
     whtMode: r.wht_mode === "grossup" ? "grossup" : "deduct",
     whtAmount: Number(r.wht_amount ?? 0),
     netAmount: Number(r.net_amount ?? 0),
-    transferDate: String(r.transfer_date ?? "").slice(0, 10),
+    transferDate: isoDay(r.transfer_date),
     slipReference: String(r.slip_reference ?? ""),
     slipName: String(r.slip_file_path ?? ""),
     status: r.status ?? "draft",
@@ -69907,7 +69921,7 @@ function toRecord(r) {
     tenantId: String(r.user_id),
     vendorId: String(r.vendor_id),
     formType: FORMS.includes(String(r.form_type)) ? String(r.form_type) : "pnd3",
-    issueDate: String(r.issue_date ?? "").slice(0, 10),
+    issueDate: isoDay(r.issue_date),
     amount: Number(r.amount ?? 0),
     whtRate: Number(r.wht_rate ?? 0),
     whtAmount: Number(r.wht_amount ?? 0),
@@ -70301,7 +70315,7 @@ app.post("/api/transactions/:id/finalize", async (c) => {
             values (${rowTenant}, ${vName}, ${taxId}, ${d2.vendor_address}, ${vType}) returning id`)?.id
         );
       }
-      const issueDate = String(d2.transfer_date).slice(0, 10);
+      const issueDate = isoDay(d2.transfer_date);
       const whtDescription = d2.payment_type || d2.note || d2.description;
       await db`insert into wht_records
         (user_id, vendor_id, form_type, issue_date, amount, wht_rate, wht_amount, description, status, certificate_no, source_transaction_id)
@@ -70332,7 +70346,7 @@ app.post("/api/transactions/:id/finalize", async (c) => {
     whtAmount: Number(d2.wht_amount),
     netAmount: Number(d2.net_amount),
     amountWords: amountToThaiWords(Number(d2.net_amount)),
-    transferDate: String(d2.transfer_date).slice(0, 10),
+    transferDate: isoDay(d2.transfer_date),
     slipReference: d2.slip_reference,
     signaturePng: sig
   });

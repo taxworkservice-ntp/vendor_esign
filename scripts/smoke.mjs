@@ -121,7 +121,7 @@ check('token reuse → 410', r.status === 410, `got ${r.status}`)
 r = await fetch(`${BASE}/api/transactions/${txnId}/finalize`, { method: 'POST' })
 const fin = await r.json()
 check('POST finalize → 200', r.status === 200, `got ${r.status} ${JSON.stringify(fin).slice(0, 120)}`)
-check('number format', /^ABC-R-2569-\d{4}$/.test(fin.number ?? ''), fin.number)
+check('number format', /^RCT-\d{3}-2569-\d{3}$/.test(fin.number ?? ''), fin.number)
 check('sha256 format', /^[0-9a-f]{64}$/.test(fin.pdfSha256 ?? ''))
 check('pdf stored', await artifactExists(fin.pdfPath), fin.pdfPath)
 

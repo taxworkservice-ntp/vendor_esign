@@ -10,6 +10,7 @@ import { emptyTotals, type TxnTotals } from '../../src/lib/txn-filters'
 import { parseListQuery } from '../../src/lib/txn-list-query'
 import { limitClause, orderByClause, totalsClause, whereClause } from './txn-sql'
 import { readStoredDurable } from './storage'
+import { isoDay } from './dates'
 import { contentDisposition, documentFileName } from '../../src/lib/download-name'
 import type { PaymentTransaction } from '../../src/lib/types'
 
@@ -128,7 +129,7 @@ export function toTxn(r: Record<string, unknown>): PaymentTransaction {
     whtMode: r.wht_mode === 'grossup' ? 'grossup' : 'deduct',
     whtAmount: Number(r.wht_amount ?? 0),
     netAmount: Number(r.net_amount ?? 0),
-    transferDate: String(r.transfer_date ?? '').slice(0, 10),
+    transferDate: isoDay(r.transfer_date),
     slipReference: String(r.slip_reference ?? ''),
     slipName: String(r.slip_file_path ?? ''),
     status: (r.status as PaymentTransaction['status']) ?? 'draft',
