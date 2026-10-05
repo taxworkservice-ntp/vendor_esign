@@ -58,6 +58,13 @@ function gateFail(tokenHash: string): number {
 
 export const app = new Hono()
 
+// Structured 500s instead of Hono's plain "Internal Server Error" so callers
+// (and the smoke test) can tell what failed. No stack is returned.
+app.onError((err, c) => {
+  console.error('[api]', err)
+  return c.json({ error: 'internal-server-error', message: err instanceof Error ? err.message : String(err) }, 500)
+})
+
 app.use('*', corsMw())
 
 // Client portal auth (login/logout/me/change-password).

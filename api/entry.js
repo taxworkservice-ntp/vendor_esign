@@ -70068,6 +70068,10 @@ function gateFail(tokenHash) {
   return Math.max(0, GATE_MAX - f.n);
 }
 var app = new Hono2();
+app.onError((err, c) => {
+  console.error("[api]", err);
+  return c.json({ error: "internal-server-error", message: err instanceof Error ? err.message : String(err) }, 500);
+});
 app.use("*", corsMw());
 app.route("/api/auth", authRoutes);
 app.route("/api/client", dataRoutes);

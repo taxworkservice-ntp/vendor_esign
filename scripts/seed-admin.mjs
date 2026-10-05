@@ -33,7 +33,10 @@ const sql = neon(url)
 const existing = await sql`select id from profiles where lower(email) = ${email}`
 let userId = existing[0]?.id
 if (!userId) {
-  const ins = await sql`insert into profiles (email, status, role) values (${email}, 'active', 'owner') returning id`
+  // profiles.password_hash is NOT NULL (008 split credentials into
+  // auth_credentials but kept the legacy column). Keep both in sync.
+  const ins = await sql`insert into profiles (email, status, role, password_hash, must_change_pw, temp_expires_at)
+    values (${email}, 'active', 'owner', ${hash}, true, ${tempExpires}) returning id`
   userId = ins[0].id
   await sql`insert into auth_credentials (user_id, password_hash, must_change_pw, temp_expires_at)
     values (${userId}, ${hash}, true, ${tempExpires})`
@@ -42,7 +45,8 @@ if (!userId) {
     values (${userId}, ${hash}, true, ${tempExpires})
     on conflict (user_id) do update set password_hash = excluded.password_hash,
       must_change_pw = true, temp_expires_at = excluded.temp_expires_at, updated_at = now()`
-  await sql`update profiles set status = 'active', updated_at = now() where id = ${userId}`
+  await sql`update profiles set status = 'active', password_hash = ${hash},
+    must_change_pw = true, temp_expires_at = ${tempExpires}, updated_at = now() where id = ${userId}`
 }
 // Workspace membership: owner of the pilot workspace (008 alignment).
 await sql`insert into client_members (member_user_id, workspace_user_id, role)

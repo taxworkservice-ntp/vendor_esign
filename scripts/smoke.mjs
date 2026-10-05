@@ -7,6 +7,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import QRCode from 'qrcode'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { AwsClient } from 'aws4fetch'
 
 dotenv({ path: '.env.local' })
 dotenv()
@@ -20,6 +21,25 @@ const stamp = Date.now().toString(36).toUpperCase()
 const check = (name, cond, extra = '') => {
   console.log(`${cond ? 'PASS' : 'FAIL'} - ${name}${extra ? ` (${extra})` : ''}`)
   if (!cond) process.exitCode = 1
+}
+
+// Storage check works against either backend: R2 when configured (the deployed
+// server), else the local disk. Avoids a false failure on serverless.
+const r2Ready = process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY
+async function artifactExists(relPath) {
+  if (!relPath) return false
+  if (r2Ready) {
+    const c = new AwsClient({
+      accessKeyId: process.env.R2_ACCESS_KEY_ID,
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+      service: 's3',
+      region: 'auto',
+    })
+    const url = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${process.env.R2_BUCKET ?? 'vendor-esign'}/${relPath}`
+    const res = await c.fetch(url)
+    return res.ok
+  }
+  return existsSync(join(process.cwd(), 'storage', relPath))
 }
 
 const token = randomBytes(32).toString('hex')
@@ -59,6 +79,7 @@ check('payload flags gate + prefill', payload.gated === true && payload.idLast4 
 // 1b. direct sign without unlock is rejected
 const sigPng = (await QRCode.toBuffer('smoke-signature', { width: 200 })).toString('base64')
 const signBody = (name, addr) => JSON.stringify({
+  vendorPrefix: 'นาย',
   vendorName: name, vendorAddress: addr,
   idNumberEncrypted: 'enc:FAKE-SMOKE', idLast4: '0708',
   signaturePng: `data:image/png;base64,${sigPng}`, consentVersion: 'v1',
@@ -102,7 +123,7 @@ const fin = await r.json()
 check('POST finalize → 200', r.status === 200, `got ${r.status} ${JSON.stringify(fin).slice(0, 120)}`)
 check('number format', /^ABC-R-2569-\d{4}$/.test(fin.number ?? ''), fin.number)
 check('sha256 format', /^[0-9a-f]{64}$/.test(fin.pdfSha256 ?? ''))
-check('pdf on disk', existsSync(join(process.cwd(), 'storage', fin.pdfPath ?? '___')), fin.pdfPath)
+check('pdf stored', await artifactExists(fin.pdfPath), fin.pdfPath)
 
 // 5. double-finalize blocked, verify page masked
 r = await fetch(`${BASE}/api/transactions/${txnId}/finalize`, { method: 'POST' })
