@@ -68625,7 +68625,9 @@ async function dummyHash() {
   return dummy;
 }
 function isClient(u) {
-  return u.memberships.some((m2) => m2.role === "client_user" || m2.role === "client_admin");
+  return u.memberships.some(
+    (m2) => m2.role === "client_user" || m2.role === "client_admin" || m2.role === "owner" || m2.role === "manager" || m2.role === "officer"
+  );
 }
 async function requireClient(c) {
   const u = await sessionUser(c.req.header("cookie"));

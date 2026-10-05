@@ -47,7 +47,13 @@ async function dummyHash(): Promise<string> {
 }
 
 function isClient(u: SessionUser): boolean {
-  return u.memberships.some((m) => m.role === 'client_user' || m.role === 'client_admin')
+  // Must match the roles the login accepts (below) and src/lib/mock-users.ts
+  // CLIENT_ROLES — otherwise a signed-in owner/manager/officer gets 401 on
+  // every client API call.
+  return u.memberships.some((m) =>
+    m.role === 'client_user' || m.role === 'client_admin' ||
+    m.role === 'owner' || m.role === 'manager' || m.role === 'officer',
+  )
 }
 
 export async function requireClient(c: { req: { header: (n: string) => string | undefined } }): Promise<SessionUser | null> {
