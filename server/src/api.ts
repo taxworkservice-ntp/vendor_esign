@@ -135,6 +135,7 @@ app.get('/api/vendor/:token', async (c) => {
       t.wht_amount, t.net_amount, t.transfer_date, t.slip_reference, t.status,
       t.tax_id_hash, t.tax_id_last4,
       v.prefix as vendor_prefix, v.name as vendor_name, v.address as vendor_address,
+      v.phone as vendor_phone, v.email as vendor_email,
       (select client_code from client_profiles where id = vr.user_id) as client_code
     from vendor_requests vr
     join vendor_payables t on t.id = vr.transaction_id
@@ -162,6 +163,8 @@ app.get('/api/vendor/:token', async (c) => {
     gated: (r as Record<string, unknown>).tax_id_hash != null,
     idLast4: (r as Record<string, unknown>).tax_id_last4 ?? null,
     vendorPrefix: r.vendor_prefix, vendorName: r.vendor_name, vendorAddress: r.vendor_address,
+    vendorPhone: (r as Record<string, unknown>).vendor_phone ?? null,
+    vendorEmail: (r as Record<string, unknown>).vendor_email ?? null,
     unlocked: (r as Record<string, unknown>).unlocked_at != null,
   })
 })
@@ -222,8 +225,8 @@ app.post('/api/vendor/:token/sign', async (c) => {
   if (rateLimited(`sign:${ip}`, 10)) return c.json({ error: 'too-many-requests' }, 429)
   const token = c.req.param('token')
   const body = await c.req.json().catch(() => null) as {
-    vendorPrefix?: string; vendorName?: string; vendorAddress?: string; idNumberEncrypted?: string;
-    idLast4?: string; signaturePng?: string; consentVersion?: string; lineUserId?: string;
+    vendorPrefix?: string; vendorName?: string; vendorAddress?: string; vendorPhone?: string; vendorEmail?: string;
+    idNumberEncrypted?: string; idLast4?: string; signaturePng?: string; consentVersion?: string; lineUserId?: string;
   } | null
   if (!body?.vendorName || !body?.vendorAddress || !body?.signaturePng || body.consentVersion !== 'v1')
     return c.json({ error: 'invalid-body' }, 400)
@@ -271,12 +274,21 @@ app.post('/api/vendor/:token/sign', async (c) => {
   if (subAddr !== String(r.record_address))
     corrections.push({ field: 'address', from: String(r.record_address), to: subAddr })
   const sigPath = await saveBytesDurable('signatures', `${txnId}.png`, png, rowTenant)
+  // Contact snapshot: what the vendor confirmed at signing (they may have edited
+  // the client's record). Immutable from here — the issued PDF reads these.
+  const subPhone = String(body.vendorPhone ?? '').trim().slice(0, 50)
+  const subEmail = String(body.vendorEmail ?? '').trim().slice(0, 200)
+  // Signing reference: the authorization's own identifier, shown to the vendor
+  // right away. Distinct from the receipt number (assigned only at issuance, so
+  // the statutory series never has gaps).
+  const authRef = `AUTH-${randomBytes(4).toString('hex').toUpperCase()}`
   await db`insert into vendor_authorizations
     (user_id, transaction_id, vendor_prefix, vendor_name, vendor_address, vendor_masked_id,
-     signature_image_path, verification_method, line_user_id, ip, user_agent,
+     vendor_phone, vendor_email, auth_ref, signature_image_path, verification_method, line_user_id, ip, user_agent,
      consent_text_version, corrections)
     values (${rowTenant}, ${txnId}, ${subPrefix}, ${subName}, ${subAddr},
       ${`x-xxxx-xxxxx-${last4.slice(0, 2)}-${last4.slice(2)}`},
+      ${subPhone}, ${subEmail}, ${authRef},
       ${sigPath}, 'stub-deferred', ${body.lineUserId ?? null}, ${ip},
       ${(c.req.header('user-agent') ?? '').slice(0, 500)}, 'v1',
       ${JSON.stringify(corrections)})`
@@ -284,8 +296,8 @@ app.post('/api/vendor/:token/sign', async (c) => {
   await db`update vendor_payables set status = 'signed' where id = ${txnId}`
   await withTenant(rowTenant, 'client', async () =>
     audit(rowTenant, 'vendor_payables', txnId, 'vendor.signed', 'vendor',
-      { verificationMethod: 'stub-deferred', consentVersion: 'v1', corrections }, ip))
-  return c.json({ ok: true, transactionId: txnId, corrections })
+      { verificationMethod: 'stub-deferred', consentVersion: 'v1', corrections, authRef }, ip))
+  return c.json({ ok: true, transactionId: txnId, corrections, authRef })
 })
 
 // Finalize: assign series number + receipt row + PDF in one flow.
@@ -336,7 +348,8 @@ app.post('/api/transactions/:id/finalize', async (c) => {
   const rows = await db`
     select t.description, t.note, t.payment_type, t.line_items, t.gross_amount, t.wht_rate, t.wht_amount, t.net_amount,
       t.transfer_date, t.slip_reference,
-      a.vendor_prefix, a.vendor_name, a.vendor_address, a.vendor_masked_id, a.signature_image_path,
+      a.vendor_prefix, a.vendor_name, a.vendor_address, a.vendor_masked_id, a.vendor_phone, a.vendor_email,
+      a.auth_ref, a.signature_image_path,
       a.signed_at, a.verification_method, a.consent_text_version
     from vendor_payables t
     join vendor_authorizations a on a.transaction_id = t.id
@@ -346,6 +359,7 @@ app.post('/api/transactions/:id/finalize', async (c) => {
     gross_amount: string; wht_rate: string; wht_amount: string;
     net_amount: string; transfer_date: string; slip_reference: string;
     vendor_prefix: string; vendor_name: string; vendor_address: string; vendor_masked_id: string;
+    vendor_phone: string | null; vendor_email: string | null; auth_ref: string | null;
     signature_image_path: string; signed_at: string;
     verification_method: string; consent_text_version: string;
   }>(rows)
@@ -410,7 +424,10 @@ app.post('/api/transactions/:id/finalize', async (c) => {
     consentVersion: d.consent_text_version,
     signedAt: d.signed_at,
     client: { code: prof.code, display: prof.display },
-    vendor: { prefix: d.vendor_prefix, name: d.vendor_name, address: d.vendor_address, maskedId: d.vendor_masked_id },
+    vendor: {
+      prefix: d.vendor_prefix, name: d.vendor_name, address: d.vendor_address, maskedId: d.vendor_masked_id,
+      phone: d.vendor_phone ?? undefined, email: d.vendor_email ?? undefined,
+    },
     lineItems,
     note: d.note,
     description: d.description,

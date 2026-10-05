@@ -36,7 +36,7 @@ export interface ReceiptPdfInput {
   consentVersion: string
   signedAt: string // ISO datetime
   client: { code: string; display: string } // display = name/addr/taxid line [VERIFY]
-  vendor: { prefix: string; name: string; address: string; maskedId: string }
+  vendor: { prefix: string; name: string; address: string; maskedId: string; phone?: string; email?: string }
   // Line items are the source; a legacy single line is expressed as one item.
   lineItems: ReceiptLine[]
   note?: string
@@ -174,7 +174,17 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
   text(vendorDisplayName(input.vendor.prefix, input.vendor.name), M, y, 14, bold, INK)
   const vAddr = wrap(`ที่อยู่: ${input.vendor.address}`, regular, 10, halfW)
   vAddr.slice(0, 2).forEach((ln, i) => text(ln, M, y - 16 - i * 13, 10, regular, MUTED))
-  text(`เลขบัตรประชาชน: ${input.vendor.maskedId}`, M, y - 16 - Math.min(vAddr.length, 2) * 13, 9.5, regular, MUTED)
+  const idY = y - 16 - Math.min(vAddr.length, 2) * 13
+  text(`เลขบัตรประชาชน: ${input.vendor.maskedId}`, M, idY, 9.5, regular, MUTED)
+  // Contact lines, only when the vendor supplied them at signing.
+  let contactY = idY - 12
+  if (input.vendor.phone) {
+    text(`โทร: ${input.vendor.phone}`, M, contactY, 9, regular, MUTED)
+    contactY -= 12
+  }
+  if (input.vendor.email) {
+    text(`อีเมล: ${input.vendor.email}`, M, contactY, 9, regular, MUTED)
+  }
   rightText('ใบเสร็จรับเงิน', right, y, 24, bold, INK)
   rightText('RECEIPT', right, y - 18, 9, regular, FAINT)
   rightText('ต้นฉบับ', right, y - 30, 9, bold, MUTED)

@@ -68289,7 +68289,16 @@ async function buildReceiptPdf(input) {
   text(vendorDisplayName(input.vendor.prefix, input.vendor.name), M, y, 14, bold, INK);
   const vAddr = wrap(`\u0E17\u0E35\u0E48\u0E2D\u0E22\u0E39\u0E48: ${input.vendor.address}`, regular, 10, halfW);
   vAddr.slice(0, 2).forEach((ln2, i) => text(ln2, M, y - 16 - i * 13, 10, regular, MUTED));
-  text(`\u0E40\u0E25\u0E02\u0E1A\u0E31\u0E15\u0E23\u0E1B\u0E23\u0E30\u0E0A\u0E32\u0E0A\u0E19: ${input.vendor.maskedId}`, M, y - 16 - Math.min(vAddr.length, 2) * 13, 9.5, regular, MUTED);
+  const idY = y - 16 - Math.min(vAddr.length, 2) * 13;
+  text(`\u0E40\u0E25\u0E02\u0E1A\u0E31\u0E15\u0E23\u0E1B\u0E23\u0E30\u0E0A\u0E32\u0E0A\u0E19: ${input.vendor.maskedId}`, M, idY, 9.5, regular, MUTED);
+  let contactY = idY - 12;
+  if (input.vendor.phone) {
+    text(`\u0E42\u0E17\u0E23: ${input.vendor.phone}`, M, contactY, 9, regular, MUTED);
+    contactY -= 12;
+  }
+  if (input.vendor.email) {
+    text(`\u0E2D\u0E35\u0E40\u0E21\u0E25: ${input.vendor.email}`, M, contactY, 9, regular, MUTED);
+  }
   rightText("\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19", right, y, 24, bold, INK);
   rightText("RECEIPT", right, y - 18, 9, regular, FAINT);
   rightText("\u0E15\u0E49\u0E19\u0E09\u0E1A\u0E31\u0E1A", right, y - 30, 9, bold, MUTED);
@@ -68997,7 +69006,10 @@ dataRoutes.get("/vendors", async (c) => {
               to_char(t.last_activity, 'YYYY-MM-DD') as last_activity
        from vendor_payees v
        left join lateral (
-         select sum(p.net_amount) as outstanding, count(*) as txn_count, max(p.transfer_date) as last_activity
+         select
+           sum(p.net_amount) filter (where p.status <> 'issued') as outstanding,
+           count(*) as txn_count,
+           max(p.transfer_date) as last_activity
          from vendor_payables p
          where p.user_id = v.user_id and p.vendor_id = v.id
            and p.status not in ('cancelled', 'void')
@@ -69725,6 +69737,7 @@ txnRoutes.get("/transactions/:id/authorization", async (c) => {
     const db = sql();
     return await db.query(
       `select a.vendor_prefix, a.vendor_name, a.vendor_address, a.vendor_masked_id,
+         a.vendor_phone, a.vendor_email, a.auth_ref,
          a.signature_image_path, a.signed_at, a.verification_method, a.consent_text_version,
          v.prefix as client_prefix, v.name as client_name, v.address as client_address
        from vendor_authorizations a
@@ -69752,6 +69765,9 @@ txnRoutes.get("/transactions/:id/authorization", async (c) => {
     vendorPrefix: String(a2.vendor_prefix ?? ""),
     vendorName: String(a2.vendor_name ?? ""),
     vendorAddress: String(a2.vendor_address ?? ""),
+    vendorPhone: String(a2.vendor_phone ?? ""),
+    vendorEmail: String(a2.vendor_email ?? ""),
+    authRef: String(a2.auth_ref ?? ""),
     maskedId: String(a2.vendor_masked_id ?? ""),
     corrections,
     signaturePng: sig ? `data:image/png;base64,${Buffer.from(sig).toString("base64")}` : null
@@ -70259,6 +70275,7 @@ app.get("/api/vendor/:token", async (c) => {
       t.wht_amount, t.net_amount, t.transfer_date, t.slip_reference, t.status,
       t.tax_id_hash, t.tax_id_last4,
       v.prefix as vendor_prefix, v.name as vendor_name, v.address as vendor_address,
+      v.phone as vendor_phone, v.email as vendor_email,
       (select client_code from client_profiles where id = vr.user_id) as client_code
     from vendor_requests vr
     join vendor_payables t on t.id = vr.transaction_id
@@ -70296,6 +70313,8 @@ app.get("/api/vendor/:token", async (c) => {
     vendorPrefix: r.vendor_prefix,
     vendorName: r.vendor_name,
     vendorAddress: r.vendor_address,
+    vendorPhone: r.vendor_phone ?? null,
+    vendorEmail: r.vendor_email ?? null,
     unlocked: r.unlocked_at != null
   });
 });
@@ -70385,12 +70404,16 @@ app.post("/api/vendor/:token/sign", async (c) => {
   if (subAddr !== String(r.record_address))
     corrections.push({ field: "address", from: String(r.record_address), to: subAddr });
   const sigPath = await saveBytesDurable("signatures", `${txnId}.png`, png, rowTenant);
+  const subPhone = String(body.vendorPhone ?? "").trim().slice(0, 50);
+  const subEmail = String(body.vendorEmail ?? "").trim().slice(0, 200);
+  const authRef = `AUTH-${randomBytes4(4).toString("hex").toUpperCase()}`;
   await db`insert into vendor_authorizations
     (user_id, transaction_id, vendor_prefix, vendor_name, vendor_address, vendor_masked_id,
-     signature_image_path, verification_method, line_user_id, ip, user_agent,
+     vendor_phone, vendor_email, auth_ref, signature_image_path, verification_method, line_user_id, ip, user_agent,
      consent_text_version, corrections)
     values (${rowTenant}, ${txnId}, ${subPrefix}, ${subName}, ${subAddr},
       ${`x-xxxx-xxxxx-${last4.slice(0, 2)}-${last4.slice(2)}`},
+      ${subPhone}, ${subEmail}, ${authRef},
       ${sigPath}, 'stub-deferred', ${body.lineUserId ?? null}, ${ip},
       ${(c.req.header("user-agent") ?? "").slice(0, 500)}, 'v1',
       ${JSON.stringify(corrections)})`;
@@ -70402,10 +70425,10 @@ app.post("/api/vendor/:token/sign", async (c) => {
     txnId,
     "vendor.signed",
     "vendor",
-    { verificationMethod: "stub-deferred", consentVersion: "v1", corrections },
+    { verificationMethod: "stub-deferred", consentVersion: "v1", corrections, authRef },
     ip
   ));
-  return c.json({ ok: true, transactionId: txnId, corrections });
+  return c.json({ ok: true, transactionId: txnId, corrections, authRef });
 });
 app.post("/api/transactions/:id/finalize", async (c) => {
   const ip = c.req.header("x-forwarded-for") ?? "local";
@@ -70443,7 +70466,8 @@ app.post("/api/transactions/:id/finalize", async (c) => {
   const rows = await db`
     select t.description, t.note, t.payment_type, t.line_items, t.gross_amount, t.wht_rate, t.wht_amount, t.net_amount,
       t.transfer_date, t.slip_reference,
-      a.vendor_prefix, a.vendor_name, a.vendor_address, a.vendor_masked_id, a.signature_image_path,
+      a.vendor_prefix, a.vendor_name, a.vendor_address, a.vendor_masked_id, a.vendor_phone, a.vendor_email,
+      a.auth_ref, a.signature_image_path,
       a.signed_at, a.verification_method, a.consent_text_version
     from vendor_payables t
     join vendor_authorizations a on a.transaction_id = t.id
@@ -70499,7 +70523,14 @@ app.post("/api/transactions/:id/finalize", async (c) => {
     consentVersion: d2.consent_text_version,
     signedAt: d2.signed_at,
     client: { code: prof.code, display: prof.display },
-    vendor: { prefix: d2.vendor_prefix, name: d2.vendor_name, address: d2.vendor_address, maskedId: d2.vendor_masked_id },
+    vendor: {
+      prefix: d2.vendor_prefix,
+      name: d2.vendor_name,
+      address: d2.vendor_address,
+      maskedId: d2.vendor_masked_id,
+      phone: d2.vendor_phone ?? void 0,
+      email: d2.vendor_email ?? void 0
+    },
     lineItems,
     note: d2.note,
     description: d2.description,

@@ -118,10 +118,12 @@ dataRoutes.get('/vendors', async (c) => {
   const includeArchived = c.req.query('includeArchived') === '1'
   // Money context per vendor, in the same query rather than N follow-ups.
   //
-  // `outstanding` deliberately excludes cancelled and void, matching the
-  // transaction list's NON_PAYABLE rule — otherwise the same number would mean
-  // two different things on two screens. `last_activity` and `txn_count` are
-  // what a bookkeeper scans a supplier register for.
+  // `outstanding` is what is STILL OWED, so it excludes every settled document:
+  // `issued` (the receipt exists — this was the bug: paid vendors showed a
+  // balance), plus `cancelled`/`void`. `draft`/`sent`/`opened`/`signed`/`expired`
+  // stay in — the vendor still has to be chased. `txn_count` remains the total
+  // transaction count (not just the open ones), which is what a bookkeeper scans
+  // a supplier register for.
   const rows = await withTenant(g.ws, 'client', async () => {
     const db = sql()
     return (await db.query(
@@ -132,7 +134,10 @@ dataRoutes.get('/vendors', async (c) => {
               to_char(t.last_activity, 'YYYY-MM-DD') as last_activity
        from vendor_payees v
        left join lateral (
-         select sum(p.net_amount) as outstanding, count(*) as txn_count, max(p.transfer_date) as last_activity
+         select
+           sum(p.net_amount) filter (where p.status <> 'issued') as outstanding,
+           count(*) as txn_count,
+           max(p.transfer_date) as last_activity
          from vendor_payables p
          where p.user_id = v.user_id and p.vendor_id = v.id
            and p.status not in ('cancelled', 'void')

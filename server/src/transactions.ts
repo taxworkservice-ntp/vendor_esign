@@ -263,6 +263,7 @@ txnRoutes.get('/transactions/:id/authorization', async (c) => {
     const db = sql()
     return (await db.query(
       `select a.vendor_prefix, a.vendor_name, a.vendor_address, a.vendor_masked_id,
+         a.vendor_phone, a.vendor_email, a.auth_ref,
          a.signature_image_path, a.signed_at, a.verification_method, a.consent_text_version,
          v.prefix as client_prefix, v.name as client_name, v.address as client_address
        from vendor_authorizations a
@@ -297,6 +298,9 @@ txnRoutes.get('/transactions/:id/authorization', async (c) => {
     vendorPrefix: String(a.vendor_prefix ?? ''),
     vendorName: String(a.vendor_name ?? ''),
     vendorAddress: String(a.vendor_address ?? ''),
+    vendorPhone: String(a.vendor_phone ?? ''),
+    vendorEmail: String(a.vendor_email ?? ''),
+    authRef: String(a.auth_ref ?? ''),
     maskedId: String(a.vendor_masked_id ?? ''),
     corrections,
     signaturePng: sig ? `data:image/png;base64,${Buffer.from(sig).toString('base64')}` : null,

@@ -175,6 +175,18 @@ export function ReceiptView() {
               <p className="mt-0.5 text-body leading-relaxed text-ink-600">
                 <span className="text-ink-400">ที่อยู่: </span>{auth?.vendorAddress ?? t.vendor.address}
               </p>
+              {(auth?.vendorPhone || t.vendor.phone) && (
+                <p className="mt-0.5 text-label text-ink-600">
+                  <span className="text-ink-400">โทร: </span>
+                  <span className="font-mono">{auth?.vendorPhone || t.vendor.phone}</span>
+                </p>
+              )}
+              {(auth?.vendorEmail || t.vendor.email) && (
+                <p className="mt-0.5 text-label text-ink-600">
+                  <span className="text-ink-400">อีเมล: </span>
+                  <span className="font-mono">{auth?.vendorEmail || t.vendor.email}</span>
+                </p>
+              )}
               <p className="mt-0.5 text-label text-ink-600">
                 <span className="text-ink-400">เลขบัตรประชาชน: </span>
                 <span className="font-mono">{t.vendor.taxId ?? t.vendor.maskedId}</span>

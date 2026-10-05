@@ -55,6 +55,9 @@ export function VendorSign() {
   const [prefix, setPrefix] = useState('')
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
+  const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
+  const [authRef, setAuthRef] = useState('')
   const [tid, setTid] = useState('')
   const [consent, setConsent] = useState(false)
   const [drew, setDrew] = useState(false)
@@ -85,6 +88,8 @@ export function VendorSign() {
       setPrefix(t.vendor.prefix ?? '')
       setName(t.vendor.name)
       setAddress(t.vendor.address)
+      setPhone(t.vendor.phone ?? '')
+      setEmail(t.vendor.email ?? '')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, t?.id])
@@ -108,13 +113,18 @@ export function VendorSign() {
         title="ลงนามเรียบร้อยแล้ว"
         body="ขอบคุณ ระบบได้บันทึกการรับเงินและการมอบอำนาจออกใบเสร็จสำหรับธุรกรรมนี้แล้ว ลูกค้าผู้จ่ายจะออกใบเสร็จรับเงินให้ต่อไป"
         extra={
-          receiptId ? (
-            <div className="mt-5">
+          <div className="mt-5 space-y-3">
+            {authRef && (
+              <p className="text-body text-ink-500">
+                เลขอ้างอิงการลงนาม: <span className="font-mono font-semibold text-ink-900">{authRef}</span>
+              </p>
+            )}
+            {receiptId && (
               <Link to={`/v/receipt/${receiptId}`}>
                 <Button>ดูสำเนาใบเสร็จ</Button>
               </Link>
-            </div>
-          ) : undefined
+            )}
+          </div>
         }
       />
     )
@@ -151,6 +161,8 @@ export function VendorSign() {
       setPrefix(t.vendor.prefix ?? '')
       setName(t.vendor.name)
       setAddress(t.vendor.address)
+      setPhone(t.vendor.phone ?? '')
+      setEmail(t.vendor.email ?? '')
       setGateId('')
       window.scrollTo(0, 0)
     } else {
@@ -209,6 +221,8 @@ export function VendorSign() {
           vendorPrefix: isVendorPrefix(prefix) ? prefix : '',
           vendorName: name.trim(),
           vendorAddress: address.trim(),
+          vendorPhone: phone.trim(),
+          vendorEmail: email.trim(),
           vendorIdLast4: tid.replace(/\D/g, '').slice(-4) || (t.taxIdLast4 ?? ''),
           signaturePng: padRef.current.toPng(),
           verificationMethod: 'stub-deferred',
@@ -228,6 +242,7 @@ export function VendorSign() {
         )
         return
       }
+      if (res.authRef) setAuthRef(res.authRef)
       // Allow this browser to open the receipt copy right after signing (the
       // single-use invite token is consumed, so a URL flag is the only handle).
       try {
@@ -319,6 +334,16 @@ export function VendorSign() {
               <Label>ที่อยู่</Label>
               <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="บ้านเลขที่ ถนน ตำบล อำเภอ จังหวัด" />
               {tried && address.trim().length < 6 && <FieldError msg="กรุณากรอกที่อยู่ให้ครบ" />}
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label hint="ไม่บังคับ">โทรศัพท์</Label>
+                <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="08x-xxx-xxxx" inputMode="tel" autoComplete="tel" />
+              </div>
+              <div>
+                <Label hint="ไม่บังคับ">อีเมล</Label>
+                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" autoComplete="email" />
+              </div>
             </div>
             {gatePassed && t.taxIdLast4 ? (
               <div className="rounded-control bg-success-soft p-3.5 text-body">

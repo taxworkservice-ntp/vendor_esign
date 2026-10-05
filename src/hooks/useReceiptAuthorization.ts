@@ -16,6 +16,8 @@ import { getSignature } from '../lib/sig-store'
 export interface ReceiptAuthorization extends VendorAuthMeta {
   /** data URL, or null when the image could not be retrieved. */
   signaturePng: string | null
+  /** The authorization's own reference (assigned at signing). */
+  authRef?: string
 }
 
 const QK = ['receipt-auth'] as const

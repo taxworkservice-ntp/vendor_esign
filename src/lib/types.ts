@@ -19,6 +19,8 @@ export interface Vendor {
   maskedId: string
   // Full tax ID for local testing display; production never stores plaintext.
   taxId?: string
+  phone?: string
+  email?: string
 }
 
 // A receipt line. `amount` is the authoritative line total

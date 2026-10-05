@@ -3,8 +3,6 @@ import type { LineItem, PaymentTransaction, TxnStatus } from '../lib/types'
 import { loadTxns, saveTxns } from '../lib/mock'
 import { normalizeLineItem } from '../lib/line-items'
 import { normalizeTaxId, taxIdHash } from '../lib/taxid'
-import { currentBeYear } from '../lib/settings'
-import { nextReceiptNumber } from '../lib/receipt-number'
 import { putSignature } from '../lib/sig-store'
 import { hasServer } from '../lib/api-client'
 
@@ -20,6 +18,8 @@ export interface VendorAuthMeta {
   vendorName: string
   vendorAddress: string
   vendorIdLast4: string
+  vendorPhone?: string
+  vendorEmail?: string
   verificationMethod: 'stub-deferred'
   consentVersion: 'v1'
   signedAt: string
@@ -89,6 +89,8 @@ interface ServerVendor {
   vendorPrefix?: string
   vendorName?: string
   vendorAddress?: string
+  vendorPhone?: string | null
+  vendorEmail?: string | null
   unlocked?: boolean
 }
 
@@ -117,6 +119,8 @@ async function fetchServerVendor(token: string): Promise<PaymentTransaction | un
       name: j.vendorName ?? '',
       address: j.vendorAddress ?? '',
       maskedId: maskFromLast4(j.idLast4),
+      phone: j.vendorPhone ?? undefined,
+      email: j.vendorEmail ?? undefined,
     },
     paymentType: j.paymentType ?? '',
     description: j.description ?? '',
@@ -244,7 +248,7 @@ export function useVendorActions() {
       )
       refresh()
     },
-    async submit(id: string, auth: VendorAuth, token?: string): Promise<{ ok: boolean; error?: string }> {
+    async submit(id: string, auth: VendorAuth, token?: string): Promise<{ ok: boolean; error?: string; authRef?: string }> {
       if (hasServer) {
         if (!token) return { ok: false, error: 'invalid-link' }
         const r = await fetch(`${API}/api/vendor/${encodeURIComponent(token)}/sign`, {
@@ -254,16 +258,16 @@ export function useVendorActions() {
             vendorPrefix: auth.vendorPrefix,
             vendorName: auth.vendorName,
             vendorAddress: auth.vendorAddress,
+            vendorPhone: auth.vendorPhone ?? '',
+            vendorEmail: auth.vendorEmail ?? '',
             idLast4: auth.vendorIdLast4,
             signaturePng: auth.signaturePng,
             consentVersion: 'v1',
           }),
         })
-        if (!r.ok) {
-          const j = (await r.json().catch(() => null)) as { error?: string } | null
-          return { ok: false, error: j?.error ?? 'sign-failed' }
-        }
-        return { ok: true }
+        const j = (await r.json().catch(() => null)) as { error?: string; authRef?: string } | null
+        if (!r.ok) return { ok: false, error: j?.error ?? 'sign-failed' }
+        return { ok: true, authRef: j?.authRef }
       }
 
       // Mock mode: local store (kept for `npm run dev` without an API).
@@ -271,16 +275,10 @@ export function useVendorActions() {
       // flip on an IndexedDB write would only add latency to the vendor.
       void putSignature(id, auth.signaturePng)
       writeAuth({ ...readAuth(), [id]: auth })
-      touch(id, (t, all) => {
-        // Assign the receipt number as soon as the vendor signs, so the receipt
-        // (and the vendor's copy) always shows a number. Finalization keeps it.
-        const receiptNumber =
-          t.receiptNumber ??
-          nextReceiptNumber(
-            t.vendor.vendorNo ?? 0,
-            currentBeYear(),
-            all.filter((x) => x.tenantId === t.tenantId && x.id !== t.id).map((x) => x.receiptNumber),
-          )
+      touch(id, (t) => {
+        // The receipt number is assigned at ISSUANCE, not here — the statutory
+        // series must not consume a number for an authorization that may never
+        // be issued (that would create gaps). Mirrors the server.
         // Diff against client records — reported back on the detail page.
         const corrections: VendorCorrection[] = []
         if (auth.vendorPrefix !== (t.vendor.prefix ?? ''))
@@ -294,7 +292,6 @@ export function useVendorActions() {
         return {
           ...t,
           status: 'signed',
-          receiptNumber,
           inviteToken: undefined, // single-use: consumed on signing
           timeline: [
             ...t.timeline,
