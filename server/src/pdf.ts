@@ -1,6 +1,6 @@
-import { PDFDocument, PDFFont, PDFPage, rgb } from 'pdf-lib'
+import { PDFDocument, PDFFont, PDFPage, RGB, rgb } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
-import QRCode from 'qrcode'
+import qrcode from 'qrcode-generator'
 import { createHash } from 'node:crypto'
 import { readFileSync as readFs } from 'node:fs'
 import { join } from 'node:path'
@@ -108,6 +108,24 @@ function wrap(text: string, font: PDFFont, size: number, maxW: number): string[]
 }
 
 const thb = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+// Draw the verification QR as filled modules (vector) instead of embedding a
+// PNG. Avoids the `qrcode` server build, which pulls pngjs/node:fs and breaks
+// the Vercel ESM function bundle (FUNCTION_INVOCATION_FAILED) at import time.
+function drawQr(page: PDFPage, data: string, x: number, y: number, size: number, color: RGB): void {
+  const qr = qrcode(0, 'M')
+  qr.addData(data)
+  qr.make()
+  const count = qr.getModuleCount()
+  const cell = size / count
+  for (let r = 0; r < count; r++) {
+    for (let c = 0; c < count; c++) {
+      if (qr.isDark(r, c)) {
+        page.drawRectangle({ x: x + c * cell, y: y + (count - 1 - r) * cell, width: cell, height: cell, color })
+      }
+    }
+  }
+}
 
 function normalizeItems(input: ReceiptPdfInput): ReceiptLine[] {
   const items = (input.lineItems ?? [])
@@ -281,10 +299,8 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
 
   // ── Verification footer (audit copy only) ──
   if (input.showVerification) {
-    const qrPng = await QRCode.toBuffer(input.verifyUrl, { width: 200, margin: 0, color: { dark: '#1a2332', light: '#ffffff' } })
-    const qr = await doc.embedPng(qrPng)
     const qrSize = 64
-    page.drawImage(qr, { x: right - qrSize, y: M - 6, width: qrSize, height: qrSize })
+    drawQr(page, input.verifyUrl, right - qrSize, M - 6, qrSize, INK)
     text(`รหัสตรวจสอบ  ${input.verificationCode}`, M, M + 30, 9.5, bold, INK)
     text(input.verifyUrl, M, M + 14, 8.5, regular, MUTED)
   }
