@@ -8,7 +8,8 @@ import { Select } from '../../components/ui/select'
 import { Button } from '../../components/ui/button'
 import { EmptyState } from '../../components/ui/empty-state'
 import { TableSkeleton } from '../../components/ui/table-skeleton'
-import { Row, Td, Th, tableCls } from '../../components/ui/data-table'
+import { Row, SortableTh, Td, tableCls } from '../../components/ui/data-table'
+import { useColumnSort } from '../../hooks/useColumnSort'
 import { useDebounced } from '../../hooks/useDebounced'
 import { useToast } from '../../components/ui/toast'
 import { downloadCsv, toCsv, withBom, type CsvColumn } from '../../lib/csv'
@@ -33,10 +34,23 @@ export function AuditLog() {
   const [tenant, setTenant] = useState('')
   const [event, setEvent] = useState('')
   const [offset, setOffset] = useState(0)
+  const { key: sortKey, dir: sortDir, onSort } = useColumnSort('time', 'desc')
   const debouncedQ = useDebounced(q, 250)
   const { data: tenants } = useAdminTenants()
-  const { data, isLoading } = useAuditLog({ q: debouncedQ, tenant, event, limit: PAGE, offset })
+  const { data, isLoading } = useAuditLog({
+    q: debouncedQ,
+    tenant,
+    event,
+    limit: PAGE,
+    offset,
+    sort: sortKey ?? '',
+    order: sortDir,
+  })
   const toast = useToast()
+  const changeSort = (k: string) => {
+    setOffset(0)
+    onSort(k)
+  }
 
   const events = data?.events ?? []
   const total = data?.total ?? 0
@@ -101,12 +115,12 @@ export function AuditLog() {
           <table className={cn(tableCls, 'min-w-[880px]')}>
             <thead>
               <tr>
-                <Th className="w-44">เวลา</Th>
-                <Th className="w-28">เวิร์กสเปซ</Th>
-                <Th>เหตุการณ์</Th>
-                <Th>เอนทิตี</Th>
-                <Th className="w-48">ผู้กระทำ</Th>
-                <Th className="w-28">IP</Th>
+                <SortableTh label="เวลา" className="w-44" active={sortKey === 'time'} dir={sortDir} onSort={() => changeSort('time')} />
+                <SortableTh label="เวิร์กสเปซ" className="w-28" active={sortKey === 'tenant'} dir={sortDir} onSort={() => changeSort('tenant')} />
+                <SortableTh label="เหตุการณ์" active={sortKey === 'event'} dir={sortDir} onSort={() => changeSort('event')} />
+                <SortableTh label="เอนทิตี" active={sortKey === 'entity'} dir={sortDir} onSort={() => changeSort('entity')} />
+                <SortableTh label="ผู้กระทำ" className="w-48" active={sortKey === 'actor'} dir={sortDir} onSort={() => changeSort('actor')} />
+                <SortableTh label="IP" className="w-28" active={sortKey === 'ip'} dir={sortDir} onSort={() => changeSort('ip')} />
               </tr>
             </thead>
             <tbody>

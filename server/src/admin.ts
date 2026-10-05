@@ -469,13 +469,38 @@ adminApp.get('/api/admin/audit', async (c) => {
   const event = (c.req.query('event') ?? '').trim()
   const limit = Math.min(200, Math.max(1, Number(c.req.query('limit') ?? 50)))
   const offset = Math.max(0, Number(c.req.query('offset') ?? 0))
+  // ORDER BY cannot be a bound parameter, so it comes from a fixed whitelist —
+  // never from request text. `id` is a stable tiebreaker so paging is correct.
+  const AUDIT_ORDER: Record<string, string> = {
+    time: 'created_at',
+    tenant: 'user_id',
+    event: 'event_type',
+    entity: 'entity_id',
+    actor: 'actor',
+    ip: 'ip',
+  }
+  const sortCol = AUDIT_ORDER[(c.req.query('sort') ?? '').trim()] ?? 'created_at'
+  const dir = c.req.query('order') === 'asc' ? 'asc' : 'desc'
   const db = sql()
-  const rows = (await db`select id, user_id, entity_type, entity_id, event_type, actor, metadata, ip, created_at
-    from audit_events
-    where (${tenant === ''} or user_id = ${tenant})
-      and (${event === ''} or event_type = ${event})
-      and (${q === ''} or lower(event_type) like ${'%' + q + '%'} or lower(coalesce(actor,'')) like ${'%' + q + '%'})
-    order by created_at desc limit ${limit} offset ${offset}`) as unknown as Record<string, unknown>[]
+  const params: unknown[] = []
+  const conds: string[] = []
+  if (tenant !== '') { params.push(tenant); conds.push(`user_id = $${params.length}`) }
+  if (event !== '') { params.push(event); conds.push(`event_type = $${params.length}`) }
+  if (q !== '') {
+    params.push('%' + q + '%')
+    conds.push(`(lower(event_type) like $${params.length} or lower(coalesce(actor,'')) like $${params.length})`)
+  }
+  const where = conds.length ? `where ${conds.join(' and ')}` : ''
+  params.push(limit)
+  const limP = `$${params.length}`
+  params.push(offset)
+  const offP = `$${params.length}`
+  const rows = (await db.query(
+    `select id, user_id, entity_type, entity_id, event_type, actor, metadata, ip, created_at
+     from audit_events ${where}
+     order by ${sortCol} ${dir}, id asc limit ${limP} offset ${offP}`,
+    params as never[],
+  )) as unknown as Record<string, unknown>[]
   const total = one<{ n: number }>(await db`select count(*)::int as n from audit_events
     where (${tenant === ''} or user_id = ${tenant}) and (${event === ''} or event_type = ${event})
       and (${q === ''} or lower(event_type) like ${'%' + q + '%'} or lower(coalesce(actor,'')) like ${'%' + q + '%'})`)

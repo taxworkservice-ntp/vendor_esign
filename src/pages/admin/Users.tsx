@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { KeyRound, Pencil, Power, PowerOff, Search, ShieldOff, UserCog } from 'lucide-react'
 import { useAllAdminUsers, useUserActions, type AdminDirectoryUser } from '../../hooks/useAdmin'
+import { useColumnSort } from '../../hooks/useColumnSort'
+import { sortRows, type SortAccessor } from '../../lib/sort'
 import { Card, CardBody } from '../../components/ui/card'
 import { PageHeader } from '../../components/ui/page-header'
 import { Input } from '../../components/ui/input'
@@ -10,10 +12,17 @@ import { ErrorState } from '../../components/ui/error-state'
 import { TableSkeleton } from '../../components/ui/table-skeleton'
 import { ConfirmDialog } from '../../components/ui/confirm-dialog'
 import { useToast } from '../../components/ui/toast'
-import { Row, Td, Th, tableCls } from '../../components/ui/data-table'
+import { Row, SortableTh, Td, Th, tableCls } from '../../components/ui/data-table'
 import { cn } from '../../lib/cn'
 
 const ROLE_TH: Record<string, string> = { owner: 'เจ้าของ', manager: 'ผู้จัดการ', officer: 'เจ้าหน้าที่' }
+
+const USER_SORT: Record<string, SortAccessor<AdminDirectoryUser>> = {
+  email: (u) => u.email,
+  tenant: (u) => u.memberships[0]?.tenantId ?? '',
+  role: (u) => u.memberships[0]?.role ?? '',
+  status: (u) => u.status,
+}
 
 type Confirm = { kind: 'disable' | 'revoke' | 'force'; user: AdminDirectoryUser } | null
 
@@ -22,10 +31,11 @@ export function Users() {
   const { data, isLoading, isError, refetch } = useAllAdminUsers(q)
   const actions = useUserActions()
   const toast = useToast()
+  const { key: sortKey, dir: sortDir, onSort } = useColumnSort()
   const [tempPw, setTempPw] = useState('')
   const [confirm, setConfirm] = useState<Confirm>(null)
 
-  const users = useMemo(() => data ?? [], [data])
+  const users = useMemo(() => sortRows(data ?? [], sortKey, sortDir, USER_SORT), [data, sortKey, sortDir])
 
   const reset = async (u: AdminDirectoryUser) => {
     try {
@@ -81,9 +91,9 @@ export function Users() {
             <table className={cn(tableCls, 'min-w-[860px]')}>
               <thead>
                 <tr>
-                  <Th>อีเมล</Th>
-                  <Th>เวิร์กสเปซ · บทบาท</Th>
-                  <Th>สถานะ</Th>
+                  <SortableTh label="อีเมล" active={sortKey === 'email'} dir={sortDir} onSort={() => onSort('email')} />
+                  <SortableTh label="เวิร์กสเปซ · บทบาท" active={sortKey === 'tenant'} dir={sortDir} onSort={() => onSort('tenant')} />
+                  <SortableTh label="สถานะ" active={sortKey === 'status'} dir={sortDir} onSort={() => onSort('status')} />
                   <Th align="right" className="w-80">
                     <span className="sr-only">จัดการ</span>
                   </Th>

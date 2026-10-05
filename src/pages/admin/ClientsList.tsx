@@ -1,7 +1,10 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Building2, ChevronRight, Plus, Search } from 'lucide-react'
 import { useAdminTenants } from '../../hooks/useAdmin'
+import { useColumnSort } from '../../hooks/useColumnSort'
+import { sortRows, type SortAccessor } from '../../lib/sort'
+import type { AdminTenant } from '../../lib/admin-mock'
 import { Card, CardBody } from '../../components/ui/card'
 import { PageHeader } from '../../components/ui/page-header'
 import { Input } from '../../components/ui/input'
@@ -9,7 +12,7 @@ import { FilterChip } from '../../components/ui/filter-chip'
 import { Button } from '../../components/ui/button'
 import { EmptyState } from '../../components/ui/empty-state'
 import { TableSkeleton } from '../../components/ui/table-skeleton'
-import { Row, Td, Th, tableCls } from '../../components/ui/data-table'
+import { Row, SortableTh, Td, Th, tableCls } from '../../components/ui/data-table'
 import { cn } from '../../lib/cn'
 
 const FILTERS = [
@@ -18,11 +21,22 @@ const FILTERS = [
   { v: 'suspended', th: 'ระงับ' },
 ]
 
+const TENANT_SORT: Record<string, SortAccessor<AdminTenant>> = {
+  client: (t) => t.displayName,
+  code: (t) => t.clientCode,
+  txns: (t) => t.txns,
+  receipts: (t) => t.receipts,
+  users: (t) => t.users,
+  status: (t) => t.status,
+}
+
 export function ClientsList() {
   const [q, setQ] = useState('')
   const [status, setStatus] = useState('all')
   const { data, isLoading } = useAdminTenants(q, status)
+  const { key: sortKey, dir: sortDir, onSort } = useColumnSort()
   const nav = useNavigate()
+  const rows = useMemo(() => sortRows(data ?? [], sortKey, sortDir, TENANT_SORT), [data, sortKey, sortDir])
 
   return (
     <div className="space-y-5">
@@ -59,12 +73,12 @@ export function ClientsList() {
           <table className={cn(tableCls, 'min-w-[900px]')}>
             <thead>
               <tr>
-                <Th>ลูกค้า</Th>
-                <Th>ชุดเลขที่</Th>
-                <Th align="right">ธุรกรรม</Th>
-                <Th align="right">ใบเสร็จ</Th>
-                <Th align="right">ผู้ใช้</Th>
-                <Th>สถานะ</Th>
+                <SortableTh label="ลูกค้า" active={sortKey === 'client'} dir={sortDir} onSort={() => onSort('client')} />
+                <SortableTh label="ชุดเลขที่" active={sortKey === 'code'} dir={sortDir} onSort={() => onSort('code')} />
+                <SortableTh label="ธุรกรรม" align="right" active={sortKey === 'txns'} dir={sortDir} onSort={() => onSort('txns')} />
+                <SortableTh label="ใบเสร็จ" align="right" active={sortKey === 'receipts'} dir={sortDir} onSort={() => onSort('receipts')} />
+                <SortableTh label="ผู้ใช้" align="right" active={sortKey === 'users'} dir={sortDir} onSort={() => onSort('users')} />
+                <SortableTh label="สถานะ" active={sortKey === 'status'} dir={sortDir} onSort={() => onSort('status')} />
                 <Th className="w-10">
                   <span className="sr-only">เปิด</span>
                 </Th>
@@ -74,7 +88,7 @@ export function ClientsList() {
               {isLoading ? (
                 <TableSkeleton rows={5} cols={7} />
               ) : (
-                (data ?? []).map((t) => (
+                rows.map((t) => (
                   <Row key={t.id} className="cursor-pointer" >
                     <Td onClick={() => nav(`/admin/clients/${t.id}`)}>
                       <Link to={`/admin/clients/${t.id}`} className="font-semibold leading-snug hover:underline">

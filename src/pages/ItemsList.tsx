@@ -1,6 +1,9 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { Archive, ArchiveRestore, Package, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
-import { useDeleteItem, useItems, useSaveItem, useSetItemActive, type ItemSort } from '../hooks/useItems'
+import { useDeleteItem, useItems, useSaveItem, useSetItemActive } from '../hooks/useItems'
+import { useColumnSort } from '../hooks/useColumnSort'
+import { sortRows, type SortAccessor } from '../lib/sort'
+import type { CatalogItem } from '../lib/items-mock'
 import { useDebounced } from '../hooks/useDebounced'
 import { itemCode } from '../lib/ids'
 import { Card, CardBody } from '../components/ui/card'
@@ -12,8 +15,8 @@ import { EmptyState } from '../components/ui/empty-state'
 import { ErrorState } from '../components/ui/error-state'
 import { TableSkeleton } from '../components/ui/table-skeleton'
 import { useToast } from '../components/ui/toast'
-import { RegistryToolbar, type SortOption } from '../components/ui/registry-toolbar'
-import { LoadingBar, RegistryId, Row, Td, Th, tableCls } from '../components/ui/data-table'
+import { RegistryToolbar } from '../components/ui/registry-toolbar'
+import { LoadingBar, RegistryId, Row, SortableTh, Td, Th, tableCls } from '../components/ui/data-table'
 import { fmtTHB } from '../lib/format'
 import { cn } from '../lib/cn'
 
@@ -29,22 +32,22 @@ import { cn } from '../lib/cn'
 // existed in the schema since 008 but was never read by anything — is now the
 // archive flag, so an entry can be retired without being deleted.
 
-const SORTS: SortOption<ItemSort>[] = [
-  { v: 'recent', th: 'เพิ่มล่าสุด' },
-  { v: 'name', th: 'ชื่อ ก-ฮ' },
-  { v: 'price-desc', th: 'ราคาสูงสุด' },
-  { v: 'price-asc', th: 'ราคาต่ำสุด' },
-]
+const ITEM_SORT: Record<string, SortAccessor<CatalogItem>> = {
+  code: (it) => it.itemNo,
+  name: (it) => it.name,
+  unit: (it) => it.unit ?? '',
+  unitPrice: (it) => it.unitPrice,
+}
 
 const empty = { id: '' as string | undefined, itemNo: 0, name: '', unit: 'รายการ', unitPrice: '' }
 
 export function ItemsList() {
   const [search, setSearch] = useState('')
-  const [sort, setSort] = useState<ItemSort>('recent')
   const [showArchived, setShowArchived] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  const { key: sortKey, dir: sortDir, onSort } = useColumnSort()
   const debouncedSearch = useDebounced(search, 250)
-  const { data, isLoading, isFetching, isError, error, refetch } = useItems(debouncedSearch, sort, showArchived)
+  const { data, isLoading, isFetching, isError, error, refetch } = useItems(debouncedSearch, 'recent', showArchived)
   const save = useSaveItem()
   const del = useDeleteItem()
   const setActive = useSetItemActive()
@@ -55,7 +58,7 @@ export function ItemsList() {
   const toast = useToast()
   const searchRef = useRef<HTMLInputElement>(null)
 
-  const items = useMemo(() => data ?? [], [data])
+  const items = useMemo(() => sortRows(data ?? [], sortKey, sortDir, ITEM_SORT), [data, sortKey, sortDir])
   const editing = !!form.id
 
   const closeForm = useCallback(() => {
@@ -196,11 +199,6 @@ export function ItemsList() {
             onSearch={setSearch}
             placeholder="ค้นหาชื่อรายการ / หน่วย / รหัส (ITM-001)…"
             inputRef={searchRef}
-            sort={sort}
-            onSort={setSort}
-            sorts={SORTS}
-            sortAriaLabel="เรียงลำดับรายการสินค้า"
-            sortWidth="min-w-40"
             archived={showArchived}
             onArchived={setShowArchived}
             archivedLabel="แสดงรายการที่ปิดใช้งาน"
@@ -226,10 +224,10 @@ export function ItemsList() {
                 <table className={cn(tableCls, 'min-w-[680px]')}>
                   <thead>
                     <tr>
-                      <Th className="w-28">รหัส</Th>
-                      <Th>รายการ</Th>
-                      <Th>หน่วย</Th>
-                      <Th align="right">ราคา</Th>
+                      <SortableTh label="รหัส" className="w-28" active={sortKey === 'code'} dir={sortDir} onSort={() => onSort('code')} />
+                      <SortableTh label="รายการ" active={sortKey === 'name'} dir={sortDir} onSort={() => onSort('name')} />
+                      <SortableTh label="หน่วย" active={sortKey === 'unit'} dir={sortDir} onSort={() => onSort('unit')} />
+                      <SortableTh label="ราคา" align="right" active={sortKey === 'unitPrice'} dir={sortDir} onSort={() => onSort('unitPrice')} />
                       <Th align="right" className="w-32">
                         <span className="sr-only">จัดการ</span>
                       </Th>

@@ -298,13 +298,21 @@ export function useUserActions(tenantId?: string) {
 }
 
 // ── Audit log ────────────────────────────────────────────────────────────────
-export function useAuditLog(filters: { q?: string; tenant?: string; event?: string; limit?: number; offset?: number }) {
-  const { q = '', tenant = '', event = '', limit = 50, offset = 0 } = filters
+export function useAuditLog(filters: {
+  q?: string
+  tenant?: string
+  event?: string
+  limit?: number
+  offset?: number
+  sort?: string
+  order?: 'asc' | 'desc'
+}) {
+  const { q = '', tenant = '', event = '', limit = 50, offset = 0, sort = '', order = 'desc' } = filters
   return useQuery({
-    queryKey: [...QK, 'audit', q, tenant, event, limit, offset],
+    queryKey: [...QK, 'audit', q, tenant, event, limit, offset, sort, order],
     queryFn: async (): Promise<{ events: AuditEvent[]; total: number }> => {
       if (!API) return { events: [], total: 0 }
-      const p = new URLSearchParams({ q, tenant, event, limit: String(limit), offset: String(offset) })
+      const p = new URLSearchParams({ q, tenant, event, limit: String(limit), offset: String(offset), sort, order })
       return api<{ events: AuditEvent[]; total: number }>(`/api/admin/audit?${p.toString()}`)
     },
   })

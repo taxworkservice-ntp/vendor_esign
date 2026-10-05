@@ -19,10 +19,11 @@ interface Props<T extends string> {
   onSearch: (v: string) => void
   placeholder: string
   inputRef?: RefObject<HTMLInputElement>
-  sort: T
-  onSort: (v: T) => void
-  sorts: readonly SortOption<T>[]
-  sortAriaLabel: string
+  /** Optional: omit to hide the sort dropdown (e.g. when headers are sortable). */
+  sort?: T
+  onSort?: (v: T) => void
+  sorts?: readonly SortOption<T>[]
+  sortAriaLabel?: string
   sortWidth?: string
   archived: boolean
   onArchived: (v: boolean) => void
@@ -91,21 +92,23 @@ export function RegistryToolbar<T extends string>({
           )}
         </div>
 
-        <label className="flex items-center gap-2">
-          <span className="whitespace-nowrap text-label text-ink-500">เรียงตาม</span>
-          <Select
-            value={sort}
-            onChange={(e) => onSort(e.target.value as T)}
-            aria-label={sortAriaLabel}
-            className={cn('h-9 w-auto', sortWidth)}
-          >
-            {sorts.map((s) => (
-              <option key={s.v} value={s.v}>
-                {s.th}
-              </option>
-            ))}
-          </Select>
-        </label>
+        {sorts && onSort && (
+          <label className="flex items-center gap-2">
+            <span className="whitespace-nowrap text-label text-ink-500">เรียงตาม</span>
+            <Select
+              value={sort}
+              onChange={(e) => onSort(e.target.value as T)}
+              aria-label={sortAriaLabel}
+              className={cn('h-9 w-auto', sortWidth)}
+            >
+              {sorts.map((s) => (
+                <option key={s.v} value={s.v}>
+                  {s.th}
+                </option>
+              ))}
+            </Select>
+          </label>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-3 border-t border-card-border pt-3 text-label">

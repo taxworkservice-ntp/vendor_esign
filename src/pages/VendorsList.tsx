@@ -1,7 +1,9 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Archive, ArchiveRestore, ChevronRight, Download, Plus, Search, Users } from 'lucide-react'
-import { useSetVendorActive, useVendors, type VendorSort } from '../hooks/useVendors'
+import { useSetVendorActive, useVendors } from '../hooks/useVendors'
+import { useColumnSort } from '../hooks/useColumnSort'
+import { sortRows, type SortAccessor } from '../lib/sort'
 import { useDebounced } from '../hooks/useDebounced'
 import { displayTaxId } from '../lib/vendors-mock'
 import { vendorDisplayName } from '../lib/vendor-name'
@@ -20,8 +22,8 @@ import { ErrorState } from '../components/ui/error-state'
 import { TableSkeleton } from '../components/ui/table-skeleton'
 import { useToast } from '../components/ui/toast'
 import { ConfirmDialog } from '../components/ui/confirm-dialog'
-import { RegistryToolbar, type SortOption } from '../components/ui/registry-toolbar'
-import { ClickableRow, LoadingBar, RegistryId, Td, Th, tableCls } from '../components/ui/data-table'
+import { RegistryToolbar } from '../components/ui/registry-toolbar'
+import { ClickableRow, LoadingBar, RegistryId, SortableTh, Td, Th, tableCls } from '../components/ui/data-table'
 import { cn } from '../lib/cn'
 
 // Supplier register.
@@ -44,12 +46,14 @@ import { cn } from '../lib/cn'
 // of a tax ID, which server-side pushdown cannot, because the stored number is
 // encrypted. Debouncing is what keeps that affordable.
 
-const SORTS: SortOption<VendorSort>[] = [
-  { v: 'recent', th: 'เพิ่มล่าสุด' },
-  { v: 'name', th: 'ชื่อ ก-ฮ' },
-  { v: 'outstanding', th: 'ยอดค้างชำระมากที่สุด' },
-  { v: 'activity', th: 'เคลื่อนไหวล่าสุด' },
-]
+const VENDOR_SORT: Record<string, SortAccessor<ClientVendor>> = {
+  code: (v) => v.vendorNo,
+  name: (v) => v.name,
+  taxId: (v) => displayTaxId(v),
+  txnCount: (v) => v.txnCount ?? 0,
+  outstanding: (v) => v.outstanding ?? 0,
+  lastActivity: (v) => v.lastActivity ?? '',
+}
 
 const CSV_COLUMNS: CsvColumn<ClientVendor>[] = [
   { header: 'รหัสผู้ขาย', value: (v) => vendorCode(v.vendorNo) },
@@ -68,11 +72,11 @@ const CSV_COLUMNS: CsvColumn<ClientVendor>[] = [
 
 export function VendorsList() {
   const [search, setSearch] = useState('')
-  const [sort, setSort] = useState<VendorSort>('recent')
   const [showArchived, setShowArchived] = useState(false)
   const [pendingArchive, setPendingArchive] = useState<{ id: string; name: string } | null>(null)
+  const { key: sortKey, dir: sortDir, onSort } = useColumnSort()
   const debouncedSearch = useDebounced(search, 250)
-  const { data, isLoading, isFetching, isError, error, refetch } = useVendors(debouncedSearch, sort, showArchived)
+  const { data, isLoading, isFetching, isError, error, refetch } = useVendors(debouncedSearch, 'recent', showArchived)
   const setActive = useSetVendorActive()
   const nav = useNavigate()
   const toast = useToast()
@@ -80,7 +84,7 @@ export function VendorsList() {
   const { data: settings } = useSettings()
   const clientCode = (settings ?? defaultSettings()).clientCode
 
-  const vendors = useMemo(() => data ?? [], [data])
+  const vendors = useMemo(() => sortRows(data ?? [], sortKey, sortDir, VENDOR_SORT), [data, sortKey, sortDir])
   const totalOutstanding = useMemo(
     () => vendors.reduce((s, v) => s + (v.outstanding ?? 0), 0),
     [vendors],
@@ -148,10 +152,6 @@ export function VendorsList() {
             onSearch={setSearch}
             placeholder="ค้นหาชื่อ / ที่อยู่ / เลขบัตร 4 หลักท้าย / เบอร์โทร / รหัสผู้ขาย…"
             inputRef={searchRef}
-            sort={sort}
-            onSort={setSort}
-            sorts={SORTS}
-            sortAriaLabel="เรียงลำดับรายการผู้ขาย"
             archived={showArchived}
             onArchived={setShowArchived}
             archivedLabel="แสดงผู้ขายที่ปิดใช้งาน"
@@ -184,12 +184,12 @@ export function VendorsList() {
                 <table className={cn(tableCls, 'min-w-[960px]')}>
                   <thead>
                     <tr>
-                      <Th className="w-28">รหัส</Th>
-                      <Th>ผู้ขาย</Th>
-                      <Th>เลขบัตรประชาชน</Th>
-                      <Th align="right">จำนวนรายการ</Th>
-                      <Th align="right">ยอดค้างชำระ</Th>
-                      <Th align="right">เคลื่อนไหวล่าสุด</Th>
+                      <SortableTh label="รหัส" className="w-28" active={sortKey === 'code'} dir={sortDir} onSort={() => onSort('code')} />
+                      <SortableTh label="ผู้ขาย" active={sortKey === 'name'} dir={sortDir} onSort={() => onSort('name')} />
+                      <SortableTh label="เลขบัตรประชาชน" active={sortKey === 'taxId'} dir={sortDir} onSort={() => onSort('taxId')} />
+                      <SortableTh label="จำนวนรายการ" align="right" active={sortKey === 'txnCount'} dir={sortDir} onSort={() => onSort('txnCount')} />
+                      <SortableTh label="ยอดค้างชำระ" align="right" active={sortKey === 'outstanding'} dir={sortDir} onSort={() => onSort('outstanding')} />
+                      <SortableTh label="เคลื่อนไหวล่าสุด" align="right" active={sortKey === 'lastActivity'} dir={sortDir} onSort={() => onSort('lastActivity')} />
                       <Th align="right" className="w-24">
                         <span className="sr-only">จัดการ</span>
                       </Th>

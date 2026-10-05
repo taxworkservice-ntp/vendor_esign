@@ -1,5 +1,7 @@
 import { ReactNode, TdHTMLAttributes, ThHTMLAttributes } from 'react'
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { cn } from '../../lib/cn'
+import type { SortDir } from '../../lib/sort'
 
 // Shared table primitives for the registries (vendors, items). Extracted so the
 // two lists can no longer drift on header, density, alignment, hover or focus.
@@ -23,6 +25,46 @@ export function Th({
   return (
     <th scope="col" className={cn(headCls, alignCls(align), className)} {...rest}>
       {children}
+    </th>
+  )
+}
+
+/** A click-to-sort header cell. Pair with `useColumnSort` + `sortRows`. */
+export function SortableTh({
+  label,
+  active,
+  dir,
+  onSort,
+  align,
+  className,
+  ...rest
+}: {
+  label: string
+  active: boolean
+  dir: SortDir
+  onSort: () => void
+  align?: Align
+} & Omit<ThHTMLAttributes<HTMLTableCellElement>, 'onClick' | 'children'>) {
+  const Icon = !active ? ArrowUpDown : dir === 'asc' ? ArrowUp : ArrowDown
+  return (
+    <th
+      scope="col"
+      aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+      className={cn(headCls, alignCls(align), className)}
+      {...rest}
+    >
+      <button
+        type="button"
+        onClick={onSort}
+        className={cn(
+          'inline-flex items-center gap-1 transition hover:text-ink-900',
+          align === 'right' && 'flex-row-reverse',
+          active && 'text-ink-900',
+        )}
+      >
+        {label}
+        <Icon size={13} className={active ? '' : 'text-ink-300'} aria-hidden />
+      </button>
     </th>
   )
 }
