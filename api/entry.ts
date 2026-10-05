@@ -1,4 +1,5 @@
 import type { Hono } from 'hono'
+import { readdirSync } from 'node:fs'
 
 let appPromise: Promise<Hono> | null = null
 function getApp(): Promise<Hono> {
@@ -26,10 +27,22 @@ export default {
       if (request.method !== 'GET' && request.method !== 'HEAD') init.body = await request.arrayBuffer()
       return app.fetch(new Request(url.toString(), init))
     } catch (e) {
-      return new Response('DIAG: ' + (e instanceof Error ? e.stack : String(e)), {
-        status: 200,
-        headers: { 'content-type': 'text/plain; charset=utf-8' },
-      })
+      const ls = (p: string) => {
+        try {
+          return readdirSync(p).join(', ')
+        } catch (err) {
+          return 'ERR ' + (err instanceof Error ? err.message : err)
+        }
+      }
+      return new Response(
+        'DIAG: ' + (e instanceof Error ? e.stack : String(e)) +
+          '\n\n/var/task: ' + ls('/var/task') +
+          '\n\n/var/task/api: ' + ls('/var/task/api') +
+          '\n\n/var/task/server: ' + ls('/var/task/server') +
+          '\n\n/var/task/server/src: ' + ls('/var/task/server/src') +
+          '\n\n/var/task/server/assets/fonts: ' + ls('/var/task/server/assets/fonts'),
+        { status: 200, headers: { 'content-type': 'text/plain; charset=utf-8' } },
+      )
     }
   },
 }
