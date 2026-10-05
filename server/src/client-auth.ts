@@ -12,6 +12,7 @@ import {
   type SessionUser,
 } from './auth'
 import { PILOT_TENANT, audit, one, rateLimited } from './shared'
+import { impersonationFromCookie } from './impersonation'
 
 // Client portal auth (admin-provisioned passwords, no self-signup).
 // Mounted at /api/auth on the client/vendor operation. Cookie: tw_session (7d).
@@ -118,8 +119,21 @@ authRoutes.post('/logout', async (c) => {
 
 authRoutes.get('/me', async (c) => {
   const u = await requireClient(c)
-  if (!u) return c.json({ error: 'unauthorized' }, 401)
-  return c.json({ email: u.email, mustChangePw: u.mustChangePw, memberships: u.memberships })
+  if (u) return c.json({ email: u.email, mustChangePw: u.mustChangePw, memberships: u.memberships })
+  // Operator "viewing as client": present a synthetic session for the target
+  // workspace so the portal loads, with the impersonation surfaced to the UI.
+  const imp = impersonationFromCookie(c.req.header('cookie'))
+  if (imp) {
+    return c.json({
+      email: 'operator (viewing as client)',
+      mustChangePw: false,
+      memberships: [{ tenantId: imp.tenantId, role: 'owner' }],
+      impersonating: true,
+      impersonationMode: imp.mode,
+      tenantId: imp.tenantId,
+    })
+  }
+  return c.json({ error: 'unauthorized' }, 401)
 })
 
 authRoutes.post('/change-password', async (c) => {

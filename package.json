@@ -24,6 +24,7 @@
     "db:list": "tsx scripts/txn-list-check.ts",
     "db:seed": "node scripts/seed.mjs",
     "db:seed-admin": "node scripts/seed-admin.mjs",
+    "admin:create": "node scripts/create-platform-admin.mjs",
     "pdf:preview": "tsx scripts/preview-receipt.ts"
   },
   "dependencies": {

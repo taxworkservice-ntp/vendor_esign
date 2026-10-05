@@ -5,11 +5,17 @@ import { CLIENT_ROLES, findMockUser, hasRole } from './mock-users'
 // operation at VITE_API_BASE; falls back to mock credentials when no API base is
 // set so `npm run dev` works (see lib/mock-users.ts).
 // One client user = one company: the active tenant is the user's single tenant.
+//
+// A platform admin can "view as" a client: the server returns a synthetic
+// session (see GET /api/auth/me) marked `impersonating`, which the portal shows
+// as a banner. Writes are blocked server-side unless the operator opted in.
 
 export interface Membership {
   tenantId: string
   role: string
 }
+
+export type ImpersonationMode = 'read' | 'write'
 
 interface ClientAuthState {
   email: string | null
@@ -17,6 +23,10 @@ interface ClientAuthState {
   activeTenant: string
   mustChangePw: boolean
   isClientAdmin: boolean
+  /** Operator viewing as a client. */
+  impersonating: boolean
+  impersonationMode: ImpersonationMode
+  impersonationTenant: string | null
   ready: boolean
 }
 
@@ -24,10 +34,13 @@ interface ClientAuthCtx extends ClientAuthState {
   login: (email: string, password: string) => Promise<{ mustChangePw: boolean }>
   logout: () => Promise<void>
   refresh: () => Promise<void>
+  stopImpersonation: () => Promise<void>
+  setImpersonationMode: (mode: ImpersonationMode) => Promise<void>
 }
 
 const Ctx = createContext<ClientAuthCtx | null>(null)
 const API = (import.meta.env.VITE_API_BASE ?? '') as string
+const ADMIN = ((import.meta.env.VITE_ADMIN_API_BASE ?? '') || API) as string
 const LS_KEY = 'taxwork-client-auth-v2'
 
 export const MOCK_MODE = !API
@@ -38,20 +51,31 @@ function activeTenantOf(memberships: Membership[]): string {
   return memberships[0]?.tenantId ?? 'ABC'
 }
 
-function stateFrom(email: string, memberships: Membership[], mustChangePw: boolean): ClientAuthState {
+function stateFrom(
+  email: string,
+  memberships: Membership[],
+  mustChangePw: boolean,
+  imp?: { impersonating?: boolean; mode?: ImpersonationMode; tenantId?: string },
+): ClientAuthState {
   return {
     email,
     memberships,
-    activeTenant: activeTenantOf(memberships),
+    activeTenant: imp?.tenantId ?? activeTenantOf(memberships),
     mustChangePw,
     // owner (top role) and manager may manage workspace settings; officer is read-only.
     isClientAdmin: memberships.some((m) => m.role === 'owner' || m.role === 'manager' || m.role === 'client_admin'),
+    impersonating: !!imp?.impersonating,
+    impersonationMode: imp?.mode === 'write' ? 'write' : 'read',
+    impersonationTenant: imp?.impersonating ? (imp.tenantId ?? null) : null,
     ready: true,
   }
 }
 
 function loggedOut(): ClientAuthState {
-  return { email: null, memberships: [], activeTenant: 'ABC', mustChangePw: false, isClientAdmin: false, ready: true }
+  return {
+    email: null, memberships: [], activeTenant: 'ABC', mustChangePw: false, isClientAdmin: false,
+    impersonating: false, impersonationMode: 'read', impersonationTenant: null, ready: true,
+  }
 }
 
 function storedState(): ClientAuthState | null {
@@ -64,7 +88,8 @@ function storedState(): ClientAuthState | null {
 
 export function ClientAuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<ClientAuthState>({
-    email: null, memberships: [], activeTenant: 'ABC', mustChangePw: false, isClientAdmin: false, ready: false,
+    email: null, memberships: [], activeTenant: 'ABC', mustChangePw: false, isClientAdmin: false,
+    impersonating: false, impersonationMode: 'read', impersonationTenant: null, ready: false,
   })
 
   const refresh = useCallback(async () => {
@@ -78,8 +103,13 @@ export function ClientAuthProvider({ children }: { children: React.ReactNode }) 
         setState(loggedOut())
         return
       }
-      const j = (await r.json()) as { email: string; mustChangePw: boolean; memberships: Membership[] }
-      setState(stateFrom(j.email, j.memberships ?? [], !!j.mustChangePw))
+      const j = (await r.json()) as {
+        email: string; mustChangePw: boolean; memberships: Membership[]
+        impersonating?: boolean; impersonationMode?: ImpersonationMode; tenantId?: string
+      }
+      setState(stateFrom(j.email, j.memberships ?? [], !!j.mustChangePw, {
+        impersonating: j.impersonating, mode: j.impersonationMode, tenantId: j.tenantId,
+      }))
     } catch {
       setState(loggedOut())
     }
@@ -124,7 +154,31 @@ export function ClientAuthProvider({ children }: { children: React.ReactNode }) 
     await refresh()
   }, [refresh])
 
-  return <Ctx.Provider value={{ ...state, login, logout, refresh }}>{children}</Ctx.Provider>
+  const stopImpersonation = useCallback(async () => {
+    if (MOCK_MODE) return
+    await fetch(`${API}/api/impersonate/stop`, { method: 'POST', credentials: 'include' }).catch(() => null)
+    await refresh()
+  }, [refresh])
+
+  const setImpersonationMode = useCallback(
+    async (mode: ImpersonationMode) => {
+      if (MOCK_MODE || !state.impersonationTenant) return
+      await fetch(`${ADMIN}/api/admin/impersonate`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId: state.impersonationTenant, mode }),
+      }).catch(() => null)
+      await refresh()
+    },
+    [refresh, state.impersonationTenant],
+  )
+
+  return (
+    <Ctx.Provider value={{ ...state, login, logout, refresh, stopImpersonation, setImpersonationMode }}>
+      {children}
+    </Ctx.Provider>
+  )
 }
 
 export function useClientAuth(): ClientAuthCtx {

@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { sql, withTenant } from '../../src/server/db'
 import { requireClient } from './client-auth'
+import { impersonationFromCookie, type ImpersonationMode } from './impersonation'
 import { decryptId, encryptId } from './crypto'
 import type { SessionUser } from './auth'
 import { isVendorPrefix, prefixRequired } from '../../src/lib/vendor-name'
@@ -12,7 +13,9 @@ import { isVendorPrefix, prefixRequired } from '../../src/lib/vendor-name'
 
 export const dataRoutes = new Hono()
 
-type Guarded = { error: 401 | 403 } | { u: SessionUser; ws: string }
+type Guarded =
+  | { error: 401 | 403 }
+  | { u: SessionUser | null; ws: string; impersonating: boolean; mode: ImpersonationMode; actor: string | null }
 
 /**
  * Session guard for the client portal (port 8787).
@@ -39,9 +42,15 @@ type Guarded = { error: 401 | 403 } | { u: SessionUser; ws: string }
 export async function guard(c: { req: { header: (n: string) => string | undefined } }): Promise<Guarded> {
   const u = await requireClient(c)
   const ws = u?.memberships[0]?.tenantId
-  if (!u || !ws) return { error: 401 }
-  if (u.mustChangePw) return { error: 403 }
-  return { u, ws }
+  if (u && ws) {
+    if (u.mustChangePw) return { error: 403 }
+    return { u, ws, impersonating: false, mode: 'write', actor: u.email }
+  }
+  // A platform admin "viewing as" a client: honour the signed impersonation
+  // cookie. Read-mode writes are rejected by the client-surface middleware.
+  const imp = impersonationFromCookie(c.req.header('cookie'))
+  if (imp) return { u: null, ws: imp.tenantId, impersonating: true, mode: imp.mode, actor: imp.actor }
+  return { error: 401 }
 }
 
 function maskTaxId(last4: string): string {

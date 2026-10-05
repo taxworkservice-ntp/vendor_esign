@@ -23,7 +23,15 @@ export const profiles = pgTable('profiles', {
   email: text('email').notNull(),
   role: text('role').notNull().default('owner'),
   status: text('status').notNull().default('active'),
+  isPlatformAdmin: boolean('is_platform_admin').notNull().default(false),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+})
+
+export const platformSettings = pgTable('platform_settings', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  updatedBy: text('updated_by'),
 })
 
 export const authCredentials = pgTable('auth_credentials', {

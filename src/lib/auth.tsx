@@ -10,7 +10,8 @@ interface AuthState {
   email: string | null
   memberships: Membership[]
   mustChangePw: boolean
-  isSuperAdmin: boolean
+  /** Provider/operator account — controls the whole app. */
+  isPlatformAdmin: boolean
   ready: boolean
 }
 
@@ -29,20 +30,23 @@ const LS_KEY = 'taxwork-auth-v1'
 export const MOCK_MODE = !API
 
 function loggedOut(): AuthState {
-  return { email: null, memberships: [], mustChangePw: false, isSuperAdmin: false, ready: true }
+  return { email: null, memberships: [], mustChangePw: false, isPlatformAdmin: false, ready: true }
 }
 
 function localSession(): AuthState {
   try {
     const raw = localStorage.getItem(LS_KEY)
-    if (raw) return { ...(JSON.parse(raw) as AuthState), ready: true }
+    if (raw) {
+      const s = JSON.parse(raw) as AuthState
+      return { ...s, isPlatformAdmin: s.isPlatformAdmin ?? s.memberships.some((m) => m.role === 'super_admin'), ready: true }
+    }
   } catch { /* ignore */ }
   // No stored session: require login (mock uses lib/mock-users.ts credentials).
   return loggedOut()
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<AuthState>({ email: null, memberships: [], mustChangePw: false, isSuperAdmin: false, ready: false })
+  const [state, setState] = useState<AuthState>({ email: null, memberships: [], mustChangePw: false, isPlatformAdmin: false, ready: false })
 
   const refresh = useCallback(async () => {
     if (!API) {
@@ -52,19 +56,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const r = await fetch(`${API}/api/me`, { credentials: 'include' })
       if (!r.ok) {
-        setState({ email: null, memberships: [], mustChangePw: false, isSuperAdmin: false, ready: true })
+        setState(loggedOut())
         return
       }
-      const j = (await r.json()) as { email: string; mustChangePw: boolean; memberships: Membership[] }
+      const j = (await r.json()) as { email: string; mustChangePw: boolean; isPlatformAdmin?: boolean; memberships: Membership[] }
       setState({
         email: j.email,
         memberships: j.memberships ?? [],
         mustChangePw: !!j.mustChangePw,
-        isSuperAdmin: (j.memberships ?? []).some((m) => m.role === 'super_admin'),
+        isPlatformAdmin: !!j.isPlatformAdmin,
         ready: true,
       })
     } catch {
-      setState({ email: null, memberships: [], mustChangePw: false, isSuperAdmin: false, ready: true })
+      setState(loggedOut())
     }
   }, [])
 
@@ -82,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email: user.email,
           memberships: user.memberships,
           mustChangePw: false,
-          isSuperAdmin: user.memberships.some((m) => m.role === 'super_admin'),
+          isPlatformAdmin: user.memberships.some((m) => m.role === 'super_admin'),
           ready: true,
         }
         localStorage.setItem(LS_KEY, JSON.stringify(next))
@@ -106,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     if (!API) {
       localStorage.removeItem(LS_KEY)
-      setState({ email: null, memberships: [], mustChangePw: false, isSuperAdmin: false, ready: true })
+      setState(loggedOut())
       return
     }
     await fetch(`${API}/api/logout`, { method: 'POST', credentials: 'include' }).catch(() => null)

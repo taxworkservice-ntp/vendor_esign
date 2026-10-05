@@ -11,11 +11,13 @@ import { readStoredDurable, saveBytesDurable } from './storage'
 import { buildReceiptPdf } from './pdf'
 import { sha256hex, sessionUser } from './auth'
 import { getVendorMemory } from './vendor-memory'
-import { authRoutes, requireClient } from './client-auth'
+import { authRoutes } from './client-auth'
 import { corsMw } from './cors'
 import { getTenantSettings, saveTenantSettings } from './settings'
 import { r2Configured, signDownload, signUpload } from './r2-storage'
-import { dataRoutes } from './data'
+import { dataRoutes, guard } from './data'
+import { getPlatformSettingsCached } from './platform'
+import { clearImpersonationCookie, impersonationFromCookie } from './impersonation'
 import { txnRoutes } from './transactions'
 import { whtRoutes } from './wht'
 import {
@@ -67,6 +69,43 @@ app.onError((err, c) => {
 })
 
 app.use('*', corsMw())
+
+// Client-operation gate: maintenance mode + read-only impersonation. Applies to
+// the client data surface only (auth, announcement, verify and cron are exempt
+// so the portal can still load, show the banner, and let the operator stop).
+const CLIENT_WRITE_PREFIXES = ['/api/client', '/api/settings', '/api/transactions', '/api/files']
+app.use('*', async (c, next) => {
+  const path = c.req.path
+  const mutating = !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)
+  const onClientSurface = CLIENT_WRITE_PREFIXES.some((p) => path.startsWith(p))
+  if (!onClientSurface) return next()
+
+  const imp = impersonationFromCookie(c.req.header('cookie'))
+  if (imp && imp.mode === 'read' && mutating) {
+    return c.json({ error: 'impersonation-read-only' }, 403)
+  }
+  const { maintenance } = await getPlatformSettingsCached()
+  if (maintenance.mode === 'full') {
+    return c.json({ error: 'maintenance', message: maintenance.message }, 503)
+  }
+  if (maintenance.mode === 'read_only' && mutating) {
+    return c.json({ error: 'maintenance-read-only', message: maintenance.message }, 503)
+  }
+  return next()
+})
+
+// Public platform notice (announcement + maintenance) for the client shell.
+app.get('/api/announcement', async (c) => {
+  const { announcement, maintenance } = await getPlatformSettingsCached()
+  return c.json({ announcement, maintenance })
+})
+
+// Leaving impersonation is unauthenticated: it only clears the tw_imp cookie.
+app.post('/api/impersonate/stop', (c) => {
+  return new Response(JSON.stringify({ ok: true }), {
+    headers: { 'Content-Type': 'application/json', 'Set-Cookie': clearImpersonationCookie() },
+  })
+})
 
 // Client portal auth (login/logout/me/change-password).
 app.route('/api/auth', authRoutes)
@@ -408,26 +447,24 @@ app.get('/api/vendor_payees/:id/memory', async (c) => {
 // Tenant settings (per-tenant). PREPARED, session-guarded: requires a client
 // session (401 until client API auth ships). client_admin may write; others read.
 app.get('/api/settings', async (c) => {
-  const u = await requireClient(c)
-  const tenantId = u?.memberships[0]?.tenantId
-  if (!tenantId) return c.json({ error: 'unauthorized' }, 401)
+  const g = await guard(c)
+  if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
   try {
-    return c.json(await getTenantSettings(tenantId))
+    return c.json(await getTenantSettings(g.ws))
   } catch {
     return c.json({ error: 'unavailable' }, 503)
   }
 })
 
 app.put('/api/settings', async (c) => {
-  const u = await requireClient(c)
-  const tenantId = u?.memberships[0]?.tenantId
-  if (!tenantId) return c.json({ error: 'unauthorized' }, 401)
-  const role = u?.memberships.find((m) => m.tenantId === tenantId)?.role
-  if (role !== 'client_admin') return c.json({ error: 'forbidden' }, 403)
+  const g = await guard(c)
+  if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  const role = g.impersonating ? 'owner' : g.u?.memberships.find((m) => m.tenantId === g.ws)?.role
+  if (!['client_admin', 'owner', 'manager'].includes(String(role))) return c.json({ error: 'forbidden' }, 403)
   const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
   if (!body) return c.json({ error: 'invalid-body' }, 400)
   try {
-    await saveTenantSettings(tenantId, body as never)
+    await saveTenantSettings(g.ws, body as never)
     return c.json({ ok: true })
   } catch {
     return c.json({ error: 'invalid-body' }, 400)
@@ -438,30 +475,28 @@ app.put('/api/settings', async (c) => {
 // Client-uploaded images (signature, stamp) go to R2. The server never handles
 // the bytes — it only issues presigned URLs so credentials stay server-side.
 app.get('/api/files/r2-status', async (c) => {
-  const u = await requireClient(c)
-  if (!u) return c.json({ error: 'unauthorized' }, 401)
+  const g = await guard(c)
+  if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
   return c.json({ configured: r2Configured() })
 })
 
 app.post('/api/files/sign-upload', async (c) => {
-  const u = await requireClient(c)
-  const tenantId = u?.memberships[0]?.tenantId
-  if (!tenantId) return c.json({ error: 'unauthorized' }, 401)
+  const g = await guard(c)
+  if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
   if (!r2Configured()) return c.json({ error: 'storage-not-configured' }, 503)
   const body = (await c.req.json().catch(() => null)) as { fileName?: string } | null
   if (!body?.fileName) return c.json({ error: 'fileName required' }, 400)
-  const result = await signUpload(body.fileName, tenantId)
+  const result = await signUpload(body.fileName, g.ws)
   if (!result) return c.json({ error: 'signing-failed' }, 500)
   return c.json(result)
 })
 
 app.post('/api/files/sign-download', async (c) => {
-  const u = await requireClient(c)
-  const tenantId = u?.memberships[0]?.tenantId
-  if (!tenantId) return c.json({ error: 'unauthorized' }, 401)
+  const g = await guard(c)
+  if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
   if (!r2Configured()) return c.json({ error: 'storage-not-configured' }, 503)
   const body = (await c.req.json().catch(() => null)) as { path?: string } | null
-  if (!body?.path || !body.path.startsWith(`${tenantId}/`)) {
+  if (!body?.path || !body.path.startsWith(`${g.ws}/`)) {
     return c.json({ error: 'invalid-path' }, 400)
   }
   const url = await signDownload(body.path)

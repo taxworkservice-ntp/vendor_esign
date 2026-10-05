@@ -22039,46 +22039,46 @@ var require_fontkit_umd = __commonJS({
       }
       revLookup["-".charCodeAt(0)] = 62;
       revLookup["_".charCodeAt(0)] = 63;
-      function getLens(b64) {
-        var len2 = b64.length;
+      function getLens(b642) {
+        var len2 = b642.length;
         if (len2 % 4 > 0) {
           throw new Error("Invalid string. Length must be a multiple of 4");
         }
-        var validLen = b64.indexOf("=");
+        var validLen = b642.indexOf("=");
         if (validLen === -1) validLen = len2;
         var placeHoldersLen = validLen === len2 ? 0 : 4 - validLen % 4;
         return [validLen, placeHoldersLen];
       }
-      function byteLength(b64) {
-        var lens = getLens(b64);
+      function byteLength(b642) {
+        var lens = getLens(b642);
         var validLen = lens[0];
         var placeHoldersLen = lens[1];
         return (validLen + placeHoldersLen) * 3 / 4 - placeHoldersLen;
       }
-      function _byteLength(b64, validLen, placeHoldersLen) {
+      function _byteLength(b642, validLen, placeHoldersLen) {
         return (validLen + placeHoldersLen) * 3 / 4 - placeHoldersLen;
       }
-      function toByteArray(b64) {
+      function toByteArray(b642) {
         var tmp;
-        var lens = getLens(b64);
+        var lens = getLens(b642);
         var validLen = lens[0];
         var placeHoldersLen = lens[1];
-        var arr = new Arr(_byteLength(b64, validLen, placeHoldersLen));
+        var arr = new Arr(_byteLength(b642, validLen, placeHoldersLen));
         var curByte = 0;
         var len2 = placeHoldersLen > 0 ? validLen - 4 : validLen;
         var i2;
         for (i2 = 0; i2 < len2; i2 += 4) {
-          tmp = revLookup[b64.charCodeAt(i2)] << 18 | revLookup[b64.charCodeAt(i2 + 1)] << 12 | revLookup[b64.charCodeAt(i2 + 2)] << 6 | revLookup[b64.charCodeAt(i2 + 3)];
+          tmp = revLookup[b642.charCodeAt(i2)] << 18 | revLookup[b642.charCodeAt(i2 + 1)] << 12 | revLookup[b642.charCodeAt(i2 + 2)] << 6 | revLookup[b642.charCodeAt(i2 + 3)];
           arr[curByte++] = tmp >> 16 & 255;
           arr[curByte++] = tmp >> 8 & 255;
           arr[curByte++] = tmp & 255;
         }
         if (placeHoldersLen === 2) {
-          tmp = revLookup[b64.charCodeAt(i2)] << 2 | revLookup[b64.charCodeAt(i2 + 1)] >> 4;
+          tmp = revLookup[b642.charCodeAt(i2)] << 2 | revLookup[b642.charCodeAt(i2 + 1)] >> 4;
           arr[curByte++] = tmp & 255;
         }
         if (placeHoldersLen === 1) {
-          tmp = revLookup[b64.charCodeAt(i2)] << 10 | revLookup[b64.charCodeAt(i2 + 1)] << 4 | revLookup[b64.charCodeAt(i2 + 2)] >> 2;
+          tmp = revLookup[b642.charCodeAt(i2)] << 10 | revLookup[b642.charCodeAt(i2 + 1)] << 4 | revLookup[b642.charCodeAt(i2 + 2)] >> 2;
           arr[curByte++] = tmp >> 8 & 255;
           arr[curByte++] = tmp & 255;
         }
@@ -37488,7 +37488,7 @@ var require_fontkit_umd = __commonJS({
           throw new Error("Unknown font format");
         }
       };
-      function cache(target, key3, descriptor) {
+      function cache2(target, key3, descriptor) {
         if (descriptor.get) {
           var get = descriptor.get;
           descriptor.get = function() {
@@ -37502,17 +37502,17 @@ var require_fontkit_umd = __commonJS({
           var fn = descriptor.value;
           return {
             get: function get2() {
-              var cache2 = /* @__PURE__ */ new Map();
+              var cache3 = /* @__PURE__ */ new Map();
               function memoized() {
                 for (var _len = arguments.length, args = new Array(_len), _key = 0; _key < _len; _key++) {
                   args[_key] = arguments[_key];
                 }
                 var key4 = args.length > 0 ? args[0] : "value";
-                if (cache2.has(key4)) {
-                  return cache2.get(key4);
+                if (cache3.has(key4)) {
+                  return cache3.get(key4);
                 }
                 var result = fn.apply(this, args);
-                cache2.set(key4, result);
+                cache3.set(key4, result);
                 return result;
               }
               Object.defineProperty(this, key3, {
@@ -42284,7 +42284,7 @@ var require_fontkit_umd = __commonJS({
           }
         };
         return CmapProcessor2;
-      }(), _applyDecoratedDescriptor(_class.prototype, "getCharacterSet", [cache], Object.getOwnPropertyDescriptor(_class.prototype, "getCharacterSet"), _class.prototype), _applyDecoratedDescriptor(_class.prototype, "codePointsForGlyph", [cache], Object.getOwnPropertyDescriptor(_class.prototype, "codePointsForGlyph"), _class.prototype), _class);
+      }(), _applyDecoratedDescriptor(_class.prototype, "getCharacterSet", [cache2], Object.getOwnPropertyDescriptor(_class.prototype, "getCharacterSet"), _class.prototype), _applyDecoratedDescriptor(_class.prototype, "codePointsForGlyph", [cache2], Object.getOwnPropertyDescriptor(_class.prototype, "codePointsForGlyph"), _class.prototype), _class);
       function _createForOfIteratorHelperLoose$5(o) {
         var i2 = 0;
         if (typeof Symbol === "undefined" || o[Symbol.iterator] == null) {
@@ -48339,7 +48339,7 @@ var require_fontkit_umd = __commonJS({
           return res;
         };
         return AATLookupTable2;
-      }(), _applyDecoratedDescriptor$1(_class$1.prototype, "glyphsForValue", [cache], Object.getOwnPropertyDescriptor(_class$1.prototype, "glyphsForValue"), _class$1.prototype), _class$1);
+      }(), _applyDecoratedDescriptor$1(_class$1.prototype, "glyphsForValue", [cache2], Object.getOwnPropertyDescriptor(_class$1.prototype, "glyphsForValue"), _class$1.prototype), _class$1);
       function _createForOfIteratorHelperLoose$9(o) {
         var i2 = 0;
         if (typeof Symbol === "undefined" || o[Symbol.iterator] == null) {
@@ -48785,7 +48785,7 @@ var require_fontkit_umd = __commonJS({
           });
         };
         return AATMorxProcessor2;
-      }(), _applyDecoratedDescriptor$2(_class$2.prototype, "getStateMachine", [cache], Object.getOwnPropertyDescriptor(_class$2.prototype, "getStateMachine"), _class$2.prototype), _class$2);
+      }(), _applyDecoratedDescriptor$2(_class$2.prototype, "getStateMachine", [cache2], Object.getOwnPropertyDescriptor(_class$2.prototype, "getStateMachine"), _class$2.prototype), _class$2);
       function swap(glyphs, rangeA, rangeB, reverseA, reverseB) {
         if (reverseA === void 0) {
           reverseA = false;
@@ -52341,7 +52341,7 @@ var require_fontkit_umd = __commonJS({
           }
         }]);
         return Glyph2;
-      }(), _applyDecoratedDescriptor$3(_class$3.prototype, "cbox", [cache], Object.getOwnPropertyDescriptor(_class$3.prototype, "cbox"), _class$3.prototype), _applyDecoratedDescriptor$3(_class$3.prototype, "bbox", [cache], Object.getOwnPropertyDescriptor(_class$3.prototype, "bbox"), _class$3.prototype), _applyDecoratedDescriptor$3(_class$3.prototype, "path", [cache], Object.getOwnPropertyDescriptor(_class$3.prototype, "path"), _class$3.prototype), _applyDecoratedDescriptor$3(_class$3.prototype, "advanceWidth", [cache], Object.getOwnPropertyDescriptor(_class$3.prototype, "advanceWidth"), _class$3.prototype), _applyDecoratedDescriptor$3(_class$3.prototype, "advanceHeight", [cache], Object.getOwnPropertyDescriptor(_class$3.prototype, "advanceHeight"), _class$3.prototype), _applyDecoratedDescriptor$3(_class$3.prototype, "name", [cache], Object.getOwnPropertyDescriptor(_class$3.prototype, "name"), _class$3.prototype), _class$3);
+      }(), _applyDecoratedDescriptor$3(_class$3.prototype, "cbox", [cache2], Object.getOwnPropertyDescriptor(_class$3.prototype, "cbox"), _class$3.prototype), _applyDecoratedDescriptor$3(_class$3.prototype, "bbox", [cache2], Object.getOwnPropertyDescriptor(_class$3.prototype, "bbox"), _class$3.prototype), _applyDecoratedDescriptor$3(_class$3.prototype, "path", [cache2], Object.getOwnPropertyDescriptor(_class$3.prototype, "path"), _class$3.prototype), _applyDecoratedDescriptor$3(_class$3.prototype, "advanceWidth", [cache2], Object.getOwnPropertyDescriptor(_class$3.prototype, "advanceWidth"), _class$3.prototype), _applyDecoratedDescriptor$3(_class$3.prototype, "advanceHeight", [cache2], Object.getOwnPropertyDescriptor(_class$3.prototype, "advanceHeight"), _class$3.prototype), _applyDecoratedDescriptor$3(_class$3.prototype, "name", [cache2], Object.getOwnPropertyDescriptor(_class$3.prototype, "name"), _class$3.prototype), _class$3);
       function _createForOfIteratorHelperLoose$m(o) {
         var i2 = 0;
         if (typeof Symbol === "undefined" || o[Symbol.iterator] == null) {
@@ -54765,7 +54765,7 @@ var require_fontkit_umd = __commonJS({
           }
         }]);
         return TTFFont2;
-      }(), _applyDecoratedDescriptor$4(_class$4.prototype, "bbox", [cache], Object.getOwnPropertyDescriptor(_class$4.prototype, "bbox"), _class$4.prototype), _applyDecoratedDescriptor$4(_class$4.prototype, "_cmapProcessor", [cache], Object.getOwnPropertyDescriptor(_class$4.prototype, "_cmapProcessor"), _class$4.prototype), _applyDecoratedDescriptor$4(_class$4.prototype, "characterSet", [cache], Object.getOwnPropertyDescriptor(_class$4.prototype, "characterSet"), _class$4.prototype), _applyDecoratedDescriptor$4(_class$4.prototype, "_layoutEngine", [cache], Object.getOwnPropertyDescriptor(_class$4.prototype, "_layoutEngine"), _class$4.prototype), _applyDecoratedDescriptor$4(_class$4.prototype, "variationAxes", [cache], Object.getOwnPropertyDescriptor(_class$4.prototype, "variationAxes"), _class$4.prototype), _applyDecoratedDescriptor$4(_class$4.prototype, "namedVariations", [cache], Object.getOwnPropertyDescriptor(_class$4.prototype, "namedVariations"), _class$4.prototype), _applyDecoratedDescriptor$4(_class$4.prototype, "_variationProcessor", [cache], Object.getOwnPropertyDescriptor(_class$4.prototype, "_variationProcessor"), _class$4.prototype), _class$4);
+      }(), _applyDecoratedDescriptor$4(_class$4.prototype, "bbox", [cache2], Object.getOwnPropertyDescriptor(_class$4.prototype, "bbox"), _class$4.prototype), _applyDecoratedDescriptor$4(_class$4.prototype, "_cmapProcessor", [cache2], Object.getOwnPropertyDescriptor(_class$4.prototype, "_cmapProcessor"), _class$4.prototype), _applyDecoratedDescriptor$4(_class$4.prototype, "characterSet", [cache2], Object.getOwnPropertyDescriptor(_class$4.prototype, "characterSet"), _class$4.prototype), _applyDecoratedDescriptor$4(_class$4.prototype, "_layoutEngine", [cache2], Object.getOwnPropertyDescriptor(_class$4.prototype, "_layoutEngine"), _class$4.prototype), _applyDecoratedDescriptor$4(_class$4.prototype, "variationAxes", [cache2], Object.getOwnPropertyDescriptor(_class$4.prototype, "variationAxes"), _class$4.prototype), _applyDecoratedDescriptor$4(_class$4.prototype, "namedVariations", [cache2], Object.getOwnPropertyDescriptor(_class$4.prototype, "namedVariations"), _class$4.prototype), _applyDecoratedDescriptor$4(_class$4.prototype, "_variationProcessor", [cache2], Object.getOwnPropertyDescriptor(_class$4.prototype, "_variationProcessor"), _class$4.prototype), _class$4);
       function _createForOfIteratorHelperLoose$r(o) {
         var i2 = 0;
         if (typeof Symbol === "undefined" || o[Symbol.iterator] == null) {
@@ -55214,45 +55214,45 @@ var require_fontkit_umd = __commonJS({
       }
       revLookup$1["-".charCodeAt(0)] = 62;
       revLookup$1["_".charCodeAt(0)] = 63;
-      function getLens$1(b64) {
-        var len2 = b64.length;
+      function getLens$1(b642) {
+        var len2 = b642.length;
         if (len2 % 4 > 0) {
           throw new Error("Invalid string. Length must be a multiple of 4");
         }
-        var validLen = b64.indexOf("=");
+        var validLen = b642.indexOf("=");
         if (validLen === -1) validLen = len2;
         var placeHoldersLen = validLen === len2 ? 0 : 4 - validLen % 4;
         return [validLen, placeHoldersLen];
       }
-      function byteLength$1(b64) {
-        var lens = getLens$1(b64);
+      function byteLength$1(b642) {
+        var lens = getLens$1(b642);
         var validLen = lens[0];
         var placeHoldersLen = lens[1];
         return (validLen + placeHoldersLen) * 3 / 4 - placeHoldersLen;
       }
-      function _byteLength$1(b64, validLen, placeHoldersLen) {
+      function _byteLength$1(b642, validLen, placeHoldersLen) {
         return (validLen + placeHoldersLen) * 3 / 4 - placeHoldersLen;
       }
-      function toByteArray$1(b64) {
+      function toByteArray$1(b642) {
         var tmp;
-        var lens = getLens$1(b64);
+        var lens = getLens$1(b642);
         var validLen = lens[0];
         var placeHoldersLen = lens[1];
-        var arr = new Arr$1(_byteLength$1(b64, validLen, placeHoldersLen));
+        var arr = new Arr$1(_byteLength$1(b642, validLen, placeHoldersLen));
         var curByte = 0;
         var len2 = placeHoldersLen > 0 ? validLen - 4 : validLen;
         for (var i2 = 0; i2 < len2; i2 += 4) {
-          tmp = revLookup$1[b64.charCodeAt(i2)] << 18 | revLookup$1[b64.charCodeAt(i2 + 1)] << 12 | revLookup$1[b64.charCodeAt(i2 + 2)] << 6 | revLookup$1[b64.charCodeAt(i2 + 3)];
+          tmp = revLookup$1[b642.charCodeAt(i2)] << 18 | revLookup$1[b642.charCodeAt(i2 + 1)] << 12 | revLookup$1[b642.charCodeAt(i2 + 2)] << 6 | revLookup$1[b642.charCodeAt(i2 + 3)];
           arr[curByte++] = tmp >> 16 & 255;
           arr[curByte++] = tmp >> 8 & 255;
           arr[curByte++] = tmp & 255;
         }
         if (placeHoldersLen === 2) {
-          tmp = revLookup$1[b64.charCodeAt(i2)] << 2 | revLookup$1[b64.charCodeAt(i2 + 1)] >> 4;
+          tmp = revLookup$1[b642.charCodeAt(i2)] << 2 | revLookup$1[b642.charCodeAt(i2 + 1)] >> 4;
           arr[curByte++] = tmp & 255;
         }
         if (placeHoldersLen === 1) {
-          tmp = revLookup$1[b64.charCodeAt(i2)] << 10 | revLookup$1[b64.charCodeAt(i2 + 1)] << 4 | revLookup$1[b64.charCodeAt(i2 + 2)] >> 2;
+          tmp = revLookup$1[b642.charCodeAt(i2)] << 10 | revLookup$1[b642.charCodeAt(i2 + 1)] << 4 | revLookup$1[b642.charCodeAt(i2 + 2)] >> 2;
           arr[curByte++] = tmp >> 8 & 255;
           arr[curByte++] = tmp & 255;
         }
@@ -62337,7 +62337,7 @@ var Hono2 = class extends Hono {
 };
 
 // server/src/api.ts
-import { randomBytes as randomBytes4, timingSafeEqual as timingSafeEqual2 } from "node:crypto";
+import { randomBytes as randomBytes4, timingSafeEqual as timingSafeEqual3 } from "node:crypto";
 
 // node_modules/@neondatabase/serverless/index.mjs
 var So = Object.create;
@@ -67769,7 +67769,7 @@ var UNSIGNABLE_HEADERS = /* @__PURE__ */ new Set([
   "connection"
 ]);
 var AwsClient = class {
-  constructor({ accessKeyId, secretAccessKey, sessionToken: sessionToken2, service, region, cache, retries, initRetryMs }) {
+  constructor({ accessKeyId, secretAccessKey, sessionToken: sessionToken2, service, region, cache: cache2, retries, initRetryMs }) {
     if (accessKeyId == null) throw new TypeError("accessKeyId is a required option");
     if (secretAccessKey == null) throw new TypeError("secretAccessKey is a required option");
     this.accessKeyId = accessKeyId;
@@ -67777,7 +67777,7 @@ var AwsClient = class {
     this.sessionToken = sessionToken2;
     this.service = service;
     this.region = region;
-    this.cache = cache || /* @__PURE__ */ new Map();
+    this.cache = cache2 || /* @__PURE__ */ new Map();
     this.retries = retries != null ? retries : 10;
     this.initRetryMs = initRetryMs || 50;
   }
@@ -67818,7 +67818,7 @@ var AwsClient = class {
   }
 };
 var AwsV4Signer = class {
-  constructor({ method, url, headers, body, accessKeyId, secretAccessKey, sessionToken: sessionToken2, service, region, cache, datetime, signQuery, appendSessionToken, allHeaders, singleEncode }) {
+  constructor({ method, url, headers, body, accessKeyId, secretAccessKey, sessionToken: sessionToken2, service, region, cache: cache2, datetime, signQuery, appendSessionToken, allHeaders, singleEncode }) {
     if (url == null) throw new TypeError("url is a required option");
     if (accessKeyId == null) throw new TypeError("accessKeyId is a required option");
     if (secretAccessKey == null) throw new TypeError("secretAccessKey is a required option");
@@ -67835,7 +67835,7 @@ var AwsV4Signer = class {
     }
     this.service = service || guessedService || "";
     this.region = region || guessedRegion || "us-east-1";
-    this.cache = cache || /* @__PURE__ */ new Map();
+    this.cache = cache2 || /* @__PURE__ */ new Map();
     this.datetime = datetime || (/* @__PURE__ */ new Date()).toISOString().replace(/[:-]|\.\d{3}/g, "");
     this.signQuery = signQuery;
     this.appendSessionToken = appendSessionToken || this.service === "iotdevicegateway";
@@ -68477,7 +68477,7 @@ async function sessionUser(cookieHeader, cookieName = SESSION_COOKIE) {
   if (!token) return null;
   const db = sql();
   const rows = await db`
-    select u.id, u.email, c.must_change_pw, u.status
+    select u.id, u.email, c.must_change_pw, u.status, u.is_platform_admin
     from sessions s
     join profiles u on u.id = s.user_id
     join auth_credentials c on c.user_id = u.id
@@ -68490,6 +68490,7 @@ async function sessionUser(cookieHeader, cookieName = SESSION_COOKIE) {
     email: String(u.email),
     mustChangePw: Boolean(u.must_change_pw),
     status: String(u.status),
+    isPlatformAdmin: Boolean(u.is_platform_admin),
     memberships: mems.map((m2) => ({ tenantId: String(m2.workspace_user_id), role: String(m2.role) }))
   };
 }
@@ -68500,14 +68501,6 @@ function sessionCookie(token, expiresAt, name = SESSION_COOKIE) {
 }
 function clearSessionCookie(name = SESSION_COOKIE) {
   return `${name}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`;
-}
-function isSuperAdmin(u) {
-  return !!u?.memberships.some((m2) => m2.role === "super_admin");
-}
-function roleForTenant(u, tenantId) {
-  if (u.memberships.some((m2) => m2.role === "super_admin")) return "super_admin";
-  if (u.memberships.some((m2) => m2.role === "bookkeeper")) return "bookkeeper";
-  return u.memberships.find((m2) => m2.tenantId === tenantId)?.role ?? null;
 }
 
 // src/lib/vendor-memory.ts
@@ -68585,9 +68578,6 @@ async function audit(tenantId, entityType, entityId, eventType, actor, metadata,
   await db`insert into audit_events (user_id, entity_type, entity_id, event_type, actor, metadata, ip)
     values (${tenantId}, ${entityType}, ${entityId}, ${eventType}, ${actor}, ${JSON.stringify(metadata ?? {})}, ${ip})`;
 }
-async function withAuditTenant(tenantId, role, userId, fn) {
-  return withTenant(tenantId, role, fn, userId);
-}
 async function tenantProfile(tenantId) {
   const db = sql();
   const rows = await db`select id, client_code, display_name, name, be_year
@@ -68599,6 +68589,54 @@ async function tenantProfile(tenantId) {
     beYear: Number(t.be_year ?? PILOT_BE_YEAR),
     display: t.display_name || t.name || CLIENT_DISPLAY
   };
+}
+
+// server/src/impersonation.ts
+import { createHash as createHash3, createHmac, timingSafeEqual as timingSafeEqual2 } from "node:crypto";
+var IMPERSONATION_COOKIE = "tw_imp";
+var TTL_MS = 30 * 60 * 1e3;
+function secret() {
+  const base = process.env.ID_ENCRYPTION_KEY ?? process.env.CRON_SECRET ?? "dev-impersonation-key";
+  return createHash3("sha256").update(`tw-imp:${base}`).digest();
+}
+var b64 = (b2) => b2.toString("base64url");
+function signImpersonation(input) {
+  const payload = { ...input, exp: Date.now() + TTL_MS };
+  const body = b64(Buffer.from(JSON.stringify(payload)));
+  const sig = b64(createHmac("sha256", secret()).update(body).digest());
+  return `${body}.${sig}`;
+}
+function verifyImpersonation(token) {
+  if (!token) return null;
+  const [body, sig] = token.split(".");
+  if (!body || !sig) return null;
+  const expected = b64(createHmac("sha256", secret()).update(body).digest());
+  const a2 = Buffer.from(sig);
+  const b2 = Buffer.from(expected);
+  if (a2.length !== b2.length || !timingSafeEqual2(a2, b2)) return null;
+  try {
+    const p2 = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+    if (!p2.tenantId || p2.mode !== "read" && p2.mode !== "write") return null;
+    if (typeof p2.exp !== "number" || p2.exp < Date.now()) return null;
+    return p2;
+  } catch {
+    return null;
+  }
+}
+function impersonationFromCookie(header) {
+  if (!header) return null;
+  for (const part of header.split(";")) {
+    const [k, ...rest] = part.trim().split("=");
+    if (k === IMPERSONATION_COOKIE) return verifyImpersonation(decodeURIComponent(rest.join("=")));
+  }
+  return null;
+}
+function impersonationCookie(token) {
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  return `${IMPERSONATION_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${TTL_MS / 1e3}${secure}`;
+}
+function clearImpersonationCookie() {
+  return `${IMPERSONATION_COOKIE}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`;
 }
 
 // server/src/client-auth.ts
@@ -68679,8 +68717,19 @@ authRoutes.post("/logout", async (c) => {
 });
 authRoutes.get("/me", async (c) => {
   const u = await requireClient(c);
-  if (!u) return c.json({ error: "unauthorized" }, 401);
-  return c.json({ email: u.email, mustChangePw: u.mustChangePw, memberships: u.memberships });
+  if (u) return c.json({ email: u.email, mustChangePw: u.mustChangePw, memberships: u.memberships });
+  const imp = impersonationFromCookie(c.req.header("cookie"));
+  if (imp) {
+    return c.json({
+      email: "operator (viewing as client)",
+      mustChangePw: false,
+      memberships: [{ tenantId: imp.tenantId, role: "owner" }],
+      impersonating: true,
+      impersonationMode: imp.mode,
+      tenantId: imp.tenantId
+    });
+  }
+  return c.json({ error: "unauthorized" }, 401);
 });
 authRoutes.post("/change-password", async (c) => {
   const u = await requireClient(c);
@@ -68864,9 +68913,13 @@ var dataRoutes = new Hono2();
 async function guard(c) {
   const u = await requireClient(c);
   const ws = u?.memberships[0]?.tenantId;
-  if (!u || !ws) return { error: 401 };
-  if (u.mustChangePw) return { error: 403 };
-  return { u, ws };
+  if (u && ws) {
+    if (u.mustChangePw) return { error: 403 };
+    return { u, ws, impersonating: false, mode: "write", actor: u.email };
+  }
+  const imp = impersonationFromCookie(c.req.header("cookie"));
+  if (imp) return { u: null, ws: imp.tenantId, impersonating: true, mode: imp.mode, actor: imp.actor };
+  return { error: 401 };
 }
 function maskTaxId(last4) {
   const d2 = last4.replace(/\D/g, "").slice(-4);
@@ -69112,6 +69165,44 @@ dataRoutes.delete("/items/:id", async (c) => {
   });
   return c.json({ ok: true });
 });
+
+// server/src/platform.ts
+var DEFAULT_PLATFORM_SETTINGS = {
+  announcement: { active: false, level: "info", message: "" },
+  maintenance: { mode: "off", message: "" },
+  flags: {}
+};
+var cache = null;
+var CACHE_MS = 1e4;
+async function getPlatformSettings() {
+  const db = sql();
+  const rows = await db`select key, value from platform_settings`;
+  const out = {
+    announcement: { ...DEFAULT_PLATFORM_SETTINGS.announcement },
+    maintenance: { ...DEFAULT_PLATFORM_SETTINGS.maintenance },
+    flags: {}
+  };
+  for (const r of rows) {
+    if (!r.value || typeof r.value !== "object") continue;
+    if (r.key === "announcement") out.announcement = { ...out.announcement, ...r.value };
+    else if (r.key === "maintenance") out.maintenance = { ...out.maintenance, ...r.value };
+    else if (r.key === "flags") out.flags = { ...out.flags, ...r.value };
+  }
+  return out;
+}
+async function getPlatformSettingsCached() {
+  if (cache && Date.now() - cache.at < CACHE_MS) return cache.value;
+  const value = await getPlatformSettings();
+  cache = { at: Date.now(), value };
+  return value;
+}
+async function savePlatformSetting(key2, value, actor) {
+  const db = sql();
+  await db`insert into platform_settings (key, value, updated_by, updated_at)
+    values (${key2}, ${JSON.stringify(value)}::jsonb, ${actor}, now())
+    on conflict (key) do update set value = excluded.value, updated_by = excluded.updated_by, updated_at = now()`;
+  cache = null;
+}
 
 // server/src/transactions.ts
 import { randomBytes as randomBytes3 } from "node:crypto";
@@ -69712,7 +69803,7 @@ txnRoutes.post("/transactions", async (c) => {
         ${itemsSummary(items, note)}, ${note}, ${JSON.stringify(items)}::jsonb,
         ${gross}, ${eff.rate}, ${whtMode}, ${wht}, ${net},
         ${b2.transferDate ?? (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}, ${b2.slipReference ?? ""}, 'draft',
-        ${taxId ? sha256hex(taxId) : null}, ${taxId.slice(-4) || null}, ${g.u.email})
+        ${taxId ? sha256hex(taxId) : null}, ${taxId.slice(-4) || null}, ${g.u?.email ?? g.actor ?? "system"})
       returning id`;
     return ins[0];
   });
@@ -70092,6 +70183,34 @@ app.onError((err, c) => {
   return c.json({ error: "internal-server-error", message: err instanceof Error ? err.message : String(err) }, 500);
 });
 app.use("*", corsMw());
+var CLIENT_WRITE_PREFIXES = ["/api/client", "/api/settings", "/api/transactions", "/api/files"];
+app.use("*", async (c, next) => {
+  const path = c.req.path;
+  const mutating = !["GET", "HEAD", "OPTIONS"].includes(c.req.method);
+  const onClientSurface = CLIENT_WRITE_PREFIXES.some((p2) => path.startsWith(p2));
+  if (!onClientSurface) return next();
+  const imp = impersonationFromCookie(c.req.header("cookie"));
+  if (imp && imp.mode === "read" && mutating) {
+    return c.json({ error: "impersonation-read-only" }, 403);
+  }
+  const { maintenance } = await getPlatformSettingsCached();
+  if (maintenance.mode === "full") {
+    return c.json({ error: "maintenance", message: maintenance.message }, 503);
+  }
+  if (maintenance.mode === "read_only" && mutating) {
+    return c.json({ error: "maintenance-read-only", message: maintenance.message }, 503);
+  }
+  return next();
+});
+app.get("/api/announcement", async (c) => {
+  const { announcement, maintenance } = await getPlatformSettingsCached();
+  return c.json({ announcement, maintenance });
+});
+app.post("/api/impersonate/stop", (c) => {
+  return new Response(JSON.stringify({ ok: true }), {
+    headers: { "Content-Type": "application/json", "Set-Cookie": clearImpersonationCookie() }
+  });
+});
 app.route("/api/auth", authRoutes);
 app.route("/api/client", dataRoutes);
 app.route("/api/client", txnRoutes);
@@ -70170,7 +70289,7 @@ app.post("/api/vendor/:token/unlock", async (c) => {
   }
   const a2 = Buffer.from(sha256hex(idNumber), "hex");
   const b2 = Buffer.from(String(r.tax_id_hash), "hex");
-  if (a2.length !== b2.length || !timingSafeEqual2(a2, b2)) {
+  if (a2.length !== b2.length || !timingSafeEqual3(a2, b2)) {
     const remaining = gateFail(th);
     await withTenant(rowTenant, "client", async () => audit(rowTenant, "vendor_requests", String(r.req_id), "vendor.gate-failed", "vendor", { remaining }, ip));
     return c.json(
@@ -70371,53 +70490,49 @@ app.get("/api/vendor_payees/:id/memory", async (c) => {
   }
 });
 app.get("/api/settings", async (c) => {
-  const u = await requireClient(c);
-  const tenantId = u?.memberships[0]?.tenantId;
-  if (!tenantId) return c.json({ error: "unauthorized" }, 401);
+  const g = await guard(c);
+  if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
   try {
-    return c.json(await getTenantSettings(tenantId));
+    return c.json(await getTenantSettings(g.ws));
   } catch {
     return c.json({ error: "unavailable" }, 503);
   }
 });
 app.put("/api/settings", async (c) => {
-  const u = await requireClient(c);
-  const tenantId = u?.memberships[0]?.tenantId;
-  if (!tenantId) return c.json({ error: "unauthorized" }, 401);
-  const role = u?.memberships.find((m2) => m2.tenantId === tenantId)?.role;
-  if (role !== "client_admin") return c.json({ error: "forbidden" }, 403);
+  const g = await guard(c);
+  if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  const role = g.impersonating ? "owner" : g.u?.memberships.find((m2) => m2.tenantId === g.ws)?.role;
+  if (!["client_admin", "owner", "manager"].includes(String(role))) return c.json({ error: "forbidden" }, 403);
   const body = await c.req.json().catch(() => null);
   if (!body) return c.json({ error: "invalid-body" }, 400);
   try {
-    await saveTenantSettings(tenantId, body);
+    await saveTenantSettings(g.ws, body);
     return c.json({ ok: true });
   } catch {
     return c.json({ error: "invalid-body" }, 400);
   }
 });
 app.get("/api/files/r2-status", async (c) => {
-  const u = await requireClient(c);
-  if (!u) return c.json({ error: "unauthorized" }, 401);
+  const g = await guard(c);
+  if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
   return c.json({ configured: r2Configured() });
 });
 app.post("/api/files/sign-upload", async (c) => {
-  const u = await requireClient(c);
-  const tenantId = u?.memberships[0]?.tenantId;
-  if (!tenantId) return c.json({ error: "unauthorized" }, 401);
+  const g = await guard(c);
+  if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
   if (!r2Configured()) return c.json({ error: "storage-not-configured" }, 503);
   const body = await c.req.json().catch(() => null);
   if (!body?.fileName) return c.json({ error: "fileName required" }, 400);
-  const result = await signUpload(body.fileName, tenantId);
+  const result = await signUpload(body.fileName, g.ws);
   if (!result) return c.json({ error: "signing-failed" }, 500);
   return c.json(result);
 });
 app.post("/api/files/sign-download", async (c) => {
-  const u = await requireClient(c);
-  const tenantId = u?.memberships[0]?.tenantId;
-  if (!tenantId) return c.json({ error: "unauthorized" }, 401);
+  const g = await guard(c);
+  if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
   if (!r2Configured()) return c.json({ error: "storage-not-configured" }, 503);
   const body = await c.req.json().catch(() => null);
-  if (!body?.path || !body.path.startsWith(`${tenantId}/`)) {
+  if (!body?.path || !body.path.startsWith(`${g.ws}/`)) {
     return c.json({ error: "invalid-path" }, 400);
   }
   const url = await signDownload(body.path);
@@ -70425,10 +70540,10 @@ app.post("/api/files/sign-download", async (c) => {
   return c.json({ url });
 });
 app.get("/api/cron/vendor-link-expiry", async (c) => {
-  const secret = process.env.CRON_SECRET ?? "";
+  const secret2 = process.env.CRON_SECRET ?? "";
   const auth = c.req.header("authorization") ?? "";
-  if (!secret) return c.json({ error: "cron-not-configured" }, 503);
-  if (auth !== `Bearer ${secret}`) return c.json({ error: "unauthorized" }, 401);
+  if (!secret2) return c.json({ error: "cron-not-configured" }, 503);
+  if (auth !== `Bearer ${secret2}`) return c.json({ error: "unauthorized" }, 401);
   const db = sql();
   const rows = await db`
     with lapsed as (
@@ -70510,16 +70625,12 @@ function adminIpAllowed(ip) {
 async function requireAdminSession(c) {
   return sessionUser(c.req.header("cookie"), ADMIN_COOKIE);
 }
-async function adminTenantScope(c, tenantId) {
+async function adminOnly(c) {
   const u = await requireAdminSession(c);
   if (!u) return { error: "unauthorized", status: 401 };
+  if (!u.isPlatformAdmin) return { error: "forbidden", status: 403 };
   if (u.mustChangePw) return { error: "must-change-password", status: 403 };
-  if (isSuperAdmin(u)) return { u, role: "super_admin" };
-  if (!tenantId) return { error: "forbidden", status: 403 };
-  const role = roleForTenant(u, tenantId);
-  if (role !== "owner" && role !== "manager" && role !== "client_admin" && role !== "bookkeeper")
-    return { error: "forbidden", status: 403 };
-  return { u, role };
+  return { u };
 }
 var adminApp = new Hono2();
 adminApp.use("*", corsMw());
@@ -70529,6 +70640,9 @@ adminApp.use("*", async (c, next) => {
   await next();
 });
 adminApp.get("/api/health", (c) => c.json({ ok: true, operation: "admin" }));
+async function writeAudit(tenantId, entityType, entityId, eventType, actor, metadata, ip) {
+  await audit(tenantId, entityType, entityId, eventType, actor, metadata, ip);
+}
 adminApp.post("/api/login", async (c) => {
   const ip = c.req.header("x-forwarded-for") ?? "local";
   if (rateLimited(`admin-login:${ip}`, 5)) return c.json({ error: "too-many-requests" }, 429);
@@ -70536,25 +70650,19 @@ adminApp.post("/api/login", async (c) => {
   const email = (body?.email ?? "").trim().toLowerCase();
   if (!email || !body?.password) return c.json({ error: "invalid-body" }, 400);
   const db = sql();
-  const rows = await db`select u.id, u.email, c.password_hash, c.must_change_pw, u.status, c.temp_expires_at
+  const rows = await db`select u.id, u.email, c.password_hash, c.must_change_pw, u.status, c.temp_expires_at, u.is_platform_admin
     from profiles u join auth_credentials c on c.user_id = u.id
     where lower(u.email) = ${email}`;
   const u = one(rows);
-  if (!u || u.status !== "active") return c.json({ error: "invalid-credentials" }, 401);
+  if (!u || u.status !== "active" || !u.is_platform_admin) return c.json({ error: "invalid-credentials" }, 401);
   if (u.temp_expires_at && new Date(String(u.temp_expires_at)) < /* @__PURE__ */ new Date() && u.must_change_pw)
     return c.json({ error: "temp-expired" }, 403);
   if (!await verifyPassword(body.password, String(u.password_hash)))
     return c.json({ error: "invalid-credentials" }, 401);
-  const mems = await db`select workspace_user_id, role from client_members where member_user_id = ${String(u.id)}`;
   const { token, expiresAt } = await createSession(String(u.id), ip, c.req.header("user-agent") ?? "", { admin: true });
-  const firstTenant = mems[0] ? String(mems[0].workspace_user_id) : PILOT_TENANT;
-  await withAuditTenant(firstTenant, "client", String(u.id), async () => audit(firstTenant, "profiles", String(u.id), "admin.login", "user", {}, ip));
+  await writeAudit("PLATFORM", "profiles", String(u.id), "admin.login", u.email, {}, ip);
   return new Response(
-    JSON.stringify({
-      ok: true,
-      mustChangePw: Boolean(u.must_change_pw),
-      memberships: mems.map((m2) => ({ tenantId: String(m2.workspace_user_id), role: String(m2.role) }))
-    }),
+    JSON.stringify({ ok: true, mustChangePw: Boolean(u.must_change_pw), isPlatformAdmin: true, memberships: [] }),
     { headers: { "Content-Type": "application/json", "Set-Cookie": sessionCookie(token, expiresAt, ADMIN_COOKIE) } }
   );
 });
@@ -70565,18 +70673,19 @@ adminApp.post("/api/logout", async (c) => {
     const db = sql();
     await db`delete from sessions where token_hash = ${sha256hex(decodeURIComponent(token))}`;
   }
-  return new Response(JSON.stringify({ ok: true }), {
-    headers: { "Content-Type": "application/json", "Set-Cookie": clearSessionCookie(ADMIN_COOKIE) }
-  });
+  const headers = new Headers({ "Content-Type": "application/json" });
+  headers.append("Set-Cookie", clearSessionCookie(ADMIN_COOKIE));
+  headers.append("Set-Cookie", clearImpersonationCookie());
+  return new Response(JSON.stringify({ ok: true }), { headers });
 });
 adminApp.get("/api/me", async (c) => {
   const u = await requireAdminSession(c);
-  if (!u) return c.json({ error: "unauthorized" }, 401);
-  return c.json({ userId: u.userId, email: u.email, mustChangePw: u.mustChangePw, memberships: u.memberships });
+  if (!u || !u.isPlatformAdmin) return c.json({ error: "unauthorized" }, 401);
+  return c.json({ userId: u.userId, email: u.email, mustChangePw: u.mustChangePw, isPlatformAdmin: true, memberships: u.memberships });
 });
 adminApp.post("/api/change-password", async (c) => {
   const u = await requireAdminSession(c);
-  if (!u) return c.json({ error: "unauthorized" }, 401);
+  if (!u || !u.isPlatformAdmin) return c.json({ error: "unauthorized" }, 401);
   const body = await c.req.json().catch(() => null);
   if (!body?.oldPassword || !body?.newPassword || body.newPassword.length < 10)
     return c.json({ error: "invalid-body" }, 400);
@@ -70586,19 +70695,70 @@ adminApp.post("/api/change-password", async (c) => {
     return c.json({ error: "invalid-credentials" }, 401);
   await db`update auth_credentials set password_hash = ${await hashPassword(body.newPassword)},
     must_change_pw = false, temp_expires_at = null, updated_at = now() where user_id = ${u.userId}`;
+  await writeAudit("PLATFORM", "profiles", u.userId, "admin.password.changed", u.email, {}, c.req.header("x-forwarded-for") ?? "local");
   return c.json({ ok: true });
 });
-adminApp.get("/api/admin/tenants", async (c) => {
-  const u = await requireAdminSession(c);
-  if (!u || !isSuperAdmin(u) && !u.memberships.some((m2) => m2.role === "bookkeeper"))
-    return c.json({ error: "forbidden" }, 403);
-  const q = (c.req.query("q") ?? "").trim().toLowerCase();
+adminApp.get("/api/admin/overview", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
   const db = sql();
-  const rows = await db`select t.id, t.client_code, t.display_name, t.name, t.status, t.be_year,
+  const t = one(await db`select
+      count(*)::int as tenants,
+      count(*) filter (where status = 'active')::int as active,
+      count(*) filter (where status = 'suspended')::int as suspended
+    from client_profiles`);
+  const u = one(await db`select
+      count(*)::int as users,
+      count(*) filter (where status = 'active')::int as active
+    from profiles where is_platform_admin = false`);
+  const counts = one(await db`select
+      (select count(*) from vendor_payables)::int as transactions,
+      (select count(*) from vendor_receipts)::int as receipts,
+      (select count(*) from wht_records)::int as wht,
+      (select count(*) from vendor_authorizations)::int as signings`);
+  const recentTenants = await db`select id, coalesce(display_name, name) as name, client_code, status, created_at
+    from client_profiles order by created_at desc limit 5`;
+  const recentAudit = await db`select id, coalesce(user_id, 'PLATFORM') as tenant_id, entity_type, event_type, actor, created_at
+    from audit_events order by created_at desc limit 8`;
+  const platform = await getPlatformSettings();
+  return c.json({
+    tenants: { total: Number(t?.tenants ?? 0), active: Number(t?.active ?? 0), suspended: Number(t?.suspended ?? 0) },
+    users: { total: Number(u?.users ?? 0), active: Number(u?.active ?? 0) },
+    counts: {
+      transactions: Number(counts?.transactions ?? 0),
+      receipts: Number(counts?.receipts ?? 0),
+      wht: Number(counts?.wht ?? 0),
+      signings: Number(counts?.signings ?? 0)
+    },
+    platform,
+    recentTenants: recentTenants.map((r) => ({
+      id: String(r.id),
+      name: String(r.name ?? r.id),
+      clientCode: String(r.client_code ?? r.id),
+      status: String(r.status ?? "active"),
+      createdAt: r.created_at
+    })),
+    recentAudit: recentAudit.map((r) => ({
+      id: String(r.id),
+      tenantId: String(r.tenant_id),
+      entityType: String(r.entity_type),
+      eventType: String(r.event_type),
+      actor: r.actor ? String(r.actor) : null,
+      createdAt: r.created_at
+    }))
+  });
+});
+adminApp.get("/api/admin/tenants", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
+  const q = (c.req.query("q") ?? "").trim().toLowerCase();
+  const status = c.req.query("status") ?? "all";
+  const db = sql();
+  const rows = await db`select t.id, t.client_code, t.display_name, t.name, t.status, t.be_year, t.created_at,
       (select count(*) from vendor_payables p where p.user_id = t.id) as txns,
       (select count(*) from vendor_receipts r where r.user_id = t.id) as receipts,
       (select count(*) from client_members ut where ut.workspace_user_id = t.id) as users
-    from client_profiles t order by t.id`;
+    from client_profiles t order by t.created_at desc`;
   const data = rows.map((r) => ({
     id: String(r.id),
     clientCode: String(r.client_code ?? r.id),
@@ -70607,13 +70767,14 @@ adminApp.get("/api/admin/tenants", async (c) => {
     beYear: Number(r.be_year ?? PILOT_BE_YEAR),
     txns: Number(r.txns ?? 0),
     receipts: Number(r.receipts ?? 0),
-    users: Number(r.users ?? 0)
-  })).filter((t) => !q || t.id.toLowerCase().includes(q) || t.displayName.toLowerCase().includes(q));
+    users: Number(r.users ?? 0),
+    createdAt: r.created_at
+  })).filter((t) => status === "all" || t.status === status).filter((t) => !q || t.id.toLowerCase().includes(q) || t.displayName.toLowerCase().includes(q));
   return c.json({ tenants: data });
 });
 adminApp.post("/api/admin/tenants", async (c) => {
-  const u = await requireAdminSession(c);
-  if (!u || !isSuperAdmin(u)) return c.json({ error: "forbidden" }, 403);
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
   const ip = c.req.header("x-forwarded-for") ?? "local";
   const body = await c.req.json().catch(() => null);
   const id = (body?.id ?? body?.clientCode ?? "").trim().toUpperCase().replace(/[^A-Z0-9-]/g, "");
@@ -70635,13 +70796,13 @@ adminApp.post("/api/admin/tenants", async (c) => {
     on conflict (user_id, key) do nothing`;
   await db`insert into doc_number_sequences (user_id, doc_type, be_year, vendor_no, last_number) values (${id}, 'vendor_receipt', ${beYear}, 0, ${start - 1})
     on conflict (user_id, doc_type, be_year, vendor_no) do nothing`;
-  await withAuditTenant(id, "super_admin", u.userId, async () => audit(id, "client_profiles", id, "tenant.created", u.email, { clientCode: code }, ip));
+  await writeAudit(id, "client_profiles", id, "tenant.created", g.u.email, { clientCode: code }, ip);
   return c.json({ ok: true, id });
 });
 adminApp.get("/api/admin/tenants/:id", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
   const id = c.req.param("id");
-  const scope = await adminTenantScope(c, id);
-  if ("error" in scope) return c.json({ error: scope.error }, scope.status);
   const db = sql();
   const rows = await db`select id, client_code, display_name, name, address, tax_id, contact_name, status, be_year, start_number
     from client_profiles where id = ${id}`;
@@ -70660,10 +70821,9 @@ adminApp.get("/api/admin/tenants/:id", async (c) => {
   });
 });
 adminApp.patch("/api/admin/tenants/:id", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
   const id = c.req.param("id");
-  const scope = await adminTenantScope(c, id);
-  if ("error" in scope) return c.json({ error: scope.error }, scope.status);
-  if (scope.role !== "super_admin") return c.json({ error: "forbidden" }, 403);
   const ip = c.req.header("x-forwarded-for") ?? "local";
   const body = await c.req.json().catch(() => null);
   if (body?.status && !["active", "suspended"].includes(body.status)) return c.json({ error: "invalid-body" }, 400);
@@ -70675,13 +70835,33 @@ adminApp.patch("/api/admin/tenants/:id", async (c) => {
     contact_name = coalesce(${body?.contactName ?? null}, contact_name),
     status = coalesce(${body?.status ?? null}, status),
     updated_at = now() where id = ${id}`;
-  await withAuditTenant(id, "super_admin", scope.u.userId, async () => audit(id, "tenants", id, "tenant.updated", scope.u.email, body ?? {}, ip));
+  await writeAudit(id, "client_profiles", id, "tenant.updated", g.u.email, body ?? {}, ip);
+  return c.json({ ok: true });
+});
+adminApp.delete("/api/admin/tenants/:id", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
+  const id = c.req.param("id");
+  const db = sql();
+  const counts = one(await db`select
+    (select count(*) from vendor_payables where user_id = ${id})::int as txns,
+    (select count(*) from vendor_receipts where user_id = ${id})::int as receipts,
+    (select count(*) from wht_records where user_id = ${id})::int as wht,
+    (select count(*) from vendor_payees where user_id = ${id})::int as vendors,
+    (select count(*) from items where user_id = ${id})::int as items`);
+  const dirty = ["txns", "receipts", "wht", "vendors", "items"].some((k) => Number(counts?.[k] ?? 0) > 0);
+  if (dirty) return c.json({ error: "tenant-not-empty", counts }, 409);
+  await db`delete from client_members where workspace_user_id = ${id}`;
+  await db`delete from config where user_id = ${id}`;
+  await db`delete from doc_number_sequences where user_id = ${id}`;
+  await db`delete from client_profiles where id = ${id}`;
+  await writeAudit("PLATFORM", "client_profiles", id, "tenant.deleted", g.u.email, {}, c.req.header("x-forwarded-for") ?? "local");
   return c.json({ ok: true });
 });
 adminApp.get("/api/admin/tenants/:id/users", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
   const id = c.req.param("id");
-  const scope = await adminTenantScope(c, id);
-  if ("error" in scope) return c.json({ error: scope.error }, scope.status);
   const db = sql();
   const rows = await db`select u.id, u.email, u.must_change_pw, u.status, ut.role
     from client_members ut join profiles u on u.id = ut.member_user_id
@@ -70697,25 +70877,21 @@ adminApp.get("/api/admin/tenants/:id/users", async (c) => {
   });
 });
 adminApp.post("/api/admin/tenants/:id/users", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
   const id = c.req.param("id");
-  const scope = await adminTenantScope(c, id);
-  if ("error" in scope) return c.json({ error: scope.error }, scope.status);
-  if (scope.role !== "super_admin" && scope.role !== "client_admin")
-    return c.json({ error: "forbidden" }, 403);
   const ip = c.req.header("x-forwarded-for") ?? "local";
   const body = await c.req.json().catch(() => null);
   const email = (body?.email ?? "").trim().toLowerCase();
   const role = ["owner", "manager", "officer"].includes(body?.role) ? body.role : "officer";
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return c.json({ error: "invalid-body" }, 400);
-  if ((scope.role === "manager" || scope.role === "client_admin") && role !== "officer")
-    return c.json({ error: "forbidden" }, 403);
   const password = tempPassword(12);
   const db = sql();
   const expires = new Date(Date.now() + 7 * 86400 * 1e3).toISOString();
   const existing = await db`select id from profiles where lower(email) = ${email}`;
   let userId = existing[0] ? String(existing[0].id) : "";
   if (!userId) {
-    const ins = await db`insert into profiles (email, status, role) values (${email}, 'active', ${role})
+    const ins = await db`insert into profiles (email, status, role, password_hash) values (${email}, 'active', ${role}, ${await hashPassword(password)})
       returning id`;
     userId = String(ins[0].id);
     await db`insert into auth_credentials (user_id, password_hash, must_change_pw, temp_expires_at)
@@ -70725,75 +70901,224 @@ adminApp.post("/api/admin/tenants/:id/users", async (c) => {
       values (${userId}, ${await hashPassword(password)}, true, ${expires})
       on conflict (user_id) do update set password_hash = excluded.password_hash,
         must_change_pw = true, temp_expires_at = excluded.temp_expires_at, updated_at = now()`;
-    await db`update profiles set status = 'active', updated_at = now() where id = ${userId}`;
+    await db`update profiles set status = 'active', password_hash = ${await hashPassword(password)}, updated_at = now() where id = ${userId}`;
   }
   await db`insert into client_members (member_user_id, workspace_user_id, role, status, password_changed, permissions)
     values (${userId}, ${id}, ${role}, 'active', false, '{}'::jsonb)
     on conflict (member_user_id, workspace_user_id) do update set role = ${role}, status = 'active', password_changed = false`;
   await db`insert into client_permission_audit (workspace_user_id, actor_user_id, target_member_id, action, after)
-    values (${id}, ${scope.u.userId}, ${userId}, 'user.created', ${JSON.stringify({ role })}::jsonb)`;
-  await withAuditTenant(id, isSuperAdmin(scope.u) ? "super_admin" : scope.role, scope.u.userId, async () => audit(id, "profiles", userId, "user.created", scope.u.email, { email, role }, ip));
+    values (${id}, ${g.u.userId}, ${userId}, 'user.created', ${JSON.stringify({ role })}::jsonb)`;
+  await writeAudit(id, "profiles", userId, "user.created", g.u.email, { email, role }, ip);
   return c.json({ ok: true, userId, tempPassword: password });
 });
+adminApp.get("/api/admin/users", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
+  const q = (c.req.query("q") ?? "").trim().toLowerCase();
+  const db = sql();
+  const rows = await db`select p.id, p.email, p.status, c.must_change_pw, p.created_at,
+      coalesce(json_agg(json_build_object('tenantId', cm.workspace_user_id, 'role', cm.role, 'status', cm.status)
+        order by cm.workspace_user_id) filter (where cm.member_user_id is not null), '[]') as memberships
+    from profiles p
+    left join client_members cm on cm.member_user_id = p.id
+    left join auth_credentials c on c.user_id = p.id
+    where p.is_platform_admin = false
+    group by p.id, p.email, p.status, c.must_change_pw, p.created_at
+    order by p.created_at desc`;
+  const users = rows.map((r) => ({
+    id: String(r.id),
+    email: String(r.email),
+    status: String(r.status ?? "active"),
+    mustChangePw: Boolean(r.must_change_pw),
+    memberships: r.memberships ?? [],
+    createdAt: r.created_at
+  })).filter((u) => !q || u.email.toLowerCase().includes(q) || u.memberships.some((m2) => m2.tenantId.toLowerCase().includes(q)));
+  return c.json({ users });
+});
 adminApp.patch("/api/admin/users/:userId", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
   const target = c.req.param("userId");
-  const u = await requireAdminSession(c);
-  if (!u || u.mustChangePw) return c.json({ error: "forbidden" }, 403);
-  const body = await c.req.json().catch(() => null);
   const ip = c.req.header("x-forwarded-for") ?? "local";
+  const body = await c.req.json().catch(() => null);
   const db = sql();
   const mems = await db`select workspace_user_id, role, permissions from client_members where member_user_id = ${target}`;
   if (!mems.length) return c.json({ error: "not-found" }, 404);
-  const workspaceId = String(mems[0].workspace_user_id);
-  const actorRole = roleForTenant(u, workspaceId);
-  const allowed = isSuperAdmin(u) || actorRole === "owner" || actorRole === "manager" || actorRole === "client_admin";
-  if (!allowed) return c.json({ error: "forbidden" }, 403);
-  const nextRole = ["owner", "manager", "officer"].includes(body?.role) ? body.role : mems[0].role;
-  if ((actorRole === "manager" || actorRole === "client_admin") && nextRole === "owner")
-    return c.json({ error: "forbidden" }, 403);
+  const workspaceId = body?.tenantId ? String(body.tenantId) : String(mems[0].workspace_user_id);
+  const nextRole = ["owner", "manager", "officer"].includes(body?.role) ? body.role : mems.find((m2) => m2.workspace_user_id === workspaceId)?.role ?? mems[0].role;
   const before = { role: mems[0].role, permissions: mems[0].permissions };
   const nextPermissions = normalizePermissions(body?.permissions);
   await db`update client_members set role = ${nextRole}, permissions = ${JSON.stringify(nextPermissions)}::jsonb
     where member_user_id = ${target} and workspace_user_id = ${workspaceId}`;
   await db`insert into client_permission_audit (workspace_user_id, actor_user_id, target_member_id, action, before, after)
-    values (${workspaceId}, ${u.userId}, ${target}, 'member.updated',
+    values (${workspaceId}, ${g.u.userId}, ${target}, 'member.updated',
       ${JSON.stringify(before)}::jsonb, ${JSON.stringify({ role: nextRole, permissions: nextPermissions })}::jsonb)`;
-  const auditRole = isSuperAdmin(u) ? "super_admin" : actorRole ?? "client";
-  await withAuditTenant(workspaceId, auditRole, u.userId, async () => audit(workspaceId, "client_members", target, "member.updated", u.email, { role: nextRole }, ip));
+  await writeAudit(workspaceId, "client_members", target, "member.updated", g.u.email, { role: nextRole }, ip);
   return c.json({ ok: true });
 });
 adminApp.post("/api/admin/users/:userId/reset", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
   const target = c.req.param("userId");
-  const u = await requireAdminSession(c);
-  if (!u || u.mustChangePw) return c.json({ error: "forbidden" }, 403);
-  const ip = c.req.header("x-forwarded-for") ?? "local";
   const db = sql();
   const mems = await db`select workspace_user_id, role from client_members where member_user_id = ${target}`;
-  if (!mems.length) return c.json({ error: "not-found" }, 404);
-  const tenantId = String(mems[0].workspace_user_id);
-  const allowed = isSuperAdmin(u) || roleForTenant(u, tenantId) === "client_admin";
-  if (!allowed) return c.json({ error: "forbidden" }, 403);
+  const tenantId = mems[0] ? String(mems[0].workspace_user_id) : "PLATFORM";
   const password = tempPassword(12);
   await db`update auth_credentials set password_hash = ${await hashPassword(password)}, must_change_pw = true,
     temp_expires_at = ${new Date(Date.now() + 7 * 86400 * 1e3).toISOString()}, updated_at = now() where user_id = ${target}`;
-  await withAuditTenant(tenantId, "client", u.userId, async () => audit(tenantId, "profiles", target, "user.reset", u.email, {}, ip));
+  await db`delete from sessions where user_id = ${target}`;
+  await writeAudit(tenantId, "profiles", target, "user.reset", g.u.email, {}, c.req.header("x-forwarded-for") ?? "local");
   return c.json({ ok: true, tempPassword: password });
 });
 adminApp.post("/api/admin/users/:userId/disable", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
   const target = c.req.param("userId");
-  const u = await requireAdminSession(c);
-  if (!u || u.mustChangePw) return c.json({ error: "forbidden" }, 403);
-  const ip = c.req.header("x-forwarded-for") ?? "local";
   const db = sql();
-  const mems = await db`select workspace_user_id, role from client_members where member_user_id = ${target}`;
-  if (!mems.length) return c.json({ error: "not-found" }, 404);
-  const tenantId = String(mems[0].workspace_user_id);
-  const allowed = isSuperAdmin(u) || roleForTenant(u, tenantId) === "client_admin";
-  if (!allowed) return c.json({ error: "forbidden" }, 403);
-  await db`update profiles set status = 'disabled', updated_at = now() where id = ${target}`;
+  const mems = await db`select workspace_user_id from client_members where member_user_id = ${target}`;
+  const tenantId = mems[0] ? String(mems[0].workspace_user_id) : "PLATFORM";
+  await db`update profiles set status = 'disabled', updated_at = now() where id = ${target} and is_platform_admin = false`;
   await db`delete from sessions where user_id = ${target}`;
-  await withAuditTenant(tenantId, "client", u.userId, async () => audit(tenantId, "profiles", target, "user.disabled", u.email, {}, ip));
+  await writeAudit(tenantId, "profiles", target, "user.disabled", g.u.email, {}, c.req.header("x-forwarded-for") ?? "local");
   return c.json({ ok: true });
+});
+adminApp.post("/api/admin/users/:userId/enable", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
+  const target = c.req.param("userId");
+  const db = sql();
+  await db`update profiles set status = 'active', updated_at = now() where id = ${target}`;
+  await writeAudit("PLATFORM", "profiles", target, "user.enabled", g.u.email, {}, c.req.header("x-forwarded-for") ?? "local");
+  return c.json({ ok: true });
+});
+adminApp.post("/api/admin/users/:userId/force-change", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
+  const target = c.req.param("userId");
+  const db = sql();
+  await db`update auth_credentials set must_change_pw = true, updated_at = now() where user_id = ${target}`;
+  await writeAudit("PLATFORM", "profiles", target, "user.force_change", g.u.email, {}, c.req.header("x-forwarded-for") ?? "local");
+  return c.json({ ok: true });
+});
+adminApp.post("/api/admin/users/:userId/revoke-sessions", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
+  const target = c.req.param("userId");
+  const db = sql();
+  await db`delete from sessions where user_id = ${target}`;
+  await writeAudit("PLATFORM", "profiles", target, "user.sessions.revoked", g.u.email, {}, c.req.header("x-forwarded-for") ?? "local");
+  return c.json({ ok: true });
+});
+adminApp.get("/api/admin/audit", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
+  const q = (c.req.query("q") ?? "").trim().toLowerCase();
+  const tenant = (c.req.query("tenant") ?? "").trim();
+  const event = (c.req.query("event") ?? "").trim();
+  const limit = Math.min(200, Math.max(1, Number(c.req.query("limit") ?? 50)));
+  const offset = Math.max(0, Number(c.req.query("offset") ?? 0));
+  const db = sql();
+  const rows = await db`select id, user_id, entity_type, entity_id, event_type, actor, metadata, ip, created_at
+    from audit_events
+    where (${tenant === ""} or user_id = ${tenant})
+      and (${event === ""} or event_type = ${event})
+      and (${q === ""} or lower(event_type) like ${"%" + q + "%"} or lower(coalesce(actor,'')) like ${"%" + q + "%"})
+    order by created_at desc limit ${limit} offset ${offset}`;
+  const total = one(await db`select count(*)::int as n from audit_events
+    where (${tenant === ""} or user_id = ${tenant}) and (${event === ""} or event_type = ${event})
+      and (${q === ""} or lower(event_type) like ${"%" + q + "%"} or lower(coalesce(actor,'')) like ${"%" + q + "%"})`);
+  return c.json({
+    events: rows.map((r) => ({
+      id: String(r.id),
+      tenantId: String(r.user_id),
+      entityType: String(r.entity_type),
+      entityId: String(r.entity_id),
+      eventType: String(r.event_type),
+      actor: r.actor ? String(r.actor) : null,
+      metadata: r.metadata ?? {},
+      ip: r.ip ? String(r.ip) : null,
+      createdAt: r.created_at
+    })),
+    total: Number(total?.n ?? 0)
+  });
+});
+adminApp.get("/api/admin/settings", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
+  return c.json(await getPlatformSettings());
+});
+adminApp.put("/api/admin/settings", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
+  const body = await c.req.json().catch(() => null);
+  if (!body) return c.json({ error: "invalid-body" }, 400);
+  if (body.announcement !== void 0) {
+    const a2 = body.announcement;
+    if (!["info", "warning", "critical"].includes(String(a2?.level))) return c.json({ error: "invalid-body" }, 400);
+    await savePlatformSetting("announcement", {
+      active: Boolean(a2?.active),
+      level: String(a2?.level),
+      message: String(a2?.message ?? "").slice(0, 500)
+    }, g.u.email);
+  }
+  if (body.maintenance !== void 0) {
+    const m2 = body.maintenance;
+    if (!["off", "read_only", "full"].includes(String(m2?.mode))) return c.json({ error: "invalid-body" }, 400);
+    await savePlatformSetting("maintenance", { mode: String(m2?.mode), message: String(m2?.message ?? "").slice(0, 500) }, g.u.email);
+  }
+  if (body.flags !== void 0 && body.flags && typeof body.flags === "object") {
+    await savePlatformSetting("flags", body.flags, g.u.email);
+  }
+  await writeAudit("PLATFORM", "platform_settings", "settings", "platform.settings.updated", g.u.email, {}, c.req.header("x-forwarded-for") ?? "local");
+  return c.json(await getPlatformSettings());
+});
+adminApp.get("/api/admin/sessions", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
+  const db = sql();
+  const rows = await db`select id, created_at, expires_at, ip, user_agent from sessions
+    where user_id = ${g.u.userId} and expires_at > now() order by created_at desc`;
+  return c.json({
+    sessions: rows.map((r) => ({
+      id: String(r.id),
+      createdAt: r.created_at,
+      expiresAt: r.expires_at,
+      ip: r.ip ? String(r.ip) : null,
+      userAgent: r.user_agent ? String(r.user_agent) : null
+    }))
+  });
+});
+adminApp.post("/api/admin/sessions/:id/revoke", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
+  const db = sql();
+  await db`delete from sessions where id = ${c.req.param("id")} and user_id = ${g.u.userId}`;
+  await writeAudit("PLATFORM", "sessions", c.req.param("id"), "admin.session.revoked", g.u.email, {}, c.req.header("x-forwarded-for") ?? "local");
+  return c.json({ ok: true });
+});
+adminApp.post("/api/admin/impersonate", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
+  const body = await c.req.json().catch(() => null);
+  const tenantId = (body?.tenantId ?? "").trim();
+  const mode = body?.mode === "write" ? "write" : "read";
+  if (!tenantId) return c.json({ error: "invalid-body" }, 400);
+  const db = sql();
+  const tenant = one(await db`select id from client_profiles where id = ${tenantId} and status = 'active'`);
+  if (!tenant) return c.json({ error: "not-found" }, 404);
+  const token = signImpersonation({ tenantId, mode, actor: g.u.email });
+  await writeAudit(tenantId, "client_profiles", tenantId, "impersonation.start", g.u.email, { mode }, c.req.header("x-forwarded-for") ?? "local");
+  return new Response(JSON.stringify({ ok: true, tenantId, mode }), {
+    headers: { "Content-Type": "application/json", "Set-Cookie": impersonationCookie(token) }
+  });
+});
+adminApp.post("/api/admin/impersonate/stop", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
+  await writeAudit("PLATFORM", "client_profiles", "impersonation", "impersonation.stop", g.u.email, {}, c.req.header("x-forwarded-for") ?? "local");
+  return new Response(JSON.stringify({ ok: true }), {
+    headers: { "Content-Type": "application/json", "Set-Cookie": clearImpersonationCookie() }
+  });
 });
 
 // server/entry.ts

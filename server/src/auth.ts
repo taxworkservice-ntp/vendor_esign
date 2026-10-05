@@ -68,6 +68,8 @@ export interface SessionUser {
   email: string
   mustChangePw: boolean
   status: string
+  /** Provider/operator account (controls the whole app, member of no client). */
+  isPlatformAdmin: boolean
   memberships: { tenantId: string; role: string }[]
 }
 
@@ -101,12 +103,12 @@ export async function sessionUser(
   if (!token) return null
   const db = sql()
   const rows = (await db`
-    select u.id, u.email, c.must_change_pw, u.status
+    select u.id, u.email, c.must_change_pw, u.status, u.is_platform_admin
     from sessions s
     join profiles u on u.id = s.user_id
     join auth_credentials c on c.user_id = u.id
     where s.token_hash = ${sha256hex(token)} and s.expires_at > now() and u.status = 'active'`) as unknown as
-    { id: string; email: string; must_change_pw: boolean; status: string }[]
+    { id: string; email: string; must_change_pw: boolean; status: string; is_platform_admin: boolean }[]
   const u = rows[0]
   if (!u) return null
   const mems = (await db`select workspace_user_id, role from client_members where member_user_id = ${u.id}`) as unknown as
@@ -116,6 +118,7 @@ export async function sessionUser(
     email: String(u.email),
     mustChangePw: Boolean(u.must_change_pw),
     status: String(u.status),
+    isPlatformAdmin: Boolean(u.is_platform_admin),
     memberships: mems.map((m) => ({ tenantId: String(m.workspace_user_id), role: String(m.role) })),
   }
 }

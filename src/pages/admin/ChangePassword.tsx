@@ -24,7 +24,7 @@ export function ChangePassword() {
     setBusy(true)
     try {
       if (!API) {
-        nav('/admin/clients')
+        nav('/admin')
         return
       }
       const r = await fetch(`${API}/api/change-password`, {
@@ -34,7 +34,7 @@ export function ChangePassword() {
         body: JSON.stringify({ oldPassword: oldPw, newPassword: newPw }),
       })
       if (!r.ok) throw new Error('เปลี่ยนรหัสไม่สำเร็จ — ตรวจสอบรหัสเดิม')
-      nav('/admin/clients')
+      nav('/admin')
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'เปลี่ยนรหัสไม่สำเร็จ')
     } finally {

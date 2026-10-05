@@ -23,6 +23,7 @@ import { useSettings } from '../hooks/useSettings'
 import { defaultSettings } from '../lib/settings'
 import { ConfirmDialog } from './ui/confirm-dialog'
 import { GlobalMonthBar } from './global-month-bar'
+import { SystemBanner } from './system-banner'
 import { cn } from '../lib/cn'
 
 interface NavItem {
@@ -53,14 +54,14 @@ function readCollapsed(): boolean {
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { email: clientEmail, logout: clientLogout, activeTenant } = useClientAuth()
-  const { email: adminEmail, isSuperAdmin, logout: adminLogout } = useAuth()
+  const { email: adminEmail, isPlatformAdmin, logout: adminLogout } = useAuth()
   const { data: settings } = useSettings()
   const brand = settings ?? defaultSettings(activeTenant)
   const [confirmLogout, setConfirmLogout] = useState<'client' | 'admin' | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(readCollapsed)
   const loc = useLocation()
-  const showAdmin = isSuperAdmin || !!adminEmail
+  const showAdmin = isPlatformAdmin
 
   useEffect(() => {
     document.title = `Taxwork · ${brand.clientCode}-R-${brand.beYear}`
@@ -123,19 +124,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <>
           {!collapsed && (
             <p className="px-3 pb-1 pt-4 text-label font-medium text-ink-400">
-              ผู้ดูแลระบบ
+              ผู้ให้บริการ
             </p>
           )}
           {collapsed && <div className="mx-2 my-2 border-t border-card-border/70" aria-hidden />}
           <NavLink
-            to="/admin/clients"
-            title={collapsed ? 'ผู้ดูแลระบบ' : undefined}
-            aria-label="ผู้ดูแลระบบ"
+            to="/admin"
+            end
+            title={collapsed ? 'คอนโซลผู้ให้บริการ' : undefined}
+            aria-label="คอนโซลผู้ให้บริการ"
             onClick={onNavigate}
             className={sideLink}
           >
             <ShieldCheck size={19} className="shrink-0" aria-hidden />
-            {!collapsed && <span className="truncate">ผู้ดูแลระบบ</span>}
+            {!collapsed && <span className="truncate">คอนโซลผู้ให้บริการ</span>}
           </NavLink>
         </>
       )}
@@ -313,6 +315,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
             )}
           </div>
         </header>
+
+        <SystemBanner />
 
         <GlobalMonthBar />
 

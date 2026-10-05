@@ -387,7 +387,7 @@ txnRoutes.post('/transactions', async (c) => {
         ${itemsSummary(items, note)}, ${note}, ${JSON.stringify(items)}::jsonb,
         ${gross}, ${eff.rate}, ${whtMode}, ${wht}, ${net},
         ${b!.transferDate ?? new Date().toISOString().slice(0, 10)}, ${b!.slipReference ?? ''}, 'draft',
-        ${taxId ? sha256hex(taxId) : null}, ${taxId.slice(-4) || null}, ${g!.u.email})
+        ${taxId ? sha256hex(taxId) : null}, ${taxId.slice(-4) || null}, ${g.u?.email ?? g.actor ?? 'system'})
       returning id`) as unknown as { id: string }[]
     return ins[0]
   })

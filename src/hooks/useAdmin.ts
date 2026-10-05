@@ -8,6 +8,7 @@ import {
   type AdminTenant,
   type AdminUser,
 } from '../lib/admin-mock'
+import type { AnnouncementLevel, MaintenanceMode, PlatformNotice } from './usePlatformNotice'
 
 const API = ((import.meta.env.VITE_ADMIN_API_BASE ?? '') || (import.meta.env.VITE_API_BASE ?? '')) as string
 const QK = ['admin', 'tenants'] as const
@@ -19,6 +20,85 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return j as T
 }
 
+// ── Types ────────────────────────────────────────────────────────────────────
+
+export interface AdminOverview {
+  tenants: { total: number; active: number; suspended: number }
+  users: { total: number; active: number }
+  counts: { transactions: number; receipts: number; wht: number; signings: number }
+  platform: PlatformNotice
+  recentTenants: { id: string; name: string; clientCode: string; status: string; createdAt: string }[]
+  recentAudit: { id: string; tenantId: string; entityType: string; eventType: string; actor: string | null; createdAt: string }[]
+}
+
+export interface AdminDirectoryUser {
+  id: string
+  email: string
+  status: 'active' | 'disabled'
+  mustChangePw: boolean
+  memberships: { tenantId: string; role: string; status: string }[]
+  createdAt: string
+}
+
+export interface AuditEvent {
+  id: string
+  tenantId: string
+  entityType: string
+  entityId: string
+  eventType: string
+  actor: string | null
+  metadata: unknown
+  ip: string | null
+  createdAt: string
+}
+
+export interface AdminSession {
+  id: string
+  createdAt: string
+  expiresAt: string
+  ip: string | null
+  userAgent: string | null
+}
+
+export interface PlatformSettingsAdmin {
+  announcement: { active: boolean; level: AnnouncementLevel; message: string }
+  maintenance: { mode: MaintenanceMode; message: string }
+  flags: Record<string, boolean>
+}
+
+const DEFAULT_SETTINGS: PlatformSettingsAdmin = {
+  announcement: { active: false, level: 'info', message: '' },
+  maintenance: { mode: 'off', message: '' },
+  flags: {},
+}
+
+// ── Overview ─────────────────────────────────────────────────────────────────
+export function useAdminOverview() {
+  return useQuery({
+    queryKey: [...QK, 'overview'],
+    queryFn: async (): Promise<AdminOverview> => {
+      if (API) return api<AdminOverview>('/api/admin/overview')
+      const tenants = loadTenants()
+      const users = Object.values(loadTenantUsers()).flat()
+      return {
+        tenants: {
+          total: tenants.length,
+          active: tenants.filter((t) => t.status === 'active').length,
+          suspended: tenants.filter((t) => t.status === 'suspended').length,
+        },
+        users: { total: users.length, active: users.filter((u) => u.status === 'active').length },
+        counts: { transactions: 0, receipts: 0, wht: 0, signings: 0 },
+        platform: { announcement: { active: false, level: 'info', message: '' }, maintenance: { mode: 'off', message: '' } },
+        recentTenants: tenants.slice(0, 5).map((t) => ({
+          id: t.id, name: t.displayName, clientCode: t.clientCode, status: t.status, createdAt: new Date().toISOString(),
+        })),
+        recentAudit: [],
+      }
+    },
+  })
+}
+
+// ── Tenants ──────────────────────────────────────────────────────────────────
 export function useAdminTenants(q = '', status = 'all') {
   return useQuery({
     queryKey: [...QK, q, status],
@@ -99,6 +179,19 @@ export function useUpdateTenant(id?: string) {
   })
 }
 
+export function useDeleteTenant() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (API) return api(`/api/admin/tenants/${id}`, { method: 'DELETE' })
+      saveTenants(loadTenants().filter((t) => t.id !== id))
+      return { ok: true }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: QK }),
+  })
+}
+
+// ── Tenant users ─────────────────────────────────────────────────────────────
 export function useTenantUsers(tenantId?: string) {
   return useQuery({
     queryKey: [...QK, tenantId, 'users'],
@@ -136,9 +229,33 @@ export function useCreateUser(tenantId?: string) {
   })
 }
 
+// ── All users directory ──────────────────────────────────────────────────────
+export function useAllAdminUsers(q = '') {
+  return useQuery({
+    queryKey: [...QK, 'users', q],
+    queryFn: async (): Promise<AdminDirectoryUser[]> => {
+      const list = API
+        ? (await api<{ users: AdminDirectoryUser[] }>('/api/admin/users')).users
+        : Object.values(loadTenantUsers()).flat().map((u) => ({
+            id: u.id, email: u.email, status: u.status as 'active' | 'disabled', mustChangePw: u.mustChangePw,
+            memberships: [], createdAt: new Date().toISOString(),
+          }))
+      const needle = q.trim().toLowerCase()
+      return needle
+        ? list.filter((u) => u.email.toLowerCase().includes(needle) || u.memberships.some((m) => m.tenantId.toLowerCase().includes(needle)))
+        : list
+    },
+  })
+}
+
+// ── User actions ─────────────────────────────────────────────────────────────
 export function useUserActions(tenantId?: string) {
   const qc = useQueryClient()
   const refresh = () => qc.invalidateQueries({ queryKey: QK })
+  const post = async (userId: string, action: string) => {
+    if (API) return api(`/api/admin/users/${userId}/${action}`, { method: 'POST' })
+    return { ok: true }
+  }
   return {
     async reset(userId: string): Promise<string> {
       if (API) {
@@ -146,20 +263,109 @@ export function useUserActions(tenantId?: string) {
         refresh()
         return j.tempPassword
       }
-      const pw = mockTempPassword()
       refresh()
-      return pw
+      return mockTempPassword()
     },
     async disable(userId: string) {
-      if (API) {
-        await api(`/api/admin/users/${userId}/disable`, { method: 'POST' })
-        refresh()
-        return
+      await post(userId, 'disable')
+      if (!API) {
+        const all = loadTenantUsers()
+        saveTenantUsers({ ...all, [tenantId ?? '']: (all[tenantId ?? ''] ?? []).map((u) => (u.id === userId ? { ...u, status: 'disabled' as const } : u)) })
       }
-      const all = loadTenantUsers()
-      const list = (all[tenantId ?? ''] ?? []).map((u) => (u.id === userId ? { ...u, status: 'disabled' as const } : u))
-      saveTenantUsers({ ...all, [tenantId ?? '']: list })
+      refresh()
+    },
+    async enable(userId: string) {
+      await post(userId, 'enable')
+      refresh()
+    },
+    async forceChange(userId: string) {
+      await post(userId, 'force-change')
+      refresh()
+    },
+    async revokeSessions(userId: string) {
+      await post(userId, 'revoke-sessions')
+      refresh()
+    },
+    async update(userId: string, patch: { role?: string; tenantId?: string }) {
+      if (API) {
+        await api(`/api/admin/users/${userId}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+        })
+      }
       refresh()
     },
   }
+}
+
+// ── Audit log ────────────────────────────────────────────────────────────────
+export function useAuditLog(filters: { q?: string; tenant?: string; event?: string; limit?: number; offset?: number }) {
+  const { q = '', tenant = '', event = '', limit = 50, offset = 0 } = filters
+  return useQuery({
+    queryKey: [...QK, 'audit', q, tenant, event, limit, offset],
+    queryFn: async (): Promise<{ events: AuditEvent[]; total: number }> => {
+      if (!API) return { events: [], total: 0 }
+      const p = new URLSearchParams({ q, tenant, event, limit: String(limit), offset: String(offset) })
+      return api<{ events: AuditEvent[]; total: number }>(`/api/admin/audit?${p.toString()}`)
+    },
+  })
+}
+
+// ── Platform settings ────────────────────────────────────────────────────────
+export function usePlatformSettingsAdmin() {
+  return useQuery({
+    queryKey: [...QK, 'settings'],
+    queryFn: async (): Promise<PlatformSettingsAdmin> => {
+      if (!API) return DEFAULT_SETTINGS
+      return api<PlatformSettingsAdmin>('/api/admin/settings')
+    },
+  })
+}
+
+export function useSavePlatformSettings() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (patch: Partial<PlatformSettingsAdmin>): Promise<PlatformSettingsAdmin> => {
+      if (!API) return { ...DEFAULT_SETTINGS, ...patch }
+      return api<PlatformSettingsAdmin>('/api/admin/settings', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+      })
+    },
+    onSuccess: (data) => {
+      qc.setQueryData([...QK, 'settings'], data)
+      qc.invalidateQueries({ queryKey: [...QK, 'overview'] })
+    },
+  })
+}
+
+// ── Operator sessions ────────────────────────────────────────────────────────
+export function useAdminSessions() {
+  return useQuery({
+    queryKey: [...QK, 'sessions'],
+    queryFn: async (): Promise<AdminSession[]> => {
+      if (!API) return []
+      return (await api<{ sessions: AdminSession[] }>('/api/admin/sessions')).sessions
+    },
+  })
+}
+
+export function useRevokeSession() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!API) return { ok: true }
+      return api(`/api/admin/sessions/${id}/revoke`, { method: 'POST' })
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...QK, 'sessions'] }),
+  })
+}
+
+// ── Impersonation ────────────────────────────────────────────────────────────
+export function useImpersonate() {
+  return useMutation({
+    mutationFn: async ({ tenantId, mode }: { tenantId: string; mode: 'read' | 'write' }) => {
+      return api<{ ok: boolean; tenantId: string; mode: string }>('/api/admin/impersonate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tenantId, mode }),
+      })
+    },
+  })
 }

@@ -21,7 +21,7 @@ export function Login() {
     setBusy(true)
     try {
       const j = await login(email.trim(), password)
-      nav(j.mustChangePw ? '/change-password' : '/admin/clients')
+      nav(j.mustChangePw ? '/admin/change-password' : '/admin')
     } catch {
       setErr('อีเมลหรือรหัสผ่านไม่ถูกต้อง')
     } finally {
@@ -31,7 +31,7 @@ export function Login() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="เข้าสู่ระบบ" sub="สำหรับผู้ดูแลระบบ · รหัสผ่านออกโดยผู้ดูแลระบบ — การเข้าสู่ระบบครั้งแรกจะบังคับให้เปลี่ยนรหัสผ่าน" />
+      <PageHeader title="คอนโซลผู้ให้บริการ" sub="สำหรับผู้ให้บริการระบบ (Taxwork) เท่านั้น · รหัสผ่านออกโดยผู้ให้บริการ — การเข้าสู่ระบบครั้งแรกจะบังคับให้เปลี่ยนรหัสผ่าน" />
       <Card>
         <CardBody className="space-y-4">
           <div><Label>อีเมล</Label><Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@client.co.th" /></div>

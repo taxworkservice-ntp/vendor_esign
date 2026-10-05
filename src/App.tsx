@@ -2,6 +2,7 @@ import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReceiptText } from 'lucide-react'
 import { Layout } from './components/layout'
+import { AdminLayout } from './components/admin/admin-layout'
 import { GlobalMonthProvider } from './hooks/useGlobalMonth'
 import { ErrorBoundary } from './components/error-boundary'
 import { Spinner } from './components/ui/spinner'
@@ -31,6 +32,11 @@ import { ClientNew } from './pages/admin/ClientNew'
 import { ClientDetail } from './pages/admin/ClientDetail'
 import { Login } from './pages/admin/Login'
 import { ChangePassword } from './pages/admin/ChangePassword'
+import { Dashboard as AdminDashboard } from './pages/admin/Dashboard'
+import { Users as AdminUsers } from './pages/admin/Users'
+import { AuditLog as AdminAuditLog } from './pages/admin/AuditLog'
+import { Settings as AdminSettings } from './pages/admin/Settings'
+import { Account as AdminAccount } from './pages/admin/Account'
 
 const qc = new QueryClient()
 
@@ -64,9 +70,9 @@ function RequireClient({ children }: { children: React.ReactNode }) {
 }
 
 function RequireAdmin({ children }: { children: React.ReactNode }) {
-  const { ready, email, mustChangePw } = useAuth()
+  const { ready, email, mustChangePw, isPlatformAdmin } = useAuth()
   if (!ready) return <Loading />
-  if (!email) return <Navigate to="/admin/login" replace />
+  if (!email || !isPlatformAdmin) return <Navigate to="/admin/login" replace />
   if (mustChangePw) return <Navigate to="/admin/change-password" replace />
   return <>{children}</>
 }
@@ -89,6 +95,29 @@ export default function App() {
           <Route path="/admin/login" element={<AuthShell><Login /></AuthShell>} />
           <Route path="/admin/change-password" element={<AuthShell><ChangePassword /></AuthShell>} />
 
+          {/* Provider / operator workspace — its own shell, not the client Layout */}
+          <Route
+            path="/admin/*"
+            element={
+              <RequireAdmin>
+                <AdminLayout>
+                  <Routes>
+                    <Route path="/" element={<AdminDashboard />} />
+                    <Route path="/clients" element={<ClientsList />} />
+                    <Route path="/clients/new" element={<ClientNew />} />
+                    <Route path="/clients/:id" element={<ClientDetail />} />
+                    <Route path="/users" element={<AdminUsers />} />
+                    <Route path="/audit" element={<AdminAuditLog />} />
+                    <Route path="/settings" element={<AdminSettings />} />
+                    <Route path="/account" element={<AdminAccount />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </AdminLayout>
+              </RequireAdmin>
+            }
+          />
+
+          {/* Client portal */}
           <Route
             path="/*"
             element={
@@ -109,10 +138,6 @@ export default function App() {
                   <Route path="/settings" element={<RequireClient><Settings /></RequireClient>} />
                   <Route path="/metrics" element={<RequireClient><MetricsPage /></RequireClient>} />
 
-                  <Route path="/admin/clients" element={<RequireAdmin><ClientsList /></RequireAdmin>} />
-                  <Route path="/admin/clients/new" element={<RequireAdmin><ClientNew /></RequireAdmin>} />
-                  <Route path="/admin/clients/:id" element={<RequireAdmin><ClientDetail /></RequireAdmin>} />
-
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Layout>
@@ -122,7 +147,7 @@ export default function App() {
         </Routes>
       </BrowserRouter>
         </ToastProvider>
-    </QueryClientProvider>
+      </QueryClientProvider>
     </ErrorBoundary>
   )
 }
