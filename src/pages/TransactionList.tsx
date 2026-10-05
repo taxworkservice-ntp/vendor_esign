@@ -26,6 +26,7 @@ import {
   type TransactionFilters,
 } from '../lib/txn-filters'
 import { parseListQuery, queryFromFilters, queryToParams } from '../lib/txn-list-query'
+import { pickTxnPrefs, readTxnPrefs, writeTxnPrefs } from '../lib/txn-prefs'
 import { attentionFor } from '../lib/attention'
 import { downloadCsv, txnsToCsv } from '../lib/csv'
 import { downloadName } from '../lib/download-name'
@@ -80,8 +81,10 @@ export function TransactionList() {
   const [url] = useState(() => parseListQuery(params))
 
   const [filters, setFilters] = useState<TransactionFilters>(() => {
+    // A URL with explicit params (a shared link, or App.tsx re-mounting with the
+    // last query) wins; otherwise fall back to the view this workspace last used.
     if (params.toString()) return filtersFromParams(params)
-    return { ...defaultFilters(), month: globalMonth }
+    return { ...defaultFilters(), ...readTxnPrefs(activeTenant), month: globalMonth }
   })
   const [page, setPage] = useState(() => Math.floor(url.offset / Math.max(1, url.limit)))
   const [pageSize, setPageSize] = useState(() => url.limit)
@@ -161,6 +164,13 @@ export function TransactionList() {
   useEffect(() => {
     setSelected(new Set())
   }, [filterSignature])
+
+  // Remember the list choices per workspace (status, sort, panel filters) so the
+  // bare sidebar link returns the user to the view they left, not the default.
+  const prefsSig = JSON.stringify(pickTxnPrefs(filters))
+  useEffect(() => {
+    writeTxnPrefs(activeTenant, filters)
+  }, [activeTenant, prefsSig]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // The server clamps what it returns; mirror that so the UI never sits on a
   // page that does not exist (e.g. after deleting the last row on page 3).
