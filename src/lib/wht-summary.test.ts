@@ -175,13 +175,24 @@ describe('wht sort keys', () => {
   it('toggles direction within a field and switches field on a new column', () => {
     expect(nextWhtSort('date-desc', 'date')).toBe('date-asc')
     expect(nextWhtSort('date-asc', 'date')).toBe('date-desc')
-    // A new column starts at its most useful direction.
+    // A new column starts at its most useful direction: text ascending, figures high.
     expect(nextWhtSort('date-desc', 'amount')).toBe('amount-desc')
-    expect(nextWhtSort('date-desc', 'vendor')).toBe('amount-desc')
+    expect(nextWhtSort('date-desc', 'vendor')).toBe('vendor-asc')
+    expect(nextWhtSort('date-desc', 'cert')).toBe('cert-asc')
+    expect(nextWhtSort('date-desc', 'form')).toBe('form-asc')
+    expect(nextWhtSort('date-desc', 'status')).toBe('status-asc')
   })
 
   it('produces only keys the sorter knows', () => {
-    const keys: WhtSortKey[] = ['date-desc', 'date-asc', 'vendor-asc', 'vendor-desc', 'amount-desc', 'amount-asc', 'wht-desc', 'wht-asc']
+    const keys: WhtSortKey[] = [
+      'date-desc', 'date-asc',
+      'vendor-asc', 'vendor-desc',
+      'cert-asc', 'cert-desc',
+      'form-asc', 'form-desc',
+      'amount-desc', 'amount-asc',
+      'wht-desc', 'wht-asc',
+      'status-asc', 'status-desc',
+    ]
     for (const k of keys) {
       expect(whtSortField(k)).toBeTruthy()
       expect(nextWhtSort(k, whtSortField(k))).toBeTruthy()

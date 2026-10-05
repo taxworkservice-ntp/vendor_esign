@@ -395,18 +395,12 @@ export function WhtList() {
                          />
                        </th>
                        {th('date', 'วันที่ออก')}
-                       <th scope="col" className={thBase}>
-                         เลขที่หนังสือรับรอง
-                       </th>
+                       {th('cert', 'เลขที่หนังสือรับรอง')}
                        {th('vendor', 'ผู้ถูกหักภาษี')}
-                       <th scope="col" className={thBase}>
-                         แบบยื่น
-                       </th>
+                       {th('form', 'แบบยื่น')}
                        {th('amount', 'ยอดเงิน (ฐานภาษี)', 'right')}
                        {th('wht', 'ภาษีที่หักไว้', 'right')}
-                       <th scope="col" className={thBase}>
-                         สถานะ
-                       </th>
+                       {th('status', 'สถานะ')}
                        <th scope="col" className={cn(thBase, 'w-24 text-right')}>
                          พิมพ์
                        </th>

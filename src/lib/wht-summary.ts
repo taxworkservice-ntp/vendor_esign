@@ -78,9 +78,16 @@ export function summarizeWht(records: WhtRecord[]): WhtSummary {
 }
 
 export type WhtStatusFilter = 'all' | 'active' | 'done'
-export type WhtSortKey = 'date-desc' | 'date-asc' | 'vendor-asc' | 'vendor-desc' | 'amount-desc' | 'amount-asc' | 'wht-desc' | 'wht-asc'
+export type WhtSortKey =
+  | 'date-desc' | 'date-asc'
+  | 'vendor-asc' | 'vendor-desc'
+  | 'cert-asc' | 'cert-desc'
+  | 'form-asc' | 'form-desc'
+  | 'amount-desc' | 'amount-asc'
+  | 'wht-desc' | 'wht-asc'
+  | 'status-asc' | 'status-desc'
 
-export const WHT_SORT_FIELDS = ['date', 'vendor', 'amount', 'wht'] as const
+export const WHT_SORT_FIELDS = ['date', 'vendor', 'cert', 'form', 'amount', 'wht', 'status'] as const
 export type WhtSortField = (typeof WHT_SORT_FIELDS)[number]
 
 const SORTERS: Record<WhtSortKey, (a: WhtRecord & { vendorName?: string }, b: WhtRecord & { vendorName?: string }) => number> = {
@@ -88,10 +95,16 @@ const SORTERS: Record<WhtSortKey, (a: WhtRecord & { vendorName?: string }, b: Wh
   'date-asc': (a, b) => cmp(a.issueDate, b.issueDate) || cmp(a.id, b.id),
   'vendor-asc': (a, b) => cmp(a.vendorName ?? '', b.vendorName ?? '') || cmp(a.issueDate, b.issueDate),
   'vendor-desc': (a, b) => cmp(b.vendorName ?? '', a.vendorName ?? '') || cmp(a.issueDate, b.issueDate),
+  'cert-asc': (a, b) => cmp(a.certificateNo ?? '', b.certificateNo ?? '') || cmp(a.id, b.id),
+  'cert-desc': (a, b) => cmp(b.certificateNo ?? '', a.certificateNo ?? '') || cmp(a.id, b.id),
+  'form-asc': (a, b) => cmp(a.formType, b.formType) || cmp(a.issueDate, b.issueDate),
+  'form-desc': (a, b) => cmp(b.formType, a.formType) || cmp(a.issueDate, b.issueDate),
   'amount-desc': (a, b) => b.amount - a.amount || cmp(a.id, b.id),
   'amount-asc': (a, b) => a.amount - b.amount || cmp(a.id, b.id),
   'wht-desc': (a, b) => b.whtAmount - a.whtAmount || cmp(a.id, b.id),
   'wht-asc': (a, b) => a.whtAmount - b.whtAmount || cmp(a.id, b.id),
+  'status-asc': (a, b) => cmp(a.status, b.status) || cmp(a.issueDate, b.issueDate),
+  'status-desc': (a, b) => cmp(b.status, a.status) || cmp(a.issueDate, b.issueDate),
 }
 
 function cmp(a: string, b: string): number {
@@ -111,8 +124,11 @@ export function asWhtSort(v: string | null | undefined): WhtSortKey {
   return v && v in SORTERS ? (v as WhtSortKey) : 'date-desc'
 }
 
-/** Which way a click on this column should sort. Amounts start high, dates new. */
+/** Which way a click on this column should sort. Text ascending, figures/dates high. */
+const ASC_DEFAULT: readonly WhtSortField[] = ['vendor', 'cert', 'form', 'status']
 export function nextWhtSort(sort: WhtSortKey, field: WhtSortField): WhtSortKey {
-  if (whtSortField(sort) !== field) return field === 'date' ? 'date-desc' : 'amount-desc'
+  if (whtSortField(sort) !== field) {
+    return `${field}-${ASC_DEFAULT.includes(field) ? 'asc' : 'desc'}` as WhtSortKey
+  }
   return sort.endsWith('-asc') ? (`${field}-desc` as WhtSortKey) : (`${field}-asc` as WhtSortKey)
 }

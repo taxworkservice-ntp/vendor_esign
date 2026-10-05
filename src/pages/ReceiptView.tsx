@@ -72,7 +72,11 @@ export function ReceiptView() {
   }
   const sig = signatureState(t, auth?.signaturePng, { loading: authLoading })
   const issued = t.status === 'signed' || t.status === 'issued'
-  const number = t.receiptNumber ?? (issued ? mockReceiptNumber(t.id, t.vendor.vendorNo ?? 0) : 'ยังไม่ออกเลข')
+  // A receipt number exists only once the receipt is issued. Never fabricate one
+  // for a merely-signed row — it would disagree with the number the client gets.
+  // The mock fallback stays for seeded mock rows only (no server).
+  const number =
+    t.receiptNumber ?? (t.status === 'issued' && !hasServer ? mockReceiptNumber(t.id, t.vendor.vendorNo ?? 0) : 'ยังไม่ออกเลข')
   const isVoid = t.status === 'void'
   const client = clientFor(t.tenantId)
   const vendorName = auth?.vendorName ?? t.vendor.name
@@ -239,7 +243,7 @@ export function ReceiptView() {
             </div>
             {items.map((it, i) => (
               <div key={i} className="flex items-baseline gap-2 border-b border-card-border py-1.5 last:border-0">
-                <span className="w-6 shrink-0 text-right font-mono text-label text-ink-400">{i + 1}</span>
+                <span className="w-6 shrink-0 text-left font-mono text-label text-ink-400">{i + 1}</span>
                 <span className="min-w-0 flex-1 leading-snug">{it.description}</span>
                 <span className="w-14 shrink-0 text-right tabular-nums">{it.quantity ?? 1}</span>
                 <span className="w-16 shrink-0 text-right text-ink-600">{it.unit || 'รายการ'}</span>

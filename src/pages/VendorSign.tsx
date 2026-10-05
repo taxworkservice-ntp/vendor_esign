@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { CheckCircle2, Eraser, Lock, ReceiptText, ShieldAlert } from 'lucide-react'
+import { CheckCircle2, Download, Eraser, Lock, ReceiptText, ShieldAlert } from 'lucide-react'
 import { GATE_MAX_TRIES, gateRemaining, isGateUnlocked, tryGateUnlock, useVendorActions, useVendorTxn } from '../hooks/useVendor'
+import { saveBlob } from '../lib/api-client'
 import { maskTaxId } from '../lib/taxid'
 import { loadSettings } from '../lib/settings'
 import { fmtTHB, fmtDateTH } from '../lib/format'
@@ -58,6 +59,8 @@ export function VendorSign() {
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [authRef, setAuthRef] = useState('')
+  // The issued receipt returned by the sign call (number + downloadable PDF).
+  const [receipt, setReceipt] = useState<{ number: string; verificationCode: string; pdfBase64?: string } | null>(null)
   const [tid, setTid] = useState('')
   const [consent, setConsent] = useState(false)
   const [drew, setDrew] = useState(false)
@@ -99,6 +102,12 @@ export function VendorSign() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t?.id, t?.status])
 
+  const downloadReceipt = () => {
+    if (!receipt?.pdfBase64 || !receipt.number) return
+    const bytes = Uint8Array.from(atob(receipt.pdfBase64), (c) => c.charCodeAt(0))
+    saveBlob(new Blob([bytes], { type: 'application/pdf' }), `${receipt.number}.pdf`)
+  }
+
   if (isLoading) return <StateCard title="กำลังโหลด…" body="โปรดรอสักครู่" />
   if (t?.status === 'cancelled')
     return <StateCard title="ลิงก์ถูกเพิกถอนแล้ว" body="ลูกค้าผู้จ่ายได้เพิกถอนลิงก์นี้ โปรดติดต่อลูกค้าผู้จ่ายเพื่อขอลิงก์ใหม่" />
@@ -108,22 +117,40 @@ export function VendorSign() {
   // afterwards — keep a snapshot id so the success state still renders.
   if (done || t?.status === 'signed' || t?.status === 'issued') {
     const receiptId = t?.id ?? signedId
+    const number = receipt?.number ?? t?.receiptNumber
     return (
       <StateCard
-        title="ลงนามเรียบร้อยแล้ว"
-        body="ขอบคุณ ระบบได้บันทึกการรับเงินและการมอบอำนาจออกใบเสร็จสำหรับธุรกรรมนี้แล้ว ลูกค้าผู้จ่ายจะออกใบเสร็จรับเงินให้ต่อไป"
+        title="ลงนามและออกใบเสร็จเรียบร้อยแล้ว"
+        body="ขอบคุณ ระบบได้บันทึกการรับเงิน มอบอำนาจ และออกใบเสร็จรับเงินสำหรับธุรกรรมนี้แล้ว — ท่านสามารถดาวน์โหลดใบเสร็จได้ทันที"
         extra={
           <div className="mt-5 space-y-3">
+            {number && (
+              <p className="text-body text-ink-500">
+                เลขที่ใบเสร็จ: <span className="font-mono font-semibold text-ink-900">{number}</span>
+              </p>
+            )}
+            {receipt?.verificationCode && (
+              <p className="text-body text-ink-500">
+                รหัสตรวจสอบ: <span className="font-mono font-semibold text-ink-900">{receipt.verificationCode}</span>
+              </p>
+            )}
             {authRef && (
               <p className="text-body text-ink-500">
                 เลขอ้างอิงการลงนาม: <span className="font-mono font-semibold text-ink-900">{authRef}</span>
               </p>
             )}
-            {receiptId && (
-              <Link to={`/v/receipt/${receiptId}`}>
-                <Button>ดูสำเนาใบเสร็จ</Button>
-              </Link>
-            )}
+            <div className="flex flex-wrap justify-center gap-2">
+              {receipt?.pdfBase64 && (
+                <Button onClick={downloadReceipt}>
+                  <Download size={15} aria-hidden /> ดาวน์โหลดใบเสร็จ (PDF)
+                </Button>
+              )}
+              {receiptId && (
+                <Link to={`/v/receipt/${receiptId}`}>
+                  <Button variant="secondary">ดูสำเนาใบเสร็จ</Button>
+                </Link>
+              )}
+            </div>
           </div>
         }
       />
@@ -243,6 +270,7 @@ export function VendorSign() {
         return
       }
       if (res.authRef) setAuthRef(res.authRef)
+      if (res.number) setReceipt({ number: res.number, verificationCode: res.verificationCode ?? '', pdfBase64: res.pdfBase64 })
       // Allow this browser to open the receipt copy right after signing (the
       // single-use invite token is consumed, so a URL flag is the only handle).
       try {

@@ -31,7 +31,7 @@ function mockSource(): VendorMemorySource {
 function httpSource(base: string): VendorMemorySource {
   return {
     async get(vendorId) {
-      const r = await fetch(`${base}/api/vendors/${encodeURIComponent(vendorId)}/memory`, { credentials: 'include' })
+      const r = await fetch(`${base}/api/client/vendors/${encodeURIComponent(vendorId)}/memory`, { credentials: 'include' })
       const j = (await r.json().catch(() => null)) as (VendorMemory & { error?: string }) | null
       if (!r.ok) throw new Error(j?.error ?? 'request-failed')
       return j as VendorMemory

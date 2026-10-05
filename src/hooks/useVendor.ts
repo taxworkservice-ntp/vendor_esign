@@ -4,6 +4,8 @@ import { loadTxns, saveTxns } from '../lib/mock'
 import { normalizeLineItem } from '../lib/line-items'
 import { normalizeTaxId, taxIdHash } from '../lib/taxid'
 import { putSignature } from '../lib/sig-store'
+import { nextReceiptNumber } from '../lib/receipt-number'
+import { currentBeYear } from '../lib/settings'
 import { hasServer } from '../lib/api-client'
 
 export interface VendorCorrection {
@@ -248,7 +250,19 @@ export function useVendorActions() {
       )
       refresh()
     },
-    async submit(id: string, auth: VendorAuth, token?: string): Promise<{ ok: boolean; error?: string; authRef?: string }> {
+    async submit(
+      id: string,
+      auth: VendorAuth,
+      token?: string,
+    ): Promise<{
+      ok: boolean
+      error?: string
+      authRef?: string
+      number?: string
+      verificationCode?: string
+      pdfSha256?: string
+      pdfBase64?: string
+    }> {
       if (hasServer) {
         if (!token) return { ok: false, error: 'invalid-link' }
         const r = await fetch(`${API}/api/vendor/${encodeURIComponent(token)}/sign`, {
@@ -265,9 +279,25 @@ export function useVendorActions() {
             consentVersion: 'v1',
           }),
         })
-        const j = (await r.json().catch(() => null)) as { error?: string; authRef?: string } | null
+        const j = (await r.json().catch(() => null)) as {
+          error?: string
+          authRef?: string
+          number?: string
+          verificationCode?: string
+          pdfSha256?: string
+          pdfBase64?: string
+        } | null
         if (!r.ok) return { ok: false, error: j?.error ?? 'sign-failed' }
-        return { ok: true, authRef: j?.authRef }
+        // Issuance runs at signing: the response carries the real receipt number
+        // and the PDF the vendor can download immediately.
+        return {
+          ok: true,
+          authRef: j?.authRef,
+          number: j?.number,
+          verificationCode: j?.verificationCode,
+          pdfSha256: j?.pdfSha256,
+          pdfBase64: j?.pdfBase64,
+        }
       }
 
       // Mock mode: local store (kept for `npm run dev` without an API).
@@ -275,11 +305,10 @@ export function useVendorActions() {
       // flip on an IndexedDB write would only add latency to the vendor.
       void putSignature(id, auth.signaturePng)
       writeAuth({ ...readAuth(), [id]: auth })
-      touch(id, (t) => {
-        // The receipt number is assigned at ISSUANCE, not here — the statutory
-        // series must not consume a number for an authorization that may never
-        // be issued (that would create gaps). Mirrors the server.
-        // Diff against client records — reported back on the detail page.
+      let number: string | undefined
+      touch(id, (t, all) => {
+        // Mirror the server: the receipt is issued at signing, so a number is
+        // assigned here (the mock has no PDF to hand back).
         const corrections: VendorCorrection[] = []
         if (auth.vendorPrefix !== (t.vendor.prefix ?? ''))
           corrections.push({ field: 'prefix', from: t.vendor.prefix ?? '', to: auth.vendorPrefix })
@@ -289,13 +318,25 @@ export function useVendorActions() {
           corrections.push({ field: 'address', from: t.vendor.address, to: auth.vendorAddress })
         const stored = readAuth()[id]
         if (stored) writeAuth({ ...readAuth(), [id]: { ...stored, corrections } })
+        number =
+          t.receiptNumber ??
+          nextReceiptNumber(
+            t.vendor.vendorNo ?? 0,
+            currentBeYear(),
+            all
+              .filter((x) => x.tenantId === t.tenantId && x.id !== id)
+              .map((x) => x.receiptNumber)
+              .filter((n): n is string => !!n),
+          )
         return {
           ...t,
-          status: 'signed',
+          status: 'issued',
+          receiptNumber: number,
           inviteToken: undefined, // single-use: consumed on signing
           timeline: [
             ...t.timeline,
             { at: auth.signedAt, label: 'ผู้ขายลงนามรับเงินและมอบอำนาจ', detail: 'ยืนยันด้วยลายเซ็น (การยืนยันผ่าน LINE จะเปิดใช้งานในภายหลัง)' },
+            { at: auth.signedAt, label: 'ออกใบเสร็จ', detail: number },
             ...(corrections.length
               ? [{
                   at: auth.signedAt,
@@ -307,7 +348,7 @@ export function useVendorActions() {
         }
       })
       refresh()
-      return { ok: true }
+      return { ok: true, number }
     },
   }
 }

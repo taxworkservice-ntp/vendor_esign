@@ -5,6 +5,7 @@ import { impersonationFromCookie, type ImpersonationMode } from './impersonation
 import { decryptId, encryptId } from './crypto'
 import type { SessionUser } from './auth'
 import { isVendorPrefix, prefixRequired } from '../../src/lib/vendor-name'
+import { getVendorMemory } from './vendor-memory'
 
 // ── Client data API (vendors + items) ─────────────────────────────────────
 // Session-guarded, workspace-scoped, RLS via withTenant. Mirrors the client
@@ -198,6 +199,18 @@ dataRoutes.get('/vendors/:id/tax-id', async (c) => {
     }
   }
   return c.json({ taxId })
+})
+
+// Remembered defaults for a vendor, derived from this tenant's history — used
+// to prefill a new transaction once the vendor is chosen.
+dataRoutes.get('/vendors/:id/memory', async (c) => {
+  const g = await guard(c)
+  if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  try {
+    return c.json(await getVendorMemory(g.ws, c.req.param('id')))
+  } catch {
+    return c.json({ error: 'unavailable' }, 503)
+  }
 })
 
 dataRoutes.patch('/vendors/:id', async (c) => {

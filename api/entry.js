@@ -62337,7 +62337,7 @@ var Hono2 = class extends Hono {
 };
 
 // server/src/api.ts
-import { randomBytes as randomBytes4, timingSafeEqual as timingSafeEqual3 } from "node:crypto";
+import { randomBytes as randomBytes5, timingSafeEqual as timingSafeEqual3 } from "node:crypto";
 
 // node_modules/@neondatabase/serverless/index.mjs
 var So = Object.create;
@@ -67597,56 +67597,6 @@ async function withTenant(tenantId, role, fn, actorId) {
   return fn();
 }
 
-// src/lib/thai-words.ts
-var DIGITS = ["\u0E28\u0E39\u0E19\u0E22\u0E4C", "\u0E2B\u0E19\u0E36\u0E48\u0E07", "\u0E2A\u0E2D\u0E07", "\u0E2A\u0E32\u0E21", "\u0E2A\u0E35\u0E48", "\u0E2B\u0E49\u0E32", "\u0E2B\u0E01", "\u0E40\u0E08\u0E47\u0E14", "\u0E41\u0E1B\u0E14", "\u0E40\u0E01\u0E49\u0E32"];
-function underMillion(n) {
-  if (n === 0) return "";
-  let out = "";
-  const parts = [
-    [1e5, "\u0E41\u0E2A\u0E19"],
-    [1e4, "\u0E2B\u0E21\u0E37\u0E48\u0E19"],
-    [1e3, "\u0E1E\u0E31\u0E19"],
-    [100, "\u0E23\u0E49\u0E2D\u0E22"]
-  ];
-  for (const [v2, w] of parts) {
-    const d2 = Math.floor(n / v2);
-    if (d2 > 0) {
-      out += DIGITS[d2] + w;
-      n %= v2;
-    }
-  }
-  const tens = Math.floor(n / 10);
-  const ones = n % 10;
-  if (tens > 0) {
-    if (tens === 1) out += "\u0E2A\u0E34\u0E1A";
-    else if (tens === 2) out += "\u0E22\u0E35\u0E48\u0E2A\u0E34\u0E1A";
-    else out += DIGITS[tens] + "\u0E2A\u0E34\u0E1A";
-    if (ones === 1) out += "\u0E40\u0E2D\u0E47\u0E14";
-    else if (ones > 0) out += DIGITS[ones];
-  } else if (ones > 0) {
-    out += DIGITS[ones];
-  }
-  return out;
-}
-function integerToThaiWords(n) {
-  if (!Number.isSafeInteger(n) || n < 0) throw new Error("integerToThaiWords: non-negative safe integer required");
-  if (n === 0) return "\u0E28\u0E39\u0E19\u0E22\u0E4C";
-  if (n < 1e6) return underMillion(n);
-  const high = Math.floor(n / 1e6);
-  const low = n % 1e6;
-  return integerToThaiWords(high) + "\u0E25\u0E49\u0E32\u0E19" + (low > 0 ? underMillion(low) : "");
-}
-function amountToThaiWords(amount) {
-  if (!Number.isFinite(amount) || amount < 0) throw new Error("amountToThaiWords: non-negative finite amount required");
-  const total = Math.round(amount * 100);
-  const baht = Math.floor(total / 100);
-  const satang = total % 100;
-  if (baht === 0 && satang === 0) return "\u0E28\u0E39\u0E19\u0E22\u0E4C\u0E1A\u0E32\u0E17\u0E16\u0E49\u0E27\u0E19";
-  if (baht === 0) return integerToThaiWords(satang) + "\u0E2A\u0E15\u0E32\u0E07\u0E04\u0E4C";
-  if (satang === 0) return integerToThaiWords(baht) + "\u0E1A\u0E32\u0E17\u0E16\u0E49\u0E27\u0E19";
-  return integerToThaiWords(baht) + "\u0E1A\u0E32\u0E17" + integerToThaiWords(satang) + "\u0E2A\u0E15\u0E32\u0E07\u0E04\u0E4C";
-}
-
 // src/lib/vendor-name.ts
 var VENDOR_PREFIXES = ["\u0E19\u0E32\u0E22", "\u0E19\u0E32\u0E07", "\u0E19\u0E32\u0E07\u0E2A\u0E32\u0E27"];
 function isVendorPrefix(v2) {
@@ -67664,91 +67614,6 @@ function vendorDisplayName(prefix, name) {
   const p2 = (prefix ?? "").trim();
   const n = (name ?? "").trim();
   return p2 ? `${p2} ${n}` : n;
-}
-
-// src/lib/settings-types.ts
-var DEFAULT_WHT_RATES = [
-  { value: 3, label: "\u0E04\u0E48\u0E32\u0E08\u0E49\u0E32\u0E07\u0E17\u0E33\u0E02\u0E2D\u0E07", paymentType: "\u0E04\u0E48\u0E32\u0E08\u0E49\u0E32\u0E07\u0E17\u0E33\u0E02\u0E2D\u0E07" },
-  { value: 3, label: "\u0E04\u0E48\u0E32\u0E27\u0E34\u0E0A\u0E32\u0E0A\u0E35\u0E1E\u0E2D\u0E34\u0E2A\u0E23\u0E30", paymentType: "\u0E04\u0E48\u0E32\u0E27\u0E34\u0E0A\u0E32\u0E0A\u0E35\u0E1E\u0E2D\u0E34\u0E2A\u0E23\u0E30" },
-  { value: 3, label: "\u0E04\u0E48\u0E32\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23", paymentType: "\u0E04\u0E48\u0E32\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23" },
-  { value: 5, label: "\u0E04\u0E48\u0E32\u0E40\u0E0A\u0E48\u0E32\u0E17\u0E23\u0E31\u0E1E\u0E22\u0E4C\u0E2A\u0E34\u0E19", paymentType: "\u0E04\u0E48\u0E32\u0E40\u0E0A\u0E48\u0E32\u0E17\u0E23\u0E31\u0E1E\u0E22\u0E4C\u0E2A\u0E34\u0E19" },
-  { value: 3, label: "\u0E04\u0E48\u0E32\u0E19\u0E32\u0E22\u0E2B\u0E19\u0E49\u0E32", paymentType: "\u0E04\u0E48\u0E32\u0E19\u0E32\u0E22\u0E2B\u0E19\u0E49\u0E32" },
-  { value: 1, label: "\u0E04\u0E48\u0E32\u0E02\u0E19\u0E2A\u0E48\u0E07", paymentType: "\u0E04\u0E48\u0E32\u0E02\u0E19\u0E2A\u0E48\u0E07" },
-  { value: 0, label: "\u0E44\u0E21\u0E48\u0E2B\u0E31\u0E01\u0E20\u0E32\u0E29\u0E35 \u0E13 \u0E17\u0E35\u0E48\u0E08\u0E48\u0E32\u0E22", paymentType: "\u0E44\u0E21\u0E48\u0E2B\u0E31\u0E01\u0E20\u0E32\u0E29\u0E35 \u0E13 \u0E17\u0E35\u0E48\u0E08\u0E48\u0E32\u0E22" }
-];
-var DEFAULT_WHT_MIN_THRESHOLD = 1e3;
-var DEFAULT_CONSENT = "\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E44\u0E14\u0E49\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E08\u0E33\u0E19\u0E27\u0E19\u0E14\u0E31\u0E07\u0E01\u0E25\u0E48\u0E32\u0E27\u0E41\u0E25\u0E49\u0E27 \u0E41\u0E25\u0E30\u0E21\u0E2D\u0E1A\u0E2D\u0E33\u0E19\u0E32\u0E08\u0E43\u0E2B\u0E49\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E43\u0E19\u0E19\u0E32\u0E21\u0E02\u0E2D\u0E07\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E18\u0E38\u0E23\u0E01\u0E23\u0E23\u0E21\u0E19\u0E35\u0E49\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19";
-function currentBeYear(today = /* @__PURE__ */ new Date()) {
-  return today.getFullYear() + 543;
-}
-var DEFAULT_INVITE_TEMPLATE = `\u0E40\u0E23\u0E35\u0E22\u0E19 \u0E04\u0E38\u0E13{{vendor}}
-
-\u0E41\u0E08\u0E49\u0E07\u0E22\u0E2D\u0E14\u0E42\u0E2D\u0E19\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E27\u0E31\u0E19\u0E17\u0E35\u0E48 {{date}}
-\u0E22\u0E2D\u0E14\u0E23\u0E31\u0E1A\u0E2A\u0E38\u0E17\u0E18\u0E34 {{amount}} \u0E1A\u0E32\u0E17
-
-\u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E1B\u0E34\u0E14\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E25\u0E07\u0E19\u0E32\u0E21\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E41\u0E25\u0E30\u0E21\u0E2D\u0E1A\u0E2D\u0E33\u0E19\u0E32\u0E08\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08 (\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E43\u0E0A\u0E49\u0E44\u0E14\u0E49\u0E08\u0E19\u0E01\u0E27\u0E48\u0E32\u0E08\u0E30\u0E25\u0E07\u0E19\u0E32\u0E21)
-{{link}}`;
-
-// src/lib/wht.ts
-var WHT_FORM_TYPES = ["pnd1", "pnd1_special", "pnd2", "pnd2a", "pnd3", "pnd3a", "pnd53"];
-var WHT_FORM_LABELS = {
-  pnd1: "\u0E20.\u0E07.\u0E14.1",
-  pnd1_special: "\u0E20.\u0E07.\u0E14.1 (\u0E1E\u0E34\u0E40\u0E28\u0E29)",
-  pnd2: "\u0E20.\u0E07.\u0E14.2",
-  pnd2a: "\u0E20.\u0E07.\u0E14.2/53",
-  pnd3: "\u0E20.\u0E07.\u0E14.3",
-  pnd3a: "\u0E20.\u0E07.\u0E14.3/54",
-  pnd53: "\u0E20.\u0E07.\u0E14.53"
-};
-function whtFormLabel(t) {
-  return WHT_FORM_LABELS[t] ?? String(t).toUpperCase();
-}
-function formTypeForVendorType(_t3) {
-  return "pnd3";
-}
-
-// server/src/crypto.ts
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-var PREFIX = "enc:v1:";
-function key() {
-  const raw2 = process.env.ID_ENCRYPTION_KEY ?? "";
-  if (!raw2) throw new Error("Missing ID_ENCRYPTION_KEY (32-byte base64). See docs/DB.md.");
-  const k = Buffer.from(raw2, "base64");
-  if (k.length !== 32) throw new Error("ID_ENCRYPTION_KEY must decode to 32 bytes (base64).");
-  return k;
-}
-function encryptId(plain) {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", key(), iv);
-  const ct2 = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return `${PREFIX}${iv.toString("base64")}:${tag.toString("base64")}:${ct2.toString("base64")}`;
-}
-function decryptId(payload) {
-  try {
-    if (!payload.startsWith(PREFIX)) return null;
-    const [ivB64, tagB64, ctB64] = payload.slice(PREFIX.length).split(":");
-    if (!ivB64 || !tagB64 || !ctB64) return null;
-    const decipher = createDecipheriv("aes-256-gcm", key(), Buffer.from(ivB64, "base64"));
-    decipher.setAuthTag(Buffer.from(tagB64, "base64"));
-    return Buffer.concat([decipher.update(Buffer.from(ctB64, "base64")), decipher.final()]).toString("utf8");
-  } catch {
-    return null;
-  }
-}
-
-// server/src/dates.ts
-function isoDay(v2) {
-  if (v2 == null) return "";
-  if (v2 instanceof Date) {
-    if (Number.isNaN(v2.getTime())) return "";
-    const y = v2.getFullYear();
-    const m2 = String(v2.getMonth() + 1).padStart(2, "0");
-    const d2 = String(v2.getDate()).padStart(2, "0");
-    return `${y}-${m2}-${d2}`;
-  }
-  const s = String(v2);
-  return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : s;
 }
 
 // server/src/storage.ts
@@ -68170,270 +68035,8 @@ async function readStoredDurable(tenantId, relPath) {
   return readStored(tenantId, relPath);
 }
 
-// server/src/pdf.ts
-var import_pdf_lib = __toESM(require_cjs(), 1);
-var import_fontkit = __toESM(require_fontkit_umd(), 1);
-var import_qrcode_generator = __toESM(require_qrcode(), 1);
-import { createHash } from "node:crypto";
-import { readFileSync as readFs } from "node:fs";
-import { join as join2 } from "node:path";
-
-// src/lib/line-items.ts
-var round2 = (n) => Math.round(n * 100) / 100;
-function lineTotal(it2) {
-  const qty = it2.quantity != null ? Number(it2.quantity) || 0 : 1;
-  const unitPrice = it2.unitPrice != null ? Number(it2.unitPrice) || 0 : Number(it2.amount) || 0;
-  const discount = Number(it2.discount) || 0;
-  return round2(Math.max(0, qty * unitPrice - discount));
-}
-function normalizeLineItem(raw2) {
-  const quantity = raw2.quantity != null ? Number(raw2.quantity) || 0 : 1;
-  const unitPrice = raw2.unitPrice != null ? Number(raw2.unitPrice) || 0 : Number(raw2.amount) || 0;
-  const discount = Number(raw2.discount) || 0;
-  const item = { description: String(raw2.description ?? "").trim(), amount: 0 };
-  const unit = String(raw2.unit ?? "").trim();
-  if (unit) item.unit = unit;
-  item.quantity = quantity;
-  item.unitPrice = unitPrice;
-  if (discount) item.discount = discount;
-  item.amount = lineTotal(item);
-  return item;
-}
-function itemsTotal(items) {
-  return round2(items.reduce((s, it2) => s + lineTotal(it2), 0));
-}
-function itemsSummary(items, note) {
-  const n = (note ?? "").trim();
-  if (n) return n;
-  const named = items.filter((it2) => it2.description.trim());
-  if (named.length === 0) return "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23";
-  if (named.length === 1) return named[0].description.trim();
-  return `${named[0].description.trim()} \u0E41\u0E25\u0E30\u0E2D\u0E37\u0E48\u0E19 \u0E46 (${named.length} \u0E23\u0E32\u0E22\u0E01\u0E32\u0E23)`;
-}
-
-// server/src/pdf.ts
-var INK = (0, import_pdf_lib.rgb)(0.102, 0.137, 0.196);
-var MUTED = (0, import_pdf_lib.rgb)(0.392, 0.451, 0.549);
-var FAINT = (0, import_pdf_lib.rgb)(0.62, 0.671, 0.741);
-var ACCENT = (0, import_pdf_lib.rgb)(0.059, 0.463, 0.431);
-var PANEL = (0, import_pdf_lib.rgb)(0.965, 0.973, 0.98);
-var RULE = (0, import_pdf_lib.rgb)(0.886, 0.91, 0.941);
-var ZEBRA = (0, import_pdf_lib.rgb)(0.98, 0.984, 0.99);
-var A4 = { w: 595.28, h: 841.89 };
-var M = 48;
-var ITEMS_LIMIT = M + 40;
-var BOTTOM_LIMIT = M + 92;
-var SIG_Y = M + 48;
-function fontsDir() {
-  return process.env.FONTS_DIR ?? join2(process.cwd(), "server", "assets", "fonts");
-}
-async function loadDoc() {
-  const doc = await import_pdf_lib.PDFDocument.create();
-  doc.registerFontkit(import_fontkit.default);
-  const dir = fontsDir();
-  const regular = await doc.embedFont(readFs(join2(dir, "Sarabun-Regular.ttf")));
-  const bold = await doc.embedFont(readFs(join2(dir, "Sarabun-Bold.ttf")));
-  return { doc, fonts: { regular, bold } };
-}
-function wrap(text, font, size, maxW) {
-  const lines = [];
-  let cur = "";
-  for (const ch of text) {
-    const trial = cur + ch;
-    if (font.widthOfTextAtSize(trial, size) > maxW && cur) {
-      lines.push(cur);
-      cur = ch === " " ? "" : ch;
-    } else {
-      cur = trial;
-    }
-  }
-  if (cur) lines.push(cur);
-  return lines;
-}
-var thb = (n) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-function drawQr(page, data, x2, y, size, color) {
-  const qr = (0, import_qrcode_generator.default)(0, "M");
-  qr.addData(data);
-  qr.make();
-  const count = qr.getModuleCount();
-  const cell = size / count;
-  for (let r = 0; r < count; r++) {
-    for (let c = 0; c < count; c++) {
-      if (qr.isDark(r, c)) {
-        page.drawRectangle({ x: x2 + c * cell, y: y + (count - 1 - r) * cell, width: cell, height: cell, color });
-      }
-    }
-  }
-}
-function normalizeItems(input) {
-  const items = (input.lineItems ?? []).map((it2) => normalizeLineItem(it2)).filter((it2) => it2.description || it2.amount > 0);
-  if (items.length > 0) return items;
-  return [normalizeLineItem({ description: input.description ?? "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23", amount: Number(input.grossAmount) || 0 })];
-}
-async function buildReceiptPdf(input) {
-  const { doc, fonts } = await loadDoc();
-  const { regular, bold } = fonts;
-  const maxW = A4.w - M * 2;
-  const right = M + maxW;
-  const pages = [];
-  let page;
-  const text = (t, x2, yy, size, font = regular, color = INK) => page.drawText(t, { x: x2, y: yy, size, font, color });
-  const rightText = (t, xEnd, yy, size, font = regular, color = INK) => text(t, xEnd - font.widthOfTextAtSize(t, size), yy, size, font, color);
-  const rule = (yy, color = RULE, thickness = 1) => page.drawLine({ start: { x: M, y: yy }, end: { x: right, y: yy }, thickness, color });
-  const label = (t, x2, yy) => text(t, x2, yy, 8.5, bold, FAINT);
-  const accent = () => page.drawRectangle({ x: 0, y: A4.h - 5, width: A4.w, height: 5, color: ACCENT });
-  let y = 0;
-  const newPage = (continuation) => {
-    page = doc.addPage([A4.w, A4.h]);
-    pages.push(page);
-    accent();
-    y = A4.h - 62;
-    if (continuation) {
-      text("\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19", M, y, 13, bold, INK);
-      rightText(`\u0E40\u0E25\u0E02\u0E17\u0E35\u0E48 ${input.number}`, right, y, 10, regular, MUTED);
-      y -= 14;
-      rule(y, RULE, 1);
-      y -= 26;
-    }
-  };
-  newPage(false);
-  const halfW = maxW / 2 - 16;
-  text(vendorDisplayName(input.vendor.prefix, input.vendor.name), M, y, 14, bold, INK);
-  const vAddr = wrap(`\u0E17\u0E35\u0E48\u0E2D\u0E22\u0E39\u0E48: ${input.vendor.address}`, regular, 10, halfW);
-  vAddr.slice(0, 2).forEach((ln2, i) => text(ln2, M, y - 16 - i * 13, 10, regular, MUTED));
-  const idY = y - 16 - Math.min(vAddr.length, 2) * 13;
-  text(`\u0E40\u0E25\u0E02\u0E1A\u0E31\u0E15\u0E23\u0E1B\u0E23\u0E30\u0E0A\u0E32\u0E0A\u0E19: ${input.vendor.maskedId}`, M, idY, 9.5, regular, MUTED);
-  let contactY = idY - 12;
-  if (input.vendor.phone) {
-    text(`\u0E42\u0E17\u0E23: ${input.vendor.phone}`, M, contactY, 9, regular, MUTED);
-    contactY -= 12;
-  }
-  if (input.vendor.email) {
-    text(`\u0E2D\u0E35\u0E40\u0E21\u0E25: ${input.vendor.email}`, M, contactY, 9, regular, MUTED);
-  }
-  rightText("\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19", right, y, 24, bold, INK);
-  rightText("RECEIPT", right, y - 18, 9, regular, FAINT);
-  rightText("\u0E15\u0E49\u0E19\u0E09\u0E1A\u0E31\u0E1A", right, y - 30, 9, bold, MUTED);
-  const infoLabelX = right - 180;
-  const infoValueX = right - 128;
-  text("\u0E40\u0E25\u0E02\u0E17\u0E35\u0E48:", infoLabelX, y - 48, 10.5, bold, INK);
-  text(input.number, infoValueX, y - 48, 10.5, bold, INK);
-  text("\u0E27\u0E31\u0E19\u0E17\u0E35\u0E48:", infoLabelX, y - 64, 10, regular, MUTED);
-  text(input.issueDate, infoValueX, y - 64, 10, regular, MUTED);
-  y -= 78;
-  rule(y, INK, 1.5);
-  y -= 30;
-  const boxH = 90;
-  page.drawRectangle({ x: M, y: y - boxH, width: maxW, height: boxH, color: PANEL });
-  const lx = M + 12;
-  label("\u0E1C\u0E39\u0E49\u0E0B\u0E37\u0E49\u0E2D (\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32)", lx, y - 20);
-  const cName = wrap(input.client.display, regular, 11, maxW - 24);
-  cName.slice(0, 2).forEach((ln2, i) => text(ln2, lx, y - 38 - i * 14, 11, bold, INK));
-  y -= boxH + 26;
-  const note = (input.note ?? "").trim();
-  if (note) {
-    for (const line of wrap(note, regular, 10.5, maxW)) {
-      text(line, M, y, 10.5, regular, MUTED);
-      y -= 15;
-    }
-    y -= 8;
-  }
-  const numW = 20;
-  const descX = M + numW + 8;
-  const amtW = 82;
-  const discW = 74;
-  const priceW = 84;
-  const unitW = 52;
-  const qtyW = 34;
-  const amtRight = right;
-  const discRight = right - amtW - 6;
-  const priceRight = discRight - discW - 6;
-  const unitRight = priceRight - priceW - 8;
-  const qtyRight = unitRight - unitW - 6;
-  const descW = qtyRight - qtyW - 10 - descX;
-  const itemsHeader = () => {
-    label("#", M, y);
-    label("\u0E23\u0E32\u0E22\u0E25\u0E30\u0E40\u0E2D\u0E35\u0E22\u0E14", descX, y);
-    rightText("\u0E08\u0E33\u0E19\u0E27\u0E19", qtyRight, y, 8.5, bold, FAINT);
-    rightText("\u0E2B\u0E19\u0E48\u0E27\u0E22", unitRight, y, 8.5, bold, FAINT);
-    rightText("\u0E23\u0E32\u0E04\u0E32/\u0E2B\u0E19\u0E48\u0E27\u0E22", priceRight, y, 8.5, bold, FAINT);
-    rightText("\u0E2A\u0E48\u0E27\u0E19\u0E25\u0E14", discRight, y, 8.5, bold, FAINT);
-    rightText("\u0E08\u0E33\u0E19\u0E27\u0E19\u0E40\u0E07\u0E34\u0E19", amtRight, y, 8.5, bold, FAINT);
-    y -= 8;
-    rule(y, INK, 1);
-    y -= 18;
-  };
-  itemsHeader();
-  const items = normalizeItems(input);
-  items.forEach((it2, i) => {
-    const lines = wrap(it2.description || "\u2014", regular, 10.5, descW);
-    const rowH = Math.max(20, lines.length * 14 + 6);
-    if (y - rowH < ITEMS_LIMIT) {
-      newPage(true);
-      itemsHeader();
-    }
-    if (i % 2 === 1) page.drawRectangle({ x: M - 6, y: y - rowH + 4, width: maxW + 12, height: rowH - 4, color: ZEBRA });
-    text(String(i + 1), M + numW - regular.widthOfTextAtSize(String(i + 1), 10.5), y - 10, 10.5, regular, MUTED);
-    lines.forEach((ln2, li) => text(ln2, descX, y - 10 - li * 14, 10.5, regular, INK));
-    rightText(`${it2.quantity ?? 1}`, qtyRight, y - 10, 10.5, regular, INK);
-    rightText(`${it2.unit || "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23"}`, unitRight, y - 10, 10.5, regular, INK);
-    rightText(`${thb(it2.unitPrice ?? it2.amount)}`, priceRight, y - 10, 10.5, regular, INK);
-    rightText(it2.discount ? `${thb(it2.discount)}` : "\u2014", discRight, y - 10, 10.5, regular, MUTED);
-    rightText(`${thb(it2.amount)}`, amtRight, y - 10, 10.5, bold, INK);
-    y -= rowH;
-    page.drawLine({ start: { x: M, y: y + 4 }, end: { x: right, y: y + 4 }, thickness: 0.5, color: RULE });
-  });
-  y -= 14;
-  const totalsH = 118;
-  if (y - totalsH < BOTTOM_LIMIT) newPage(true);
-  const totalRow = (labelText, value, opts) => {
-    text(labelText, M, y, opts?.strong ? 11.5 : 11, opts?.strong ? bold : regular, opts?.strong ? INK : MUTED);
-    rightText(value, right, y, opts?.strong ? 11.5 : 11, opts?.strong ? bold : regular, opts?.strong ? INK : MUTED);
-    y -= 22;
-  };
-  totalRow("\u0E23\u0E27\u0E21\u0E40\u0E1B\u0E47\u0E19\u0E40\u0E07\u0E34\u0E19", `${thb(input.grossAmount)}`);
-  if (input.whtRate > 0) totalRow(`\u0E2B\u0E31\u0E01\u0E20\u0E32\u0E29\u0E35 \u0E13 \u0E17\u0E35\u0E48\u0E08\u0E48\u0E32\u0E22 ${input.whtRate}%`, `- ${thb(input.whtAmount)}`);
-  rule(y + 8, INK, 1.5);
-  y -= 8;
-  text("\u0E22\u0E2D\u0E14\u0E23\u0E31\u0E1A\u0E2A\u0E38\u0E17\u0E18\u0E34", M, y, 12, bold, INK);
-  rightText(`${thb(input.netAmount)}`, right, y - 3, 18, bold, INK);
-  y -= 22;
-  text(`(${input.amountWords})`, M, y, 9.5, regular, MUTED);
-  const sigY = input.showVerification ? SIG_Y + 60 : SIG_Y;
-  const sigW = 220;
-  const sigX = (A4.w - sigW) / 2;
-  const centerText = (t, yy, size, font, color) => text(t, A4.w / 2 - font.widthOfTextAtSize(t, size) / 2, yy, size, font, color);
-  if (input.signaturePng) {
-    try {
-      const img = await doc.embedPng(input.signaturePng);
-      const scale = Math.min(150 / img.width, 54 / img.height);
-      const w = img.width * scale;
-      page.drawImage(img, { x: A4.w / 2 - w / 2, y: sigY + 6, width: w, height: img.height * scale });
-    } catch {
-    }
-  }
-  page.drawLine({ start: { x: sigX, y: sigY }, end: { x: sigX + sigW, y: sigY }, thickness: 1, color: FAINT });
-  centerText("\u0E1C\u0E39\u0E49\u0E21\u0E35\u0E2D\u0E33\u0E19\u0E32\u0E08\u0E25\u0E07\u0E19\u0E32\u0E21", sigY - 14, 9.5, bold, INK);
-  centerText(vendorDisplayName(input.vendor.prefix, input.vendor.name), sigY - 28, 9, regular, MUTED);
-  if (input.showVerification) {
-    const qrSize = 64;
-    drawQr(page, input.verifyUrl, right - qrSize, M - 6, qrSize, INK);
-    text(`\u0E23\u0E2B\u0E31\u0E2A\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A  ${input.verificationCode}`, M, M + 30, 9.5, bold, INK);
-    text(input.verifyUrl, M, M + 14, 8.5, regular, MUTED);
-  }
-  if (pages.length > 1) {
-    pages.forEach((p2, i) => {
-      const t = `\u0E2B\u0E19\u0E49\u0E32 ${i + 1} / ${pages.length}`;
-      p2.drawText(t, { x: A4.w / 2 - regular.widthOfTextAtSize(t, 8.5) / 2, y: M - 30, size: 8.5, font: regular, color: FAINT });
-    });
-  }
-  const bytes = await doc.save();
-  const sha2562 = createHash("sha256").update(bytes).digest("hex");
-  return { bytes, sha256: sha2562 };
-}
-
 // server/src/auth.ts
-import { createHash as createHash2, randomBytes as randomBytes2, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 var scryptAsync = promisify(scryptCb);
 var N = 16384;
@@ -68441,10 +68044,10 @@ var R = 8;
 var P = 1;
 var KEYLEN = 64;
 function sha256hex(s) {
-  return createHash2("sha256").update(s).digest("hex");
+  return createHash("sha256").update(s).digest("hex");
 }
 async function hashPassword(password) {
-  const salt = randomBytes2(16);
+  const salt = randomBytes(16);
   const key2 = await scryptAsync(password, salt, KEYLEN, { N, r: R, p: P, maxmem: 32 * 1024 * 1024 });
   return `scrypt$${N}$${R}$${P}$${salt.toString("hex")}$${key2.toString("hex")}`;
 }
@@ -68466,11 +68069,11 @@ async function verifyPassword(password, stored) {
 }
 function tempPassword(len = 12) {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-  const bytes = randomBytes2(len);
+  const bytes = randomBytes(len);
   return Array.from(bytes, (b2) => alphabet[b2 % alphabet.length]).join("");
 }
 function sessionToken() {
-  const token = randomBytes2(32).toString("base64url");
+  const token = randomBytes(32).toString("base64url");
   return { token, hash: sha256hex(token) };
 }
 function getCookie(header, name) {
@@ -68524,57 +68127,6 @@ function clearSessionCookie(name = SESSION_COOKIE) {
   return `${name}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`;
 }
 
-// src/lib/vendor-memory.ts
-var MEMORY_CATALOG_LIMIT = 20;
-
-// server/src/vendor-memory.ts
-async function getVendorMemory(tenantId, vendorId) {
-  return withTenant(tenantId, "client", async () => {
-    const db = sql();
-    const lastRows = await db`
-      select line_items, note, payment_type, wht_rate, wht_mode
-      from vendor_payables
-      where user_id = ${tenantId} and vendor_id = ${vendorId}
-        and status not in ('draft','void','cancelled')
-      order by created_at desc, id desc
-      limit 1`;
-    const catalogRows = await db`
-      select it->>'description' as description,
-             (array_agg((it->>'amount')::numeric order by t.created_at desc))[1] as last_amount,
-             count(*)::int as times_used,
-             max(t.created_at) as last_used_at
-      from vendor_payables t
-      cross join lateral jsonb_array_elements(coalesce(t.line_items, '[]'::jsonb)) it
-      where t.user_id = ${tenantId} and t.vendor_id = ${vendorId}
-        and t.status not in ('draft','void','cancelled')
-        and coalesce(it->>'description', '') <> ''
-      group by 1
-      order by times_used desc, last_used_at desc
-      limit ${MEMORY_CATALOG_LIMIT}`;
-    const l = lastRows[0];
-    const last = l ? {
-      lineItems: toItems(l.line_items),
-      paymentType: l.payment_type,
-      whtRate: Number(l.wht_rate) || 0,
-      whtMode: l.wht_mode === "grossup" ? "grossup" : "deduct",
-      note: (l.note ?? "").trim()
-    } : null;
-    const items = catalogRows.map((r) => ({
-      description: String(r.description),
-      lastAmount: Number(r.last_amount) || 0,
-      timesUsed: Number(r.times_used) || 0,
-      lastUsedAt: String(r.last_used_at)
-    }));
-    return { last, items };
-  });
-}
-function toItems(raw2) {
-  return (Array.isArray(raw2) ? raw2 : []).map((it2) => {
-    const o = it2;
-    return { description: String(o.description ?? "").trim(), amount: Number(o.amount) || 0 };
-  }).filter((it2) => it2.description && it2.amount > 0);
-}
-
 // server/src/shared.ts
 var PILOT_TENANT = process.env.PILOT_TENANT ?? "ABC";
 var PILOT_BE_YEAR = Number(process.env.PILOT_BE_YEAR ?? 2569);
@@ -68613,12 +68165,12 @@ async function tenantProfile(tenantId) {
 }
 
 // server/src/impersonation.ts
-import { createHash as createHash3, createHmac, timingSafeEqual as timingSafeEqual2 } from "node:crypto";
+import { createHash as createHash2, createHmac, timingSafeEqual as timingSafeEqual2 } from "node:crypto";
 var IMPERSONATION_COOKIE = "tw_imp";
 var TTL_MS = 30 * 60 * 1e3;
 function secret() {
   const base = process.env.ID_ENCRYPTION_KEY ?? process.env.CRON_SECRET ?? "dev-impersonation-key";
-  return createHash3("sha256").update(`tw-imp:${base}`).digest();
+  return createHash2("sha256").update(`tw-imp:${base}`).digest();
 }
 var b64 = (b2) => b2.toString("base64url");
 function signImpersonation(input) {
@@ -68879,6 +68431,29 @@ function corsMw() {
   });
 }
 
+// src/lib/settings-types.ts
+var DEFAULT_WHT_RATES = [
+  { value: 3, label: "\u0E04\u0E48\u0E32\u0E08\u0E49\u0E32\u0E07\u0E17\u0E33\u0E02\u0E2D\u0E07", paymentType: "\u0E04\u0E48\u0E32\u0E08\u0E49\u0E32\u0E07\u0E17\u0E33\u0E02\u0E2D\u0E07" },
+  { value: 3, label: "\u0E04\u0E48\u0E32\u0E27\u0E34\u0E0A\u0E32\u0E0A\u0E35\u0E1E\u0E2D\u0E34\u0E2A\u0E23\u0E30", paymentType: "\u0E04\u0E48\u0E32\u0E27\u0E34\u0E0A\u0E32\u0E0A\u0E35\u0E1E\u0E2D\u0E34\u0E2A\u0E23\u0E30" },
+  { value: 3, label: "\u0E04\u0E48\u0E32\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23", paymentType: "\u0E04\u0E48\u0E32\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23" },
+  { value: 5, label: "\u0E04\u0E48\u0E32\u0E40\u0E0A\u0E48\u0E32\u0E17\u0E23\u0E31\u0E1E\u0E22\u0E4C\u0E2A\u0E34\u0E19", paymentType: "\u0E04\u0E48\u0E32\u0E40\u0E0A\u0E48\u0E32\u0E17\u0E23\u0E31\u0E1E\u0E22\u0E4C\u0E2A\u0E34\u0E19" },
+  { value: 3, label: "\u0E04\u0E48\u0E32\u0E19\u0E32\u0E22\u0E2B\u0E19\u0E49\u0E32", paymentType: "\u0E04\u0E48\u0E32\u0E19\u0E32\u0E22\u0E2B\u0E19\u0E49\u0E32" },
+  { value: 1, label: "\u0E04\u0E48\u0E32\u0E02\u0E19\u0E2A\u0E48\u0E07", paymentType: "\u0E04\u0E48\u0E32\u0E02\u0E19\u0E2A\u0E48\u0E07" },
+  { value: 0, label: "\u0E44\u0E21\u0E48\u0E2B\u0E31\u0E01\u0E20\u0E32\u0E29\u0E35 \u0E13 \u0E17\u0E35\u0E48\u0E08\u0E48\u0E32\u0E22", paymentType: "\u0E44\u0E21\u0E48\u0E2B\u0E31\u0E01\u0E20\u0E32\u0E29\u0E35 \u0E13 \u0E17\u0E35\u0E48\u0E08\u0E48\u0E32\u0E22" }
+];
+var DEFAULT_WHT_MIN_THRESHOLD = 1e3;
+var DEFAULT_CONSENT = "\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E44\u0E14\u0E49\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E08\u0E33\u0E19\u0E27\u0E19\u0E14\u0E31\u0E07\u0E01\u0E25\u0E48\u0E32\u0E27\u0E41\u0E25\u0E49\u0E27 \u0E41\u0E25\u0E30\u0E21\u0E2D\u0E1A\u0E2D\u0E33\u0E19\u0E32\u0E08\u0E43\u0E2B\u0E49\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E43\u0E19\u0E19\u0E32\u0E21\u0E02\u0E2D\u0E07\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E18\u0E38\u0E23\u0E01\u0E23\u0E23\u0E21\u0E19\u0E35\u0E49\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19";
+function currentBeYear(today = /* @__PURE__ */ new Date()) {
+  return today.getFullYear() + 543;
+}
+var DEFAULT_INVITE_TEMPLATE = `\u0E40\u0E23\u0E35\u0E22\u0E19 \u0E04\u0E38\u0E13{{vendor}}
+
+\u0E41\u0E08\u0E49\u0E07\u0E22\u0E2D\u0E14\u0E42\u0E2D\u0E19\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E27\u0E31\u0E19\u0E17\u0E35\u0E48 {{date}}
+\u0E22\u0E2D\u0E14\u0E23\u0E31\u0E1A\u0E2A\u0E38\u0E17\u0E18\u0E34 {{amount}} \u0E1A\u0E32\u0E17
+
+\u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E1B\u0E34\u0E14\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E25\u0E07\u0E19\u0E32\u0E21\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E41\u0E25\u0E30\u0E21\u0E2D\u0E1A\u0E2D\u0E33\u0E19\u0E32\u0E08\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08 (\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E43\u0E0A\u0E49\u0E44\u0E14\u0E49\u0E08\u0E19\u0E01\u0E27\u0E48\u0E32\u0E08\u0E30\u0E25\u0E07\u0E19\u0E32\u0E21)
+{{link}}`;
+
 // server/src/settings.ts
 async function getTenantSettings(tenantId) {
   return withTenant(tenantId, "client", async () => {
@@ -68940,6 +68515,120 @@ async function saveTenantSettings(tenantId, s) {
     if (s.signaturePlacement !== void 0) await put("signature_placement", s.signaturePlacement);
     if (s.stampPlacement !== void 0) await put("stamp_placement", s.stampPlacement);
   });
+}
+
+// server/src/crypto.ts
+import { createCipheriv, createDecipheriv, randomBytes as randomBytes2 } from "node:crypto";
+var PREFIX = "enc:v1:";
+function key() {
+  const raw2 = process.env.ID_ENCRYPTION_KEY ?? "";
+  if (!raw2) throw new Error("Missing ID_ENCRYPTION_KEY (32-byte base64). See docs/DB.md.");
+  const k = Buffer.from(raw2, "base64");
+  if (k.length !== 32) throw new Error("ID_ENCRYPTION_KEY must decode to 32 bytes (base64).");
+  return k;
+}
+function encryptId(plain) {
+  const iv = randomBytes2(12);
+  const cipher = createCipheriv("aes-256-gcm", key(), iv);
+  const ct2 = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `${PREFIX}${iv.toString("base64")}:${tag.toString("base64")}:${ct2.toString("base64")}`;
+}
+function decryptId(payload) {
+  try {
+    if (!payload.startsWith(PREFIX)) return null;
+    const [ivB64, tagB64, ctB64] = payload.slice(PREFIX.length).split(":");
+    if (!ivB64 || !tagB64 || !ctB64) return null;
+    const decipher = createDecipheriv("aes-256-gcm", key(), Buffer.from(ivB64, "base64"));
+    decipher.setAuthTag(Buffer.from(tagB64, "base64"));
+    return Buffer.concat([decipher.update(Buffer.from(ctB64, "base64")), decipher.final()]).toString("utf8");
+  } catch {
+    return null;
+  }
+}
+
+// src/lib/line-items.ts
+var round2 = (n) => Math.round(n * 100) / 100;
+function lineTotal(it2) {
+  const qty = it2.quantity != null ? Number(it2.quantity) || 0 : 1;
+  const unitPrice = it2.unitPrice != null ? Number(it2.unitPrice) || 0 : Number(it2.amount) || 0;
+  const discount = Number(it2.discount) || 0;
+  return round2(Math.max(0, qty * unitPrice - discount));
+}
+function normalizeLineItem(raw2) {
+  const quantity = raw2.quantity != null ? Number(raw2.quantity) || 0 : 1;
+  const unitPrice = raw2.unitPrice != null ? Number(raw2.unitPrice) || 0 : Number(raw2.amount) || 0;
+  const discount = Number(raw2.discount) || 0;
+  const item = { description: String(raw2.description ?? "").trim(), amount: 0 };
+  const unit = String(raw2.unit ?? "").trim();
+  if (unit) item.unit = unit;
+  item.quantity = quantity;
+  item.unitPrice = unitPrice;
+  if (discount) item.discount = discount;
+  item.amount = lineTotal(item);
+  return item;
+}
+function itemsTotal(items) {
+  return round2(items.reduce((s, it2) => s + lineTotal(it2), 0));
+}
+function itemsSummary(items, note) {
+  const n = (note ?? "").trim();
+  if (n) return n;
+  const named = items.filter((it2) => it2.description.trim());
+  if (named.length === 0) return "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23";
+  if (named.length === 1) return named[0].description.trim();
+  return `${named[0].description.trim()} \u0E41\u0E25\u0E30\u0E2D\u0E37\u0E48\u0E19 \u0E46 (${named.length} \u0E23\u0E32\u0E22\u0E01\u0E32\u0E23)`;
+}
+
+// src/lib/vendor-memory.ts
+var MEMORY_CATALOG_LIMIT = 20;
+
+// server/src/vendor-memory.ts
+async function getVendorMemory(tenantId, vendorId) {
+  return withTenant(tenantId, "client", async () => {
+    const db = sql();
+    const lastRows = await db`
+      select line_items, note, payment_type, wht_rate, wht_mode
+      from vendor_payables
+      where user_id = ${tenantId} and vendor_id = ${vendorId}
+        and status not in ('draft','void','cancelled')
+      order by created_at desc, id desc
+      limit 1`;
+    const catalogRows = await db`
+      select it->>'description' as description,
+             (array_agg((it->>'amount')::numeric order by t.created_at desc))[1] as last_amount,
+             count(*)::int as times_used,
+             max(t.created_at) as last_used_at
+      from vendor_payables t
+      cross join lateral jsonb_array_elements(coalesce(t.line_items, '[]'::jsonb)) it
+      where t.user_id = ${tenantId} and t.vendor_id = ${vendorId}
+        and t.status not in ('draft','void','cancelled')
+        and coalesce(it->>'description', '') <> ''
+      group by 1
+      order by times_used desc, last_used_at desc
+      limit ${MEMORY_CATALOG_LIMIT}`;
+    const l = lastRows[0];
+    const last = l ? {
+      lineItems: toItems(l.line_items),
+      paymentType: l.payment_type,
+      whtRate: Number(l.wht_rate) || 0,
+      whtMode: l.wht_mode === "grossup" ? "grossup" : "deduct",
+      note: (l.note ?? "").trim()
+    } : null;
+    const items = catalogRows.map((r) => ({
+      description: String(r.description),
+      lastAmount: Number(r.last_amount) || 0,
+      timesUsed: Number(r.times_used) || 0,
+      lastUsedAt: String(r.last_used_at)
+    }));
+    return { last, items };
+  });
+}
+function toItems(raw2) {
+  return (Array.isArray(raw2) ? raw2 : []).map((it2) => {
+    const o = it2;
+    return { description: String(o.description ?? "").trim(), amount: Number(o.amount) || 0 };
+  }).filter((it2) => it2.description && it2.amount > 0);
 }
 
 // server/src/data.ts
@@ -69081,6 +68770,15 @@ dataRoutes.get("/vendors/:id/tax-id", async (c) => {
     }
   }
   return c.json({ taxId });
+});
+dataRoutes.get("/vendors/:id/memory", async (c) => {
+  const g = await guard(c);
+  if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  try {
+    return c.json(await getVendorMemory(g.ws, c.req.param("id")));
+  } catch {
+    return c.json({ error: "unavailable" }, 503);
+  }
 });
 dataRoutes.patch("/vendors/:id", async (c) => {
   const g = await guard(c);
@@ -69521,6 +69219,20 @@ function totalsClause(q, userId) {
   };
 }
 
+// server/src/dates.ts
+function isoDay(v2) {
+  if (v2 == null) return "";
+  if (v2 instanceof Date) {
+    if (Number.isNaN(v2.getTime())) return "";
+    const y = v2.getFullYear();
+    const m2 = String(v2.getMonth() + 1).padStart(2, "0");
+    const d2 = String(v2.getDate()).padStart(2, "0");
+    return `${y}-${m2}-${d2}`;
+  }
+  const s = String(v2);
+  return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : s;
+}
+
 // src/lib/download-name.ts
 function seg(s) {
   return s.trim().replace(/[^\p{L}\p{M}\p{N}._ -]+/gu, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 120);
@@ -69933,17 +69645,41 @@ txnRoutes.post("/transactions/:id/slip", async (c) => {
   return c.json({ ok: true });
 });
 
+// src/lib/wht.ts
+var WHT_FORM_TYPES = ["pnd1", "pnd1_special", "pnd2", "pnd2a", "pnd3", "pnd3a", "pnd53"];
+var WHT_FORM_LABELS = {
+  pnd1: "\u0E20.\u0E07.\u0E14.1",
+  pnd1_special: "\u0E20.\u0E07.\u0E14.1 (\u0E1E\u0E34\u0E40\u0E28\u0E29)",
+  pnd2: "\u0E20.\u0E07.\u0E14.2",
+  pnd2a: "\u0E20.\u0E07.\u0E14.2/53",
+  pnd3: "\u0E20.\u0E07.\u0E14.3",
+  pnd3a: "\u0E20.\u0E07.\u0E14.3/54",
+  pnd53: "\u0E20.\u0E07.\u0E14.53"
+};
+function whtFormLabel(t) {
+  return WHT_FORM_LABELS[t] ?? String(t).toUpperCase();
+}
+function formTypeForVendorType(_t3) {
+  return "pnd3";
+}
+
 // src/lib/wht-summary.ts
-var WHT_SORT_FIELDS = ["date", "vendor", "amount", "wht"];
+var WHT_SORT_FIELDS = ["date", "vendor", "cert", "form", "amount", "wht", "status"];
 var SORTERS = {
   "date-desc": (a2, b2) => cmp(b2.issueDate, a2.issueDate) || cmp(a2.id, b2.id),
   "date-asc": (a2, b2) => cmp(a2.issueDate, b2.issueDate) || cmp(a2.id, b2.id),
   "vendor-asc": (a2, b2) => cmp(a2.vendorName ?? "", b2.vendorName ?? "") || cmp(a2.issueDate, b2.issueDate),
   "vendor-desc": (a2, b2) => cmp(b2.vendorName ?? "", a2.vendorName ?? "") || cmp(a2.issueDate, b2.issueDate),
+  "cert-asc": (a2, b2) => cmp(a2.certificateNo ?? "", b2.certificateNo ?? "") || cmp(a2.id, b2.id),
+  "cert-desc": (a2, b2) => cmp(b2.certificateNo ?? "", a2.certificateNo ?? "") || cmp(a2.id, b2.id),
+  "form-asc": (a2, b2) => cmp(a2.formType, b2.formType) || cmp(a2.issueDate, b2.issueDate),
+  "form-desc": (a2, b2) => cmp(b2.formType, a2.formType) || cmp(a2.issueDate, b2.issueDate),
   "amount-desc": (a2, b2) => b2.amount - a2.amount || cmp(a2.id, b2.id),
   "amount-asc": (a2, b2) => a2.amount - b2.amount || cmp(a2.id, b2.id),
   "wht-desc": (a2, b2) => b2.whtAmount - a2.whtAmount || cmp(a2.id, b2.id),
-  "wht-asc": (a2, b2) => a2.whtAmount - b2.whtAmount || cmp(a2.id, b2.id)
+  "wht-asc": (a2, b2) => a2.whtAmount - b2.whtAmount || cmp(a2.id, b2.id),
+  "status-asc": (a2, b2) => cmp(a2.status, b2.status) || cmp(a2.issueDate, b2.issueDate),
+  "status-desc": (a2, b2) => cmp(b2.status, a2.status) || cmp(a2.issueDate, b2.issueDate)
 };
 function cmp(a2, b2) {
   return a2 < b2 ? -1 : a2 > b2 ? 1 : 0;
@@ -69992,8 +69728,11 @@ function bounded(raw2, max, fallback) {
 var ORDER_BY2 = {
   date: "r.issue_date",
   vendor: "v.name",
+  cert: "r.certificate_no",
+  form: "r.form_type",
   amount: "r.amount",
-  wht: "r.wht_amount"
+  wht: "r.wht_amount",
+  status: "r.status"
 };
 function whtOrderByClause(sort) {
   const col = ORDER_BY2[whtSortField(sort)] ?? ORDER_BY2.date;
@@ -70225,9 +69964,416 @@ whtRoutes.patch("/wht/records/:id", async (c) => {
   return c.json({ ok: true });
 });
 
+// server/src/receipts.ts
+import { randomBytes as randomBytes4 } from "node:crypto";
+
+// src/lib/thai-words.ts
+var DIGITS = ["\u0E28\u0E39\u0E19\u0E22\u0E4C", "\u0E2B\u0E19\u0E36\u0E48\u0E07", "\u0E2A\u0E2D\u0E07", "\u0E2A\u0E32\u0E21", "\u0E2A\u0E35\u0E48", "\u0E2B\u0E49\u0E32", "\u0E2B\u0E01", "\u0E40\u0E08\u0E47\u0E14", "\u0E41\u0E1B\u0E14", "\u0E40\u0E01\u0E49\u0E32"];
+function underMillion(n) {
+  if (n === 0) return "";
+  let out = "";
+  const parts = [
+    [1e5, "\u0E41\u0E2A\u0E19"],
+    [1e4, "\u0E2B\u0E21\u0E37\u0E48\u0E19"],
+    [1e3, "\u0E1E\u0E31\u0E19"],
+    [100, "\u0E23\u0E49\u0E2D\u0E22"]
+  ];
+  for (const [v2, w] of parts) {
+    const d2 = Math.floor(n / v2);
+    if (d2 > 0) {
+      out += DIGITS[d2] + w;
+      n %= v2;
+    }
+  }
+  const tens = Math.floor(n / 10);
+  const ones = n % 10;
+  if (tens > 0) {
+    if (tens === 1) out += "\u0E2A\u0E34\u0E1A";
+    else if (tens === 2) out += "\u0E22\u0E35\u0E48\u0E2A\u0E34\u0E1A";
+    else out += DIGITS[tens] + "\u0E2A\u0E34\u0E1A";
+    if (ones === 1) out += "\u0E40\u0E2D\u0E47\u0E14";
+    else if (ones > 0) out += DIGITS[ones];
+  } else if (ones > 0) {
+    out += DIGITS[ones];
+  }
+  return out;
+}
+function integerToThaiWords(n) {
+  if (!Number.isSafeInteger(n) || n < 0) throw new Error("integerToThaiWords: non-negative safe integer required");
+  if (n === 0) return "\u0E28\u0E39\u0E19\u0E22\u0E4C";
+  if (n < 1e6) return underMillion(n);
+  const high = Math.floor(n / 1e6);
+  const low = n % 1e6;
+  return integerToThaiWords(high) + "\u0E25\u0E49\u0E32\u0E19" + (low > 0 ? underMillion(low) : "");
+}
+function amountToThaiWords(amount) {
+  if (!Number.isFinite(amount) || amount < 0) throw new Error("amountToThaiWords: non-negative finite amount required");
+  const total = Math.round(amount * 100);
+  const baht = Math.floor(total / 100);
+  const satang = total % 100;
+  if (baht === 0 && satang === 0) return "\u0E28\u0E39\u0E19\u0E22\u0E4C\u0E1A\u0E32\u0E17\u0E16\u0E49\u0E27\u0E19";
+  if (baht === 0) return integerToThaiWords(satang) + "\u0E2A\u0E15\u0E32\u0E07\u0E04\u0E4C";
+  if (satang === 0) return integerToThaiWords(baht) + "\u0E1A\u0E32\u0E17\u0E16\u0E49\u0E27\u0E19";
+  return integerToThaiWords(baht) + "\u0E1A\u0E32\u0E17" + integerToThaiWords(satang) + "\u0E2A\u0E15\u0E32\u0E07\u0E04\u0E4C";
+}
+
+// server/src/pdf.ts
+var import_pdf_lib = __toESM(require_cjs(), 1);
+var import_fontkit = __toESM(require_fontkit_umd(), 1);
+var import_qrcode_generator = __toESM(require_qrcode(), 1);
+import { createHash as createHash3 } from "node:crypto";
+import { readFileSync as readFs } from "node:fs";
+import { join as join2 } from "node:path";
+var INK = (0, import_pdf_lib.rgb)(0.102, 0.137, 0.196);
+var MUTED = (0, import_pdf_lib.rgb)(0.392, 0.451, 0.549);
+var FAINT = (0, import_pdf_lib.rgb)(0.62, 0.671, 0.741);
+var ACCENT = (0, import_pdf_lib.rgb)(0.059, 0.463, 0.431);
+var PANEL = (0, import_pdf_lib.rgb)(0.965, 0.973, 0.98);
+var RULE = (0, import_pdf_lib.rgb)(0.886, 0.91, 0.941);
+var ZEBRA = (0, import_pdf_lib.rgb)(0.98, 0.984, 0.99);
+var A4 = { w: 595.28, h: 841.89 };
+var M = 48;
+var ITEMS_LIMIT = M + 40;
+var BOTTOM_LIMIT = M + 92;
+var SIG_Y = M + 48;
+function fontsDir() {
+  return process.env.FONTS_DIR ?? join2(process.cwd(), "server", "assets", "fonts");
+}
+async function loadDoc() {
+  const doc = await import_pdf_lib.PDFDocument.create();
+  doc.registerFontkit(import_fontkit.default);
+  const dir = fontsDir();
+  const regular = await doc.embedFont(readFs(join2(dir, "Sarabun-Regular.ttf")));
+  const bold = await doc.embedFont(readFs(join2(dir, "Sarabun-Bold.ttf")));
+  return { doc, fonts: { regular, bold } };
+}
+function wrap(text, font, size, maxW) {
+  const lines = [];
+  let cur = "";
+  for (const ch of text) {
+    const trial = cur + ch;
+    if (font.widthOfTextAtSize(trial, size) > maxW && cur) {
+      lines.push(cur);
+      cur = ch === " " ? "" : ch;
+    } else {
+      cur = trial;
+    }
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
+var thb = (n) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function drawQr(page, data, x2, y, size, color) {
+  const qr = (0, import_qrcode_generator.default)(0, "M");
+  qr.addData(data);
+  qr.make();
+  const count = qr.getModuleCount();
+  const cell = size / count;
+  for (let r = 0; r < count; r++) {
+    for (let c = 0; c < count; c++) {
+      if (qr.isDark(r, c)) {
+        page.drawRectangle({ x: x2 + c * cell, y: y + (count - 1 - r) * cell, width: cell, height: cell, color });
+      }
+    }
+  }
+}
+function normalizeItems(input) {
+  const items = (input.lineItems ?? []).map((it2) => normalizeLineItem(it2)).filter((it2) => it2.description || it2.amount > 0);
+  if (items.length > 0) return items;
+  return [normalizeLineItem({ description: input.description ?? "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23", amount: Number(input.grossAmount) || 0 })];
+}
+async function buildReceiptPdf(input) {
+  const { doc, fonts } = await loadDoc();
+  const { regular, bold } = fonts;
+  const maxW = A4.w - M * 2;
+  const right = M + maxW;
+  const pages = [];
+  let page;
+  const text = (t, x2, yy, size, font = regular, color = INK) => page.drawText(t, { x: x2, y: yy, size, font, color });
+  const rightText = (t, xEnd, yy, size, font = regular, color = INK) => text(t, xEnd - font.widthOfTextAtSize(t, size), yy, size, font, color);
+  const rule = (yy, color = RULE, thickness = 1) => page.drawLine({ start: { x: M, y: yy }, end: { x: right, y: yy }, thickness, color });
+  const label = (t, x2, yy) => text(t, x2, yy, 8.5, bold, FAINT);
+  const accent = () => page.drawRectangle({ x: 0, y: A4.h - 5, width: A4.w, height: 5, color: ACCENT });
+  let y = 0;
+  const newPage = (continuation) => {
+    page = doc.addPage([A4.w, A4.h]);
+    pages.push(page);
+    accent();
+    y = A4.h - 62;
+    if (continuation) {
+      text("\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19", M, y, 13, bold, INK);
+      rightText(`\u0E40\u0E25\u0E02\u0E17\u0E35\u0E48 ${input.number}`, right, y, 10, regular, MUTED);
+      y -= 14;
+      rule(y, RULE, 1);
+      y -= 26;
+    }
+  };
+  newPage(false);
+  const halfW = maxW / 2 - 16;
+  text(vendorDisplayName(input.vendor.prefix, input.vendor.name), M, y, 14, bold, INK);
+  const vAddr = wrap(`\u0E17\u0E35\u0E48\u0E2D\u0E22\u0E39\u0E48: ${input.vendor.address}`, regular, 10, halfW);
+  vAddr.slice(0, 2).forEach((ln2, i) => text(ln2, M, y - 16 - i * 13, 10, regular, MUTED));
+  const idY = y - 16 - Math.min(vAddr.length, 2) * 13;
+  text(`\u0E40\u0E25\u0E02\u0E1A\u0E31\u0E15\u0E23\u0E1B\u0E23\u0E30\u0E0A\u0E32\u0E0A\u0E19: ${input.vendor.maskedId}`, M, idY, 9.5, regular, MUTED);
+  let contactY = idY - 12;
+  if (input.vendor.phone) {
+    text(`\u0E42\u0E17\u0E23: ${input.vendor.phone}`, M, contactY, 9, regular, MUTED);
+    contactY -= 12;
+  }
+  if (input.vendor.email) {
+    text(`\u0E2D\u0E35\u0E40\u0E21\u0E25: ${input.vendor.email}`, M, contactY, 9, regular, MUTED);
+  }
+  rightText("\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19", right, y, 24, bold, INK);
+  rightText("RECEIPT", right, y - 18, 9, regular, FAINT);
+  rightText("\u0E15\u0E49\u0E19\u0E09\u0E1A\u0E31\u0E1A", right, y - 30, 9, bold, MUTED);
+  const infoLabelX = right - 180;
+  const infoValueX = right - 128;
+  text("\u0E40\u0E25\u0E02\u0E17\u0E35\u0E48:", infoLabelX, y - 48, 10.5, bold, INK);
+  text(input.number, infoValueX, y - 48, 10.5, bold, INK);
+  text("\u0E27\u0E31\u0E19\u0E17\u0E35\u0E48:", infoLabelX, y - 64, 10, regular, MUTED);
+  text(input.issueDate, infoValueX, y - 64, 10, regular, MUTED);
+  y -= 78;
+  rule(y, INK, 1.5);
+  y -= 30;
+  const boxH = 90;
+  page.drawRectangle({ x: M, y: y - boxH, width: maxW, height: boxH, color: PANEL });
+  const lx = M + 12;
+  label("\u0E1C\u0E39\u0E49\u0E0B\u0E37\u0E49\u0E2D (\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32)", lx, y - 20);
+  const cName = wrap(input.client.display, regular, 11, maxW - 24);
+  cName.slice(0, 2).forEach((ln2, i) => text(ln2, lx, y - 38 - i * 14, 11, bold, INK));
+  y -= boxH + 26;
+  const note = (input.note ?? "").trim();
+  if (note) {
+    for (const line of wrap(note, regular, 10.5, maxW)) {
+      text(line, M, y, 10.5, regular, MUTED);
+      y -= 15;
+    }
+    y -= 8;
+  }
+  const numW = 20;
+  const descX = M + numW + 8;
+  const amtW = 82;
+  const discW = 74;
+  const priceW = 84;
+  const unitW = 52;
+  const qtyW = 34;
+  const amtRight = right;
+  const discRight = right - amtW - 6;
+  const priceRight = discRight - discW - 6;
+  const unitRight = priceRight - priceW - 8;
+  const qtyRight = unitRight - unitW - 6;
+  const descW = qtyRight - qtyW - 10 - descX;
+  const itemsHeader = () => {
+    label("#", M, y);
+    label("\u0E23\u0E32\u0E22\u0E25\u0E30\u0E40\u0E2D\u0E35\u0E22\u0E14", descX, y);
+    rightText("\u0E08\u0E33\u0E19\u0E27\u0E19", qtyRight, y, 8.5, bold, FAINT);
+    rightText("\u0E2B\u0E19\u0E48\u0E27\u0E22", unitRight, y, 8.5, bold, FAINT);
+    rightText("\u0E23\u0E32\u0E04\u0E32/\u0E2B\u0E19\u0E48\u0E27\u0E22", priceRight, y, 8.5, bold, FAINT);
+    rightText("\u0E2A\u0E48\u0E27\u0E19\u0E25\u0E14", discRight, y, 8.5, bold, FAINT);
+    rightText("\u0E08\u0E33\u0E19\u0E27\u0E19\u0E40\u0E07\u0E34\u0E19", amtRight, y, 8.5, bold, FAINT);
+    y -= 8;
+    rule(y, INK, 1);
+    y -= 18;
+  };
+  itemsHeader();
+  const items = normalizeItems(input);
+  items.forEach((it2, i) => {
+    const lines = wrap(it2.description || "\u2014", regular, 10.5, descW);
+    const rowH = Math.max(20, lines.length * 14 + 6);
+    if (y - rowH < ITEMS_LIMIT) {
+      newPage(true);
+      itemsHeader();
+    }
+    if (i % 2 === 1) page.drawRectangle({ x: M - 6, y: y - rowH + 4, width: maxW + 12, height: rowH - 4, color: ZEBRA });
+    text(String(i + 1), M + numW - regular.widthOfTextAtSize(String(i + 1), 10.5), y - 10, 10.5, regular, MUTED);
+    lines.forEach((ln2, li) => text(ln2, descX, y - 10 - li * 14, 10.5, regular, INK));
+    rightText(`${it2.quantity ?? 1}`, qtyRight, y - 10, 10.5, regular, INK);
+    rightText(`${it2.unit || "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23"}`, unitRight, y - 10, 10.5, regular, INK);
+    rightText(`${thb(it2.unitPrice ?? it2.amount)}`, priceRight, y - 10, 10.5, regular, INK);
+    rightText(it2.discount ? `${thb(it2.discount)}` : "\u2014", discRight, y - 10, 10.5, regular, MUTED);
+    rightText(`${thb(it2.amount)}`, amtRight, y - 10, 10.5, bold, INK);
+    y -= rowH;
+    page.drawLine({ start: { x: M, y: y + 4 }, end: { x: right, y: y + 4 }, thickness: 0.5, color: RULE });
+  });
+  y -= 14;
+  const totalsH = 118;
+  if (y - totalsH < BOTTOM_LIMIT) newPage(true);
+  const totalRow = (labelText, value, opts) => {
+    text(labelText, M, y, opts?.strong ? 11.5 : 11, opts?.strong ? bold : regular, opts?.strong ? INK : MUTED);
+    rightText(value, right, y, opts?.strong ? 11.5 : 11, opts?.strong ? bold : regular, opts?.strong ? INK : MUTED);
+    y -= 22;
+  };
+  totalRow("\u0E23\u0E27\u0E21\u0E40\u0E1B\u0E47\u0E19\u0E40\u0E07\u0E34\u0E19", `${thb(input.grossAmount)}`);
+  if (input.whtRate > 0) totalRow(`\u0E2B\u0E31\u0E01\u0E20\u0E32\u0E29\u0E35 \u0E13 \u0E17\u0E35\u0E48\u0E08\u0E48\u0E32\u0E22 ${input.whtRate}%`, `- ${thb(input.whtAmount)}`);
+  rule(y + 8, INK, 1.5);
+  y -= 8;
+  text("\u0E22\u0E2D\u0E14\u0E23\u0E31\u0E1A\u0E2A\u0E38\u0E17\u0E18\u0E34", M, y, 12, bold, INK);
+  rightText(`${thb(input.netAmount)}`, right, y - 3, 18, bold, INK);
+  y -= 22;
+  text(`(${input.amountWords})`, M, y, 9.5, regular, MUTED);
+  const sigY = input.showVerification ? SIG_Y + 60 : SIG_Y;
+  const sigW = 220;
+  const sigX = (A4.w - sigW) / 2;
+  const centerText = (t, yy, size, font, color) => text(t, A4.w / 2 - font.widthOfTextAtSize(t, size) / 2, yy, size, font, color);
+  if (input.signaturePng) {
+    try {
+      const img = await doc.embedPng(input.signaturePng);
+      const scale = Math.min(150 / img.width, 54 / img.height);
+      const w = img.width * scale;
+      page.drawImage(img, { x: A4.w / 2 - w / 2, y: sigY + 6, width: w, height: img.height * scale });
+    } catch {
+    }
+  }
+  page.drawLine({ start: { x: sigX, y: sigY }, end: { x: sigX + sigW, y: sigY }, thickness: 1, color: FAINT });
+  centerText("\u0E1C\u0E39\u0E49\u0E21\u0E35\u0E2D\u0E33\u0E19\u0E32\u0E08\u0E25\u0E07\u0E19\u0E32\u0E21", sigY - 14, 9.5, bold, INK);
+  centerText(vendorDisplayName(input.vendor.prefix, input.vendor.name), sigY - 28, 9, regular, MUTED);
+  if (input.showVerification) {
+    const qrSize = 64;
+    drawQr(page, input.verifyUrl, right - qrSize, M - 6, qrSize, INK);
+    text(`\u0E23\u0E2B\u0E31\u0E2A\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A  ${input.verificationCode}`, M, M + 30, 9.5, bold, INK);
+    text(input.verifyUrl, M, M + 14, 8.5, regular, MUTED);
+  }
+  if (pages.length > 1) {
+    pages.forEach((p2, i) => {
+      const t = `\u0E2B\u0E19\u0E49\u0E32 ${i + 1} / ${pages.length}`;
+      p2.drawText(t, { x: A4.w / 2 - regular.widthOfTextAtSize(t, 8.5) / 2, y: M - 30, size: 8.5, font: regular, color: FAINT });
+    });
+  }
+  const bytes = await doc.save();
+  const sha2562 = createHash3("sha256").update(bytes).digest("hex");
+  return { bytes, sha256: sha2562 };
+}
+
+// server/src/receipts.ts
+async function finalizeReceipt(txnId, ip) {
+  const db = sql();
+  const txnRows = await db`select user_id from vendor_payables where id = ${txnId}`;
+  const rowTenant = txnRows[0] ? String(txnRows[0].user_id) : process.env.PILOT_TENANT ?? "ABC";
+  const prof = await tenantProfile(rowTenant) ?? { code: rowTenant, beYear: PILOT_BE_YEAR, display: CLIENT_DISPLAY };
+  const existing = await db`
+    select r.number, r.verification_code, r.pdf_path, r.pdf_sha256 from vendor_receipts r
+    where r.transaction_id = ${txnId} and r.user_id = ${rowTenant}`;
+  const ex = one(existing);
+  if (ex?.pdf_path) {
+    const pdfPath2 = String(ex.pdf_path);
+    return {
+      ok: true,
+      number: String(ex.number),
+      verificationCode: String(ex.verification_code).toUpperCase(),
+      pdfSha256: String(ex.pdf_sha256 ?? ""),
+      pdfPath: pdfPath2,
+      pdfBytes: await readStoredDurable(rowTenant, pdfPath2) ?? new Uint8Array()
+    };
+  }
+  let number;
+  let code;
+  if (ex) {
+    number = String(ex.number);
+    code = String(ex.verification_code);
+  } else {
+    const auth = await db`select vendor_name, vendor_address from vendor_authorizations
+      where transaction_id = ${txnId} and user_id = ${rowTenant}`;
+    if (!one(auth)) return { ok: false, error: "not-signed" };
+    code = randomBytes4(6).toString("hex");
+    const vno = one(await db`
+      select v.vendor_no from vendor_payables p
+      join vendor_payees v on v.id = p.vendor_id
+      where p.id = ${txnId} and p.user_id = ${rowTenant}`);
+    const n = await db`select generate_doc_number(${rowTenant}, 'vendor_receipt', ${currentBeYear()}, ${Number(vno?.vendor_no ?? 0)}) as number`;
+    number = String(one(n)?.number);
+    await db`insert into vendor_receipts (user_id, transaction_id, number, issue_date, verification_code, status)
+      values (${rowTenant}, ${txnId}, ${number}, CURRENT_DATE, ${code}, 'issued')`;
+    await db`update vendor_payables set status = 'issued' where id = ${txnId}`;
+    await withTenant(rowTenant, "client", async () => audit(rowTenant, "vendor_receipts", txnId, "receipt.issued", "system", { number }, ip));
+  }
+  const rows = await db`
+    select t.description, t.note, t.payment_type, t.line_items, t.gross_amount, t.wht_rate, t.wht_amount, t.net_amount,
+      t.transfer_date, t.slip_reference,
+      a.vendor_prefix, a.vendor_name, a.vendor_address, a.vendor_masked_id, a.vendor_phone, a.vendor_email,
+      a.auth_ref, a.signature_image_path,
+      a.signed_at, a.verification_method, a.consent_text_version
+    from vendor_payables t
+    join vendor_authorizations a on a.transaction_id = t.id
+    where t.id = ${txnId} and t.user_id = ${rowTenant}`;
+  const d2 = one(rows);
+  if (!d2) return { ok: false, error: "not-signed" };
+  const whtAmountNum = Number(d2.wht_amount);
+  if (whtAmountNum > 0) {
+    await withTenant(rowTenant, "owner", async () => {
+      const already = one(
+        await db`select id from wht_records where user_id = ${rowTenant} and source_transaction_id = ${txnId}`
+      );
+      if (already) return;
+      let taxId = "";
+      try {
+        const enc = one(await db`
+          select v.id_number_encrypted from vendor_payables p
+          join vendor_payees v on v.id = p.vendor_id
+          where p.id = ${txnId} and p.user_id = ${rowTenant}`);
+        if (enc?.id_number_encrypted) taxId = decryptId(enc.id_number_encrypted) ?? "";
+      } catch {
+      }
+      const vName = vendorDisplayName(d2.vendor_prefix, d2.vendor_name);
+      const vType = isEntityName(d2.vendor_name) ? "company" : "individual";
+      const wv = one(await db`select id from wht_vendors
+        where user_id = ${rowTenant} and ((${taxId} <> '' and tax_id = ${taxId}) or name = ${vName}) limit 1`);
+      let vendorId = wv?.id;
+      if (!vendorId) {
+        vendorId = String(
+          one(await db`insert into wht_vendors (user_id, name, tax_id, address, vendor_type)
+            values (${rowTenant}, ${vName}, ${taxId}, ${d2.vendor_address}, ${vType}) returning id`)?.id
+        );
+      }
+      const issueDate = isoDay(d2.transfer_date);
+      const whtDescription = d2.payment_type || d2.note || d2.description;
+      await db`insert into wht_records
+        (user_id, vendor_id, form_type, issue_date, amount, wht_rate, wht_amount, description, status, certificate_no, source_transaction_id)
+        values (${rowTenant}, ${vendorId}, ${formTypeForVendorType(vType)}, ${issueDate}::date,
+          ${Number(d2.gross_amount)}, ${Number(d2.wht_rate)}, ${whtAmountNum}, ${whtDescription}, 'active',
+          generate_wht_certificate_no(${rowTenant}, ${issueDate}::date), ${txnId})`;
+    });
+  }
+  const rawItems = Array.isArray(d2.line_items) ? d2.line_items : [];
+  const lineItems = rawItems.map((it2) => ({ description: String(it2.description ?? ""), amount: Number(it2.amount) || 0 })).filter((it2) => it2.description.trim() || it2.amount > 0);
+  const sig = await readStoredDurable(rowTenant, d2.signature_image_path);
+  const verifyUrl = `${PUBLIC_BASE}/verify/${code.toUpperCase()}`;
+  const { bytes, sha256: sha2562 } = await buildReceiptPdf({
+    number,
+    issueDate: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
+    verifyUrl,
+    verificationCode: code.toUpperCase(),
+    verificationMethod: d2.verification_method,
+    consentVersion: d2.consent_text_version,
+    signedAt: d2.signed_at,
+    client: { code: prof.code, display: prof.display },
+    vendor: {
+      prefix: d2.vendor_prefix,
+      name: d2.vendor_name,
+      address: d2.vendor_address,
+      maskedId: d2.vendor_masked_id,
+      phone: d2.vendor_phone ?? void 0,
+      email: d2.vendor_email ?? void 0
+    },
+    lineItems,
+    note: d2.note,
+    description: d2.description,
+    grossAmount: Number(d2.gross_amount),
+    whtRate: Number(d2.wht_rate),
+    whtAmount: Number(d2.wht_amount),
+    netAmount: Number(d2.net_amount),
+    amountWords: amountToThaiWords(Number(d2.net_amount)),
+    transferDate: isoDay(d2.transfer_date),
+    slipReference: d2.slip_reference,
+    signaturePng: sig
+  });
+  const pdfPath = await saveBytesDurable("pdfs", `${number}.pdf`, bytes, rowTenant);
+  await db`update vendor_receipts set pdf_path = ${pdfPath}, pdf_sha256 = ${sha2562}
+    where transaction_id = ${txnId} and user_id = ${rowTenant}`;
+  return { ok: true, number, verificationCode: code.toUpperCase(), pdfSha256: sha2562, pdfPath, pdfBytes: bytes };
+}
+
 // server/src/api.ts
 var TENANT = PILOT_TENANT;
-var BE_YEAR = PILOT_BE_YEAR;
 var GATE_MAX = 5;
 var gateFails = /* @__PURE__ */ new Map();
 function gateBlocked(tokenHash) {
@@ -70426,7 +70572,7 @@ app.post("/api/vendor/:token/sign", async (c) => {
   const sigPath = await saveBytesDurable("signatures", `${txnId}.png`, png, rowTenant);
   const subPhone = String(body.vendorPhone ?? "").trim().slice(0, 50);
   const subEmail = String(body.vendorEmail ?? "").trim().slice(0, 200);
-  const authRef = `AUTH-${randomBytes4(4).toString("hex").toUpperCase()}`;
+  const authRef = `AUTH-${randomBytes5(4).toString("hex").toUpperCase()}`;
   await db`insert into vendor_authorizations
     (user_id, transaction_id, vendor_prefix, vendor_name, vendor_address, vendor_masked_id,
      vendor_phone, vendor_email, auth_ref, signature_image_path, verification_method, line_user_id, ip, user_agent,
@@ -70448,135 +70594,33 @@ app.post("/api/vendor/:token/sign", async (c) => {
     { verificationMethod: "stub-deferred", consentVersion: "v1", corrections, authRef },
     ip
   ));
-  return c.json({ ok: true, transactionId: txnId, corrections, authRef });
+  let issued;
+  try {
+    const fin = await finalizeReceipt(txnId, ip);
+    if (fin.ok) {
+      issued = {
+        number: fin.number,
+        verificationCode: fin.verificationCode,
+        pdfSha256: fin.pdfSha256,
+        pdfBase64: Buffer.from(fin.pdfBytes).toString("base64")
+      };
+    }
+  } catch (e) {
+    console.error("[sign] issue-failed", e instanceof Error ? e.message : String(e));
+  }
+  return c.json({ ok: true, transactionId: txnId, corrections, authRef, ...issued });
 });
 app.post("/api/transactions/:id/finalize", async (c) => {
   const ip = c.req.header("x-forwarded-for") ?? "local";
-  const txnId = c.req.param("id");
-  const db = sql();
-  const txnRows = await db`select user_id from vendor_payables where id = ${txnId}`;
-  const rowTenant = txnRows[0] ? String(txnRows[0].user_id) : TENANT;
-  const prof = await tenantProfile(rowTenant) ?? { code: rowTenant, beYear: BE_YEAR, display: CLIENT_DISPLAY };
-  const existing = await db`
-    select r.number, r.verification_code, r.pdf_path from vendor_receipts r
-    where r.transaction_id = ${txnId} and r.user_id = ${rowTenant}`;
-  const ex = one(existing);
-  if (ex?.pdf_path) return c.json({ error: "already-issued" }, 409);
-  let number;
-  let code;
-  if (ex) {
-    number = String(ex.number);
-    code = String(ex.verification_code);
-  } else {
-    const auth = await db`select vendor_name, vendor_address from vendor_authorizations
-      where transaction_id = ${txnId} and user_id = ${rowTenant}`;
-    if (!one(auth)) return c.json({ error: "not-signed" }, 422);
-    code = randomBytes4(6).toString("hex");
-    const vno = one(await db`
-      select v.vendor_no from vendor_payables p
-      join vendor_payees v on v.id = p.vendor_id
-      where p.id = ${txnId} and p.user_id = ${rowTenant}`);
-    const n = await db`select generate_doc_number(${rowTenant}, 'vendor_receipt', ${currentBeYear()}, ${Number(vno?.vendor_no ?? 0)}) as number`;
-    number = String(one(n)?.number);
-    await db`insert into vendor_receipts (user_id, transaction_id, number, issue_date, verification_code, status)
-      values (${rowTenant}, ${txnId}, ${number}, CURRENT_DATE, ${code}, 'issued')`;
-    await db`update vendor_payables set status = 'issued' where id = ${txnId}`;
-    await withTenant(rowTenant, "client", async () => audit(rowTenant, "vendor_receipts", txnId, "receipt.issued", "system", { number }, ip));
-  }
-  const rows = await db`
-    select t.description, t.note, t.payment_type, t.line_items, t.gross_amount, t.wht_rate, t.wht_amount, t.net_amount,
-      t.transfer_date, t.slip_reference,
-      a.vendor_prefix, a.vendor_name, a.vendor_address, a.vendor_masked_id, a.vendor_phone, a.vendor_email,
-      a.auth_ref, a.signature_image_path,
-      a.signed_at, a.verification_method, a.consent_text_version
-    from vendor_payables t
-    join vendor_authorizations a on a.transaction_id = t.id
-    where t.id = ${txnId} and t.user_id = ${rowTenant}`;
-  const d2 = one(rows);
-  if (!d2) return c.json({ error: "not-signed" }, 422);
-  const whtAmountNum = Number(d2.wht_amount);
-  if (whtAmountNum > 0) {
-    await withTenant(rowTenant, "owner", async () => {
-      const already = one(
-        await db`select id from wht_records where user_id = ${rowTenant} and source_transaction_id = ${txnId}`
-      );
-      if (already) return;
-      let taxId = "";
-      try {
-        const enc = one(await db`
-          select v.id_number_encrypted from vendor_payables p
-          join vendor_payees v on v.id = p.vendor_id
-          where p.id = ${txnId} and p.user_id = ${rowTenant}`);
-        if (enc?.id_number_encrypted) taxId = decryptId(enc.id_number_encrypted) ?? "";
-      } catch {
-      }
-      const vName = vendorDisplayName(d2.vendor_prefix, d2.vendor_name);
-      const vType = isEntityName(d2.vendor_name) ? "company" : "individual";
-      const wv = one(await db`select id from wht_vendors
-        where user_id = ${rowTenant} and ((${taxId} <> '' and tax_id = ${taxId}) or name = ${vName}) limit 1`);
-      let vendorId = wv?.id;
-      if (!vendorId) {
-        vendorId = String(
-          one(await db`insert into wht_vendors (user_id, name, tax_id, address, vendor_type)
-            values (${rowTenant}, ${vName}, ${taxId}, ${d2.vendor_address}, ${vType}) returning id`)?.id
-        );
-      }
-      const issueDate = isoDay(d2.transfer_date);
-      const whtDescription = d2.payment_type || d2.note || d2.description;
-      await db`insert into wht_records
-        (user_id, vendor_id, form_type, issue_date, amount, wht_rate, wht_amount, description, status, certificate_no, source_transaction_id)
-        values (${rowTenant}, ${vendorId}, ${formTypeForVendorType(vType)}, ${issueDate}::date,
-          ${Number(d2.gross_amount)}, ${Number(d2.wht_rate)}, ${whtAmountNum}, ${whtDescription}, 'active',
-          generate_wht_certificate_no(${rowTenant}, ${issueDate}::date), ${txnId})`;
-    });
-  }
-  const rawItems = Array.isArray(d2.line_items) ? d2.line_items : [];
-  const lineItems = rawItems.map((it2) => ({ description: String(it2.description ?? ""), amount: Number(it2.amount) || 0 })).filter((it2) => it2.description.trim() || it2.amount > 0);
-  const sig = await readStoredDurable(rowTenant, d2.signature_image_path);
-  const verifyUrl = `${PUBLIC_BASE}/verify/${code.toUpperCase()}`;
-  const { bytes, sha256: sha2562 } = await buildReceiptPdf({
-    number,
-    issueDate: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
-    verifyUrl,
-    verificationCode: code.toUpperCase(),
-    verificationMethod: d2.verification_method,
-    consentVersion: d2.consent_text_version,
-    signedAt: d2.signed_at,
-    client: { code: prof.code, display: prof.display },
-    vendor: {
-      prefix: d2.vendor_prefix,
-      name: d2.vendor_name,
-      address: d2.vendor_address,
-      maskedId: d2.vendor_masked_id,
-      phone: d2.vendor_phone ?? void 0,
-      email: d2.vendor_email ?? void 0
-    },
-    lineItems,
-    note: d2.note,
-    description: d2.description,
-    grossAmount: Number(d2.gross_amount),
-    whtRate: Number(d2.wht_rate),
-    whtAmount: Number(d2.wht_amount),
-    netAmount: Number(d2.net_amount),
-    amountWords: amountToThaiWords(Number(d2.net_amount)),
-    transferDate: isoDay(d2.transfer_date),
-    slipReference: d2.slip_reference,
-    signaturePng: sig
+  const res = await finalizeReceipt(c.req.param("id"), ip);
+  if (!res.ok) return c.json({ error: res.error }, res.error === "already-issued" ? 409 : 422);
+  return c.json({
+    ok: true,
+    number: res.number,
+    verificationCode: res.verificationCode,
+    pdfSha256: res.pdfSha256,
+    pdfPath: res.pdfPath
   });
-  const pdfPath = await saveBytesDurable("pdfs", `${number}.pdf`, bytes, rowTenant);
-  await db`update vendor_receipts set pdf_path = ${pdfPath}, pdf_sha256 = ${sha2562}
-    where transaction_id = ${txnId} and user_id = ${rowTenant}`;
-  return c.json({ ok: true, number, verificationCode: code.toUpperCase(), pdfSha256: sha2562, pdfPath });
-});
-app.get("/api/vendor_payees/:id/memory", async (c) => {
-  const u = await sessionUser(c.req.header("cookie"));
-  const tenantId = u?.memberships.find((m2) => m2.role === "client_user" || m2.role === "client_admin")?.tenantId ?? null;
-  if (!tenantId) return c.json({ error: "unauthorized" }, 401);
-  try {
-    return c.json(await getVendorMemory(tenantId, c.req.param("id")));
-  } catch {
-    return c.json({ error: "unavailable" }, 503);
-  }
 });
 app.get("/api/settings", async (c) => {
   const g = await guard(c);

@@ -1,16 +1,9 @@
 import { Hono } from 'hono'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { sql, withTenant } from '../../src/server/db'
-import { amountToThaiWords } from '../../src/lib/thai-words'
-import { isVendorPrefix, prefixRequired, isEntityName, vendorDisplayName } from '../../src/lib/vendor-name'
-import { currentBeYear } from '../../src/lib/settings-types'
-import { formTypeForVendorType } from '../../src/lib/wht'
-import { decryptId } from './crypto'
-import { isoDay } from './dates'
-import { readStoredDurable, saveBytesDurable } from './storage'
-import { buildReceiptPdf } from './pdf'
-import { sha256hex, sessionUser } from './auth'
-import { getVendorMemory } from './vendor-memory'
+import { isVendorPrefix, prefixRequired } from '../../src/lib/vendor-name'
+import { saveBytesDurable } from './storage'
+import { sha256hex } from './auth'
 import { authRoutes } from './client-auth'
 import { corsMw } from './cors'
 import { getTenantSettings, saveTenantSettings } from './settings'
@@ -20,16 +13,8 @@ import { getPlatformSettingsCached } from './platform'
 import { clearImpersonationCookie, impersonationFromCookie } from './impersonation'
 import { txnRoutes } from './transactions'
 import { whtRoutes } from './wht'
-import {
-  CLIENT_DISPLAY,
-  PILOT_BE_YEAR,
-  PILOT_TENANT,
-  PUBLIC_BASE,
-  audit,
-  one,
-  rateLimited,
-  tenantProfile,
-} from './shared'
+import { finalizeReceipt } from './receipts'
+import { PILOT_TENANT, audit, one, rateLimited } from './shared'
 
 // ── Public client/vendor operation ─────────────────────────────────────
 // Vendor links, signing, finalize, QR verify. No login, no admin routes.
@@ -37,7 +22,6 @@ import {
 // Secrets only via env. Never log tokens, ID numbers, or personal data.
 
 const TENANT = PILOT_TENANT
-const BE_YEAR = PILOT_BE_YEAR
 
 // Gate attempts: 5 wrong IDs per token per 10 min (single process;
 // move to Postgres behind multiple replicas — same caveat as rate limits).
@@ -297,7 +281,25 @@ app.post('/api/vendor/:token/sign', async (c) => {
   await withTenant(rowTenant, 'client', async () =>
     audit(rowTenant, 'vendor_payables', txnId, 'vendor.signed', 'vendor',
       { verificationMethod: 'stub-deferred', consentVersion: 'v1', corrections, authRef }, ip))
-  return c.json({ ok: true, transactionId: txnId, corrections, authRef })
+
+  // Issue the receipt now so the vendor gets the real series number and the PDF
+  // immediately — no client round-trip. If issuance fails, the row stays
+  // 'signed' and the client can still issue it later via the finalize endpoint.
+  let issued: { number: string; verificationCode: string; pdfSha256: string; pdfBase64: string } | undefined
+  try {
+    const fin = await finalizeReceipt(txnId, ip)
+    if (fin.ok) {
+      issued = {
+        number: fin.number,
+        verificationCode: fin.verificationCode,
+        pdfSha256: fin.pdfSha256,
+        pdfBase64: Buffer.from(fin.pdfBytes).toString('base64'),
+      }
+    }
+  } catch (e) {
+    console.error('[sign] issue-failed', e instanceof Error ? e.message : String(e))
+  }
+  return c.json({ ok: true, transactionId: txnId, corrections, authRef, ...issued })
 })
 
 // Finalize: assign series number + receipt row + PDF in one flow.
@@ -305,163 +307,20 @@ app.post('/api/vendor/:token/sign', async (c) => {
 // (generate_doc_number locks the counter row). PDF failure after numbering
 // retries with the SAME number — never gaps, never MAX()+1.
 // Multi-tenant: tenant + prefix + be_year come from the tenants row.
+// Finalize: assign series number + receipt row + PDF in one flow (shared with
+// the vendor sign path — see server/src/receipts.ts). Idempotent: an already
+// issued receipt returns its stored number/PDF rather than renumbering.
 app.post('/api/transactions/:id/finalize', async (c) => {
   const ip = c.req.header('x-forwarded-for') ?? 'local'
-  const txnId = c.req.param('id')
-  const db = sql()
-
-  const txnRows = (await db`select user_id from vendor_payables where id = ${txnId}`) as unknown as
-    { user_id: string }[]
-  const rowTenant = txnRows[0] ? String(txnRows[0].user_id) : TENANT
-  const prof = (await tenantProfile(rowTenant)) ?? { code: rowTenant, beYear: BE_YEAR, display: CLIENT_DISPLAY }
-
-  const existing = await db`
-    select r.number, r.verification_code, r.pdf_path from vendor_receipts r
-    where r.transaction_id = ${txnId} and r.user_id = ${rowTenant}`
-  const ex = one<Record<string, unknown>>(existing)
-  if (ex?.pdf_path) return c.json({ error: 'already-issued' }, 409)
-
-  let number: string
-  let code: string
-  if (ex) {
-    number = String(ex.number)
-    code = String(ex.verification_code)
-  } else {
-    const auth = await db`select vendor_name, vendor_address from vendor_authorizations
-      where transaction_id = ${txnId} and user_id = ${rowTenant}`
-    if (!one(auth)) return c.json({ error: 'not-signed' }, 422)
-    code = randomBytes(6).toString('hex')
-    // RCT-{VENDORNO}-{BE_YEAR}-{NNN} via generate_doc_number(user_id, doc_type, year, vendor_no)
-    const vno = one<{ vendor_no: number }>(await db`
-      select v.vendor_no from vendor_payables p
-      join vendor_payees v on v.id = p.vendor_id
-      where p.id = ${txnId} and p.user_id = ${rowTenant}`)
-    const n = await db`select generate_doc_number(${rowTenant}, 'vendor_receipt', ${currentBeYear()}, ${Number(vno?.vendor_no ?? 0)}) as number`
-    number = String(one<Record<string, unknown>>(n)?.number)
-    await db`insert into vendor_receipts (user_id, transaction_id, number, issue_date, verification_code, status)
-      values (${rowTenant}, ${txnId}, ${number}, CURRENT_DATE, ${code}, 'issued')`
-    await db`update vendor_payables set status = 'issued' where id = ${txnId}`
-    await withTenant(rowTenant, 'client', async () =>
-      audit(rowTenant, 'vendor_receipts', txnId, 'receipt.issued', 'system', { number }, ip))
-  }
-
-  const rows = await db`
-    select t.description, t.note, t.payment_type, t.line_items, t.gross_amount, t.wht_rate, t.wht_amount, t.net_amount,
-      t.transfer_date, t.slip_reference,
-      a.vendor_prefix, a.vendor_name, a.vendor_address, a.vendor_masked_id, a.vendor_phone, a.vendor_email,
-      a.auth_ref, a.signature_image_path,
-      a.signed_at, a.verification_method, a.consent_text_version
-    from vendor_payables t
-    join vendor_authorizations a on a.transaction_id = t.id
-    where t.id = ${txnId} and t.user_id = ${rowTenant}`
-  const d = one<{
-    description: string; note: string; payment_type: string | null; line_items: unknown;
-    gross_amount: string; wht_rate: string; wht_amount: string;
-    net_amount: string; transfer_date: string; slip_reference: string;
-    vendor_prefix: string; vendor_name: string; vendor_address: string; vendor_masked_id: string;
-    vendor_phone: string | null; vendor_email: string | null; auth_ref: string | null;
-    signature_image_path: string; signed_at: string;
-    verification_method: string; consent_text_version: string;
-  }>(rows)
-  if (!d) return c.json({ error: 'not-signed' }, 422)
-
-  // Auto-generate the withholding certificate on issuance (idempotent per txn).
-  const whtAmountNum = Number(d.wht_amount)
-  if (whtAmountNum > 0) {
-    await withTenant(rowTenant, 'owner', async () => {
-      const already = one<{ id: string }>(
-        await db`select id from wht_records where user_id = ${rowTenant} and source_transaction_id = ${txnId}`,
-      )
-      if (already) return
-      let taxId = ''
-      try {
-        const enc = one<{ id_number_encrypted: string | null }>(await db`
-          select v.id_number_encrypted from vendor_payables p
-          join vendor_payees v on v.id = p.vendor_id
-          where p.id = ${txnId} and p.user_id = ${rowTenant}`)
-        if (enc?.id_number_encrypted) taxId = decryptId(enc.id_number_encrypted) ?? ''
-      } catch {
-        /* key absent — certificate still issues without tax id */
-      }
-      const vName = vendorDisplayName(d.vendor_prefix, d.vendor_name)
-      const vType: 'individual' | 'company' = isEntityName(d.vendor_name) ? 'company' : 'individual'
-      const wv = one<{ id: string }>(await db`select id from wht_vendors
-        where user_id = ${rowTenant} and ((${taxId} <> '' and tax_id = ${taxId}) or name = ${vName}) limit 1`)
-      let vendorId = wv?.id
-      if (!vendorId) {
-        vendorId = String(
-          one<{ id: string }>(await db`insert into wht_vendors (user_id, name, tax_id, address, vendor_type)
-            values (${rowTenant}, ${vName}, ${taxId}, ${d.vendor_address}, ${vType}) returning id`)?.id,
-        )
-      }
-      const issueDate = isoDay(d.transfer_date)
-      // The printed description is the payment type NAME (ประเภทการจ่าย), not
-      // the transaction note and not a stored label — older labels carried a
-      // rate suffix ("ค่าบริการ — 3%") which must not appear on the form.
-      const whtDescription = d.payment_type || d.note || d.description
-      await db`insert into wht_records
-        (user_id, vendor_id, form_type, issue_date, amount, wht_rate, wht_amount, description, status, certificate_no, source_transaction_id)
-        values (${rowTenant}, ${vendorId}, ${formTypeForVendorType(vType)}, ${issueDate}::date,
-          ${Number(d.gross_amount)}, ${Number(d.wht_rate)}, ${whtAmountNum}, ${whtDescription}, 'active',
-          generate_wht_certificate_no(${rowTenant}, ${issueDate}::date), ${txnId})`
-    })
-  }
-
-  const rawItems = Array.isArray(d.line_items) ? (d.line_items as { description?: unknown; amount?: unknown }[]) : []
-  const lineItems = rawItems
-    .map((it) => ({ description: String(it.description ?? ''), amount: Number(it.amount) || 0 }))
-    .filter((it) => it.description.trim() || it.amount > 0)
-  // Read the vendor's signature through the storage seam so it comes from R2
-  // when configured — a serverless instance rarely has the file on local disk.
-  const sig = await readStoredDurable(rowTenant, d.signature_image_path)
-  const verifyUrl = `${PUBLIC_BASE}/verify/${code.toUpperCase()}`
-  const { bytes, sha256 } = await buildReceiptPdf({
-    number,
-    issueDate: new Date().toISOString().slice(0, 10),
-    verifyUrl,
-    verificationCode: code.toUpperCase(),
-    verificationMethod: d.verification_method,
-    consentVersion: d.consent_text_version,
-    signedAt: d.signed_at,
-    client: { code: prof.code, display: prof.display },
-    vendor: {
-      prefix: d.vendor_prefix, name: d.vendor_name, address: d.vendor_address, maskedId: d.vendor_masked_id,
-      phone: d.vendor_phone ?? undefined, email: d.vendor_email ?? undefined,
-    },
-    lineItems,
-    note: d.note,
-    description: d.description,
-    grossAmount: Number(d.gross_amount),
-    whtRate: Number(d.wht_rate),
-    whtAmount: Number(d.wht_amount),
-    netAmount: Number(d.net_amount),
-    amountWords: amountToThaiWords(Number(d.net_amount)),
-    transferDate: isoDay(d.transfer_date),
-    slipReference: d.slip_reference,
-    signaturePng: sig,
+  const res = await finalizeReceipt(c.req.param('id'), ip)
+  if (!res.ok) return c.json({ error: res.error }, res.error === 'already-issued' ? 409 : 422)
+  return c.json({
+    ok: true,
+    number: res.number,
+    verificationCode: res.verificationCode,
+    pdfSha256: res.pdfSha256,
+    pdfPath: res.pdfPath,
   })
-  const pdfPath = await saveBytesDurable('pdfs', `${number}.pdf`, bytes, rowTenant)
-  await db`update vendor_receipts set pdf_path = ${pdfPath}, pdf_sha256 = ${sha256}
-    where transaction_id = ${txnId} and user_id = ${rowTenant}`
-  return c.json({ ok: true, number, verificationCode: code.toUpperCase(), pdfSha256: sha256, pdfPath })
-})
-
-// Vendor memory: remembered defaults from the vendor's tenant history.
-// PREPARED, 401-guarded — requires an authenticated client session scoped to the
-// vendor's tenant. Client API auth is not implemented yet (admin sessions live on
-// ADMIN_PORT with a different cookie), so this never exposes tenant data: it
-// returns 401 until the client-auth slice lands. Client recall runs on the mock
-// source meanwhile (see src/lib/vendor-memory-source.ts).
-app.get('/api/vendor_payees/:id/memory', async (c) => {
-  const u = await sessionUser(c.req.header('cookie'))
-  const tenantId =
-    u?.memberships.find((m) => m.role === 'client_user' || m.role === 'client_admin')?.tenantId ?? null
-  if (!tenantId) return c.json({ error: 'unauthorized' }, 401)
-  try {
-    return c.json(await getVendorMemory(tenantId, c.req.param('id')))
-  } catch {
-    return c.json({ error: 'unavailable' }, 503)
-  }
 })
 
 // Tenant settings (per-tenant). PREPARED, session-guarded: requires a client

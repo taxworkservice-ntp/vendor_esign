@@ -11,8 +11,11 @@ import { whtSortField, type WhtSortField } from '../../src/lib/wht-summary'
 const ORDER_BY: Record<WhtSortField, string> = {
   date: 'r.issue_date',
   vendor: 'v.name',
+  cert: 'r.certificate_no',
+  form: 'r.form_type',
   amount: 'r.amount',
   wht: 'r.wht_amount',
+  status: 'r.status',
 }
 
 export function whtOrderByClause(sort: WhtSortQuery): string {
