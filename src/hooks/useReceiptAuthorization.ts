@@ -35,6 +35,21 @@ const EMPTY: ReceiptAuthorization = {
   corrections: [],
 }
 
+/** The signed authorization for one transaction. Shared by the hook and the
+ *  batch receipt export, which calls it per row. */
+export async function fetchReceiptAuthorization(txnId: string): Promise<ReceiptAuthorization> {
+  if (hasServer) {
+    return apiGet<ReceiptAuthorization>(`/api/client/transactions/${txnId}/authorization`)
+  }
+  // Mock: metadata in localStorage, image in IndexedDB. They can disagree
+  // in private mode, which is why the two are read independently and the
+  // result is merged — the caller distinguishes "not signed" from "signed
+  // but the image is missing".
+  const [meta, png] = await Promise.all([Promise.resolve(getAuthMeta(txnId)), getSignature(txnId)])
+  if (!meta) return { ...EMPTY, signaturePng: png ?? null }
+  return { ...meta, signaturePng: png ?? null, corrections: meta.corrections ?? [] }
+}
+
 export function useReceiptAuthorization(txnId?: string): {
   data: ReceiptAuthorization | undefined
   isLoading: boolean
@@ -47,18 +62,6 @@ export function useReceiptAuthorization(txnId?: string): {
     queryKey: [...QK, activeTenant, id],
     enabled: !!id,
     staleTime: 60_000,
-    queryFn: async (): Promise<ReceiptAuthorization> => {
-      if (!id) return EMPTY
-      if (hasServer) {
-        return apiGet<ReceiptAuthorization>(`/api/client/transactions/${id}/authorization`)
-      }
-      // Mock: metadata in localStorage, image in IndexedDB. They can disagree
-      // in private mode, which is why the two are read independently and the
-      // result is merged — the caller distinguishes "not signed" from "signed
-      // but the image is missing".
-      const [meta, png] = await Promise.all([Promise.resolve(getAuthMeta(id)), getSignature(id)])
-      if (!meta) return { ...EMPTY, signaturePng: png ?? null }
-      return { ...meta, signaturePng: png ?? null, corrections: meta.corrections ?? [] }
-    },
+    queryFn: async (): Promise<ReceiptAuthorization> => (id ? fetchReceiptAuthorization(id) : EMPTY),
   })
 }

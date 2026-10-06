@@ -38,6 +38,7 @@ const NAV: NavItem[] = [
   { to: '/vendors', label: 'ผู้ขาย', icon: Users },
   { to: '/items', label: 'สินค้า/บริการ', icon: Package },
   { to: '/wht', label: 'ภาษีหัก ณ ที่จ่าย', icon: Landmark },
+  { to: '/receipts', label: 'ใบเสร็จรับเงิน', icon: ReceiptText },
   { to: '/metrics', label: 'ภาพรวม', icon: BarChart3 },
   { to: '/settings', label: 'ตั้งค่า', icon: SettingsIcon },
 ]

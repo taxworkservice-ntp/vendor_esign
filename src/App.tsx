@@ -16,6 +16,8 @@ import { TransactionDetail } from './pages/TransactionDetail'
 import { VendorSign } from './pages/VendorSign'
 import { VendorReceipt } from './pages/VendorReceipt'
 import { ReceiptView } from './pages/ReceiptView'
+import { ReceiptsList } from './pages/ReceiptsList'
+import { ReceiptsDownload } from './pages/ReceiptsDownload'
 import { MetricsPage } from './pages/MetricsPage'
 import { VerifyPage } from './pages/VerifyPage'
 import { VendorsList } from './pages/VendorsList'
@@ -124,6 +126,8 @@ export default function App() {
               <GlobalMonthProvider>
               <Layout>
                 <Routes>
+                  <Route path="/receipts" element={<RequireClient><ReceiptsList /></RequireClient>} />
+                  <Route path="/receipts/download" element={<RequireClient><ReceiptsDownload /></RequireClient>} />
                   <Route path="/receipts/:id" element={<RequireClient><ReceiptView /></RequireClient>} />
 
                   <Route path="/" element={<RequireClient><TransactionList /></RequireClient>} />

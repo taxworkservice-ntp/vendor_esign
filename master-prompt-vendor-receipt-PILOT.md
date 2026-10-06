@@ -102,6 +102,17 @@ Transaction status: `draft → sent → opened → signed → issued`, plus `exp
   fetched; the fallback button uses it). The buyer block is the workspace profile
   (`useSettings` → `displayName/address/taxId`), never the mock client registry.
 - A4, print-ready. Buddhist-era dates.
+- **Receipt register + batch ZIP.** Issued receipts are listed at `/receipts`
+  (nav "ใบเสร็จรับเงิน"), scoped by the receipt's **issue date** — a document
+  belongs to the period it was issued, not the payment date (mirrors the WHT
+  register). `GET /api/client/receipts` returns the register (server
+  `server/src/receipts-register.ts`; sort/search/ORDER BY whitelisted). The
+  "ดาวน์โหลดทั้งหมด" button opens `/receipts/download?...&download=1`, which
+  renders each row through `ReceiptSheet` offscreen, rasterises one PDF per
+  receipt and zips them (`fflate`, one file per receipt). A receipt whose
+  signature image cannot be fetched falls back to the archived server PDF for
+  that one row rather than shipping a placeholder — never drop a statutory
+  document, and report the fallback count.
 - Amount in Thai words with a tested utility. Example: 2,910.00 → `สองพันเก้าร้อยสิบบาทถ้วน`. Cover satang, zero, millions, and the "เอ็ด" and "ยี่" rules with unit tests.
 - Contents: title "ใบเสร็จรับเงิน"; number; date; seller block (vendor name, address, ID); buyer block (client name, address, tax ID); description; gross amount; WHT rate and amount when applicable; net amount received; amount in words; transfer date and reference; a statement that the seller is not VAT-registered; vendor signature image; representative signature line with name and position; authorization statement; verification footer with time, method, code, QR, and file hash.
 - Show a stamp-duty warning on large amounts above the `[CONFIG]` threshold. `[VERIFY]` the rule, including any duty on the authorization.

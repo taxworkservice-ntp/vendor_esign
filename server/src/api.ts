@@ -13,6 +13,7 @@ import { getPlatformSettingsCached } from './platform'
 import { clearImpersonationCookie, impersonationFromCookie } from './impersonation'
 import { txnRoutes } from './transactions'
 import { whtRoutes } from './wht'
+import { receiptRoutes } from './receipts-register'
 import { finalizeReceipt } from './receipts'
 import { PILOT_TENANT, audit, one, rateLimited } from './shared'
 
@@ -102,6 +103,9 @@ app.route('/api/client', txnRoutes)
 
 // Client WHT records + vendors.
 app.route('/api/client', whtRoutes)
+
+// Client receipt register (issued receipts by issue-date period).
+app.route('/api/client', receiptRoutes)
 
 app.get('/api/health', (c) => c.json({ ok: true, operation: 'public', tenant: TENANT }))
 

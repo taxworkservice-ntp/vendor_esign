@@ -69966,6 +69966,114 @@ whtRoutes.patch("/wht/records/:id", async (c) => {
   return c.json({ ok: true });
 });
 
+// server/src/month.ts
+var MONTH_RE2 = /^(\d{4})-(0[1-9]|1[0-2])$/;
+function parseMonthParam(raw2) {
+  if (raw2 == null || raw2 === "") return null;
+  const m2 = MONTH_RE2.exec(raw2);
+  if (!m2) return { error: "invalid-month" };
+  const y = Number(m2[1]);
+  const mo = Number(m2[2]);
+  const lastDay = new Date(Date.UTC(mo === 12 ? y + 1 : y, mo === 12 ? 0 : mo, 0)).getUTCDate();
+  const pad = (n) => String(n).padStart(2, "0");
+  return { from: `${y}-${pad(mo)}-01`, to: `${y}-${pad(mo)}-${lastDay}` };
+}
+
+// server/src/receipts-register.ts
+var receiptRoutes = new Hono2();
+var ORDER_BY3 = {
+  date: "r.issue_date",
+  number: "r.number",
+  vendor: "vendor_name",
+  gross: "p.gross_amount",
+  wht: "p.wht_amount",
+  net: "p.net_amount"
+};
+var FROM = `
+  from vendor_receipts r
+  join vendor_payables p on p.id = r.transaction_id and p.user_id = r.user_id
+  join vendor_payees v on v.id = p.vendor_id
+  left join vendor_authorizations a on a.transaction_id = r.transaction_id and a.user_id = r.user_id`;
+var SELECT2 = `
+  select p.id, r.number, r.issue_date, p.transfer_date, r.verification_code,
+    coalesce(a.vendor_prefix, v.prefix) as vendor_prefix,
+    coalesce(a.vendor_name, v.name) as vendor_name,
+    p.gross_amount, p.wht_rate, p.wht_amount, p.net_amount`;
+function toRow(r) {
+  return {
+    id: String(r.id),
+    number: String(r.number ?? ""),
+    issueDate: isoDay(r.issue_date),
+    transferDate: isoDay(r.transfer_date),
+    verificationCode: r.verification_code ? String(r.verification_code) : void 0,
+    vendorPrefix: r.vendor_prefix ? String(r.vendor_prefix) : void 0,
+    vendorName: r.vendor_name ? String(r.vendor_name) : void 0,
+    grossAmount: Number(r.gross_amount ?? 0),
+    whtRate: Number(r.wht_rate ?? 0),
+    whtAmount: Number(r.wht_amount ?? 0),
+    netAmount: Number(r.net_amount ?? 0)
+  };
+}
+receiptRoutes.get("/receipts", async (c) => {
+  const g = await guard(c);
+  if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  const month = parseMonthParam(c.req.query("month"));
+  if (month && "error" in month) return c.json({ error: month.error }, 400);
+  const q = (c.req.query("q") ?? "").trim().toLowerCase();
+  const rawLimit = Number(c.req.query("limit") ?? 50);
+  const limit = Number.isFinite(rawLimit) ? Math.max(0, Math.min(1e3, Math.trunc(rawLimit))) : 50;
+  const offset = Math.max(0, Math.trunc(Number(c.req.query("offset") ?? 0)) || 0);
+  const params = [g.ws];
+  const conds = ["r.user_id = $1", "r.status = 'issued'"];
+  if (month) {
+    params.push(month.from);
+    const a2 = `$${params.length}`;
+    params.push(month.to);
+    const b2 = `$${params.length}`;
+    conds.push(`r.issue_date >= ${a2}::date`, `r.issue_date <= ${b2}::date`);
+  }
+  if (q) {
+    params.push("%" + q + "%");
+    const p2 = `$${params.length}`;
+    conds.push(`(lower(r.number) like ${p2} or lower(v.name) like ${p2} or lower(coalesce(a.vendor_name, '')) like ${p2})`);
+  }
+  const where = `where ${conds.join(" and ")}`;
+  const sortRaw = (c.req.query("sort") ?? "date-desc").split("-");
+  const col = ORDER_BY3[sortRaw[0]] ?? ORDER_BY3.date;
+  const dir = sortRaw[1] === "asc" ? "asc" : "desc";
+  const orderBy = `order by ${col} ${dir}, r.id asc`;
+  const paging = limit > 0 ? `limit $${params.length + 1} offset $${params.length + 2}` : "";
+  const rowParams = limit > 0 ? [...params, limit, offset] : params;
+  const result = await withTenant(g.ws, "client", async () => {
+    const db = sql();
+    const [rows, agg] = await Promise.all([
+      db.query(`${SELECT2}
+  ${FROM}
+  ${where}
+  ${orderBy}
+  ${paging}`, rowParams),
+      db.query(
+        `select count(*)::int as count, coalesce(sum(p.gross_amount), 0) as gross,
+           coalesce(sum(p.wht_amount), 0) as wht, coalesce(sum(p.net_amount), 0) as net
+         ${FROM} ${where}`,
+        params
+      )
+    ]);
+    const t = agg[0];
+    return {
+      receipts: rows.map(toRow),
+      total: t ? Number(t.count ?? 0) : 0,
+      summary: {
+        count: t ? Number(t.count ?? 0) : 0,
+        gross: t ? Number(t.gross ?? 0) : 0,
+        wht: t ? Number(t.wht ?? 0) : 0,
+        net: t ? Number(t.net ?? 0) : 0
+      }
+    };
+  });
+  return c.json(result);
+});
+
 // server/src/receipts.ts
 import { randomBytes as randomBytes4 } from "node:crypto";
 
@@ -70431,6 +70539,7 @@ app.route("/api/auth", authRoutes);
 app.route("/api/client", dataRoutes);
 app.route("/api/client", txnRoutes);
 app.route("/api/client", whtRoutes);
+app.route("/api/client", receiptRoutes);
 app.get("/api/health", (c) => c.json({ ok: true, operation: "public", tenant: TENANT }));
 app.get("/api/vendor/:token", async (c) => {
   const ip = c.req.header("x-forwarded-for") ?? "local";
