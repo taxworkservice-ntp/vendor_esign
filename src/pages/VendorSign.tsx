@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { CheckCircle2, Download, Eraser, Lock, ReceiptText, ShieldAlert } from 'lucide-react'
-import { GATE_MAX_TRIES, gateRemaining, isGateUnlocked, tryGateUnlock, useVendorActions, useVendorTxn } from '../hooks/useVendor'
+import { GATE_MAX_TRIES, gateRemaining, isGateUnlocked, tryGateUnlock, useVendorActions, useVendorTxn, type VendorAuth } from '../hooks/useVendor'
 import { saveBlob } from '../lib/api-client'
+import { receiptSheetToA4PdfBytes } from '../lib/receipt-to-a4-pdf'
+import { normalizeLineItem } from '../lib/line-items'
+import { ReceiptSheet, type ReceiptSheetData } from '../components/receipt/receipt-sheet'
 import { maskTaxId } from '../lib/taxid'
 import { loadSettings } from '../lib/settings'
 import { fmtTHB, fmtDateTH } from '../lib/format'
@@ -59,8 +62,13 @@ export function VendorSign() {
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [authRef, setAuthRef] = useState('')
-  // The issued receipt returned by the sign call (number + downloadable PDF).
-  const [receipt, setReceipt] = useState<{ number: string; verificationCode: string; pdfBase64?: string } | null>(null)
+  // The issued receipt returned by the sign call (number + verification code).
+  const [receipt, setReceipt] = useState<{ number: string; verificationCode: string } | null>(null)
+  // Snapshot of the receipt sheet data, captured at signing — the invite token is
+  // consumed, so the vendor cannot refetch the transaction to build it later.
+  const [vendorData, setVendorData] = useState<ReceiptSheetData | null>(null)
+  const [downloading, setDownloading] = useState(false)
+  const vendorSheetRef = useRef<HTMLDivElement>(null)
   const [tid, setTid] = useState('')
   const [consent, setConsent] = useState(false)
   const [drew, setDrew] = useState(false)
@@ -102,10 +110,16 @@ export function VendorSign() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t?.id, t?.status])
 
-  const downloadReceipt = () => {
-    if (!receipt?.pdfBase64 || !receipt.number) return
-    const bytes = Uint8Array.from(atob(receipt.pdfBase64), (c) => c.charCodeAt(0))
-    saveBlob(new Blob([bytes], { type: 'application/pdf' }), `${receipt.number}.pdf`)
+  const downloadReceipt = async () => {
+    const el = vendorSheetRef.current
+    if (!el || !vendorData) return
+    setDownloading(true)
+    try {
+      const bytes = await receiptSheetToA4PdfBytes(el)
+      saveBlob(new Blob([bytes.slice().buffer], { type: 'application/pdf' }), `${vendorData.number}.pdf`)
+    } finally {
+      setDownloading(false)
+    }
   }
 
   if (isLoading) return <StateCard title="กำลังโหลด…" body="โปรดรอสักครู่" />
@@ -119,6 +133,7 @@ export function VendorSign() {
     const receiptId = t?.id ?? signedId
     const number = receipt?.number ?? t?.receiptNumber
     return (
+      <>
       <StateCard
         title="ลงนามและออกใบเสร็จเรียบร้อยแล้ว"
         body="ขอบคุณ ระบบได้บันทึกการรับเงิน มอบอำนาจ และออกใบเสร็จรับเงินสำหรับธุรกรรมนี้แล้ว — ท่านสามารถดาวน์โหลดใบเสร็จได้ทันที"
@@ -140,9 +155,9 @@ export function VendorSign() {
               </p>
             )}
             <div className="flex flex-wrap justify-center gap-2">
-              {receipt?.pdfBase64 && (
-                <Button onClick={downloadReceipt}>
-                  <Download size={15} aria-hidden /> ดาวน์โหลดใบเสร็จ (PDF)
+              {vendorData && (
+                <Button onClick={downloadReceipt} loading={downloading}>
+                  <Download size={15} aria-hidden /> {downloading ? 'กำลังดาวน์โหลด…' : 'ดาวน์โหลดใบเสร็จ (PDF)'}
                 </Button>
               )}
               {receiptId && (
@@ -154,6 +169,13 @@ export function VendorSign() {
           </div>
         }
       />
+      {/* Hidden copy of the receipt, rasterised by the download button. */}
+      {vendorData && (
+        <div aria-hidden style={{ position: 'absolute', left: '-10000px', top: 0, width: '210mm' }}>
+          <ReceiptSheet ref={vendorSheetRef} data={vendorData} />
+        </div>
+      )}
+      </>
     )
   }
   if (!t)
@@ -242,23 +264,20 @@ export function VendorSign() {
     if (!valid || !padRef.current) return
     setSubmitting(true)
     try {
-      const res = await acts.submit(
-        t.id,
-        {
-          vendorPrefix: isVendorPrefix(prefix) ? prefix : '',
-          vendorName: name.trim(),
-          vendorAddress: address.trim(),
-          vendorPhone: phone.trim(),
-          vendorEmail: email.trim(),
-          vendorIdLast4: tid.replace(/\D/g, '').slice(-4) || (t.taxIdLast4 ?? ''),
-          signaturePng: padRef.current.toPng(),
-          verificationMethod: 'stub-deferred',
-          consentVersion: 'v1',
-          signedAt: new Date().toISOString(),
-          corrections: [], // computed at submit (diff vs client records)
-        },
-        token,
-      )
+      const auth: VendorAuth = {
+        vendorPrefix: isVendorPrefix(prefix) ? prefix : '',
+        vendorName: name.trim(),
+        vendorAddress: address.trim(),
+        vendorPhone: phone.trim(),
+        vendorEmail: email.trim(),
+        vendorIdLast4: tid.replace(/\D/g, '').slice(-4) || (t.taxIdLast4 ?? ''),
+        signaturePng: padRef.current.toPng(),
+        verificationMethod: 'stub-deferred',
+        consentVersion: 'v1',
+        signedAt: new Date().toISOString(),
+        corrections: [], // computed at submit (diff vs client records)
+      }
+      const res = await acts.submit(t.id, auth, token)
       if (!res.ok) {
         setSubmitErr(
           res.error === 'not-unlocked'
@@ -270,7 +289,34 @@ export function VendorSign() {
         return
       }
       if (res.authRef) setAuthRef(res.authRef)
-      if (res.number) setReceipt({ number: res.number, verificationCode: res.verificationCode ?? '', pdfBase64: res.pdfBase64 })
+      const number = res.number ?? t.receiptNumber ?? 'ยังไม่ออกเลข'
+      if (res.number) setReceipt({ number: res.number, verificationCode: res.verificationCode ?? '' })
+      // Snapshot the sheet now: the invite token is consumed, so the transaction
+      // cannot be fetched again to render the receipt later.
+      setVendorData({
+        number,
+        transferDate: t.transferDate,
+        items: (t.lineItems.some((it) => it.description || it.amount)
+          ? t.lineItems
+          : [{ description: t.description, amount: t.grossAmount }]
+        ).map(normalizeLineItem),
+        grossAmount: t.grossAmount,
+        whtRate: t.whtRate,
+        whtAmount: t.whtAmount,
+        netAmount: t.netAmount,
+        note: t.note,
+        client: res.client ?? { displayName: t.clientCode ?? '', address: '', taxId: '' },
+        vendor: {
+          prefix: auth.vendorPrefix,
+          name: auth.vendorName,
+          address: auth.vendorAddress,
+          phone: auth.vendorPhone || undefined,
+          email: auth.vendorEmail || undefined,
+          maskedId: t.vendor.maskedId,
+        },
+        sig: { kind: 'ready', png: auth.signaturePng },
+        signedAt: auth.signedAt,
+      })
       // Allow this browser to open the receipt copy right after signing (the
       // single-use invite token is consumed, so a URL flag is the only handle).
       try {

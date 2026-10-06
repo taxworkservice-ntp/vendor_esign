@@ -69291,7 +69291,7 @@ var SELECT = `
     v.name as vendor_name, v.address as vendor_address, v.prefix as vendor_prefix, v.vendor_no as vendor_no,
     v.id_number_encrypted as vendor_id_encrypted,
     (select row_to_json(x) from (
-       select number, issue_date from vendor_receipts rr where rr.transaction_id = p.id
+       select number, issue_date, verification_code from vendor_receipts rr where rr.transaction_id = p.id
        order by rr.issue_date desc limit 1) x) as receipt,
     (select row_to_json(x) from (
        select token, created_at, opened_at, used_at, revoked_at, expires_at
@@ -69338,6 +69338,7 @@ function toTxn(r) {
   const last4 = String(r.tax_id_last4 ?? "");
   const receipt = sub(r.receipt);
   const receiptNumber = receipt ? String(receipt.number ?? "") || void 0 : void 0;
+  const verificationCode = receipt ? String(receipt.verification_code ?? "") || void 0 : void 0;
   const req = sub(r.req);
   const live = req ? new Date(String(req.expires_at ?? 0)) > /* @__PURE__ */ new Date() : false;
   const inviteToken = req && !req.used_at && !req.revoked_at && live ? String(req.token ?? "") || void 0 : void 0;
@@ -69377,6 +69378,7 @@ function toTxn(r) {
     slipName: String(r.slip_file_path ?? ""),
     status: r.status ?? "draft",
     receiptNumber,
+    verificationCode,
     inviteToken,
     voidReason: r.void_reason ?? void 0,
     taxIdLast4: last4 || void 0,
@@ -70608,7 +70610,15 @@ app.post("/api/vendor/:token/sign", async (c) => {
   } catch (e) {
     console.error("[sign] issue-failed", e instanceof Error ? e.message : String(e));
   }
-  return c.json({ ok: true, transactionId: txnId, corrections, authRef, ...issued });
+  const clientProfile = await getTenantSettings(rowTenant).catch(() => null);
+  return c.json({
+    ok: true,
+    transactionId: txnId,
+    corrections,
+    authRef,
+    ...issued,
+    client: clientProfile ? { displayName: clientProfile.displayName, address: clientProfile.address, taxId: clientProfile.taxId } : void 0
+  });
 });
 app.post("/api/transactions/:id/finalize", async (c) => {
   const ip = c.req.header("x-forwarded-for") ?? "local";

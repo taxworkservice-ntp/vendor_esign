@@ -52,6 +52,7 @@ export interface PaymentTransaction {
   slipName: string
   status: TxnStatus
   receiptNumber?: string // assigned once: RCT-{VENDORNO}-{BE_YEAR}-{SEQ}
+  verificationCode?: string // printed on the issued receipt; drives the /verify page
   createdAt: string
   timeline: { at: string; label: string; detail?: string }[]
   // Invite lifecycle timestamps. Populated identically by the mock (from the

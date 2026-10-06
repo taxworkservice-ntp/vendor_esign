@@ -299,7 +299,19 @@ app.post('/api/vendor/:token/sign', async (c) => {
   } catch (e) {
     console.error('[sign] issue-failed', e instanceof Error ? e.message : String(e))
   }
-  return c.json({ ok: true, transactionId: txnId, corrections, authRef, ...issued })
+  // The buyer (client) profile, so the vendor can render the same receipt sheet
+  // locally and download it — the vendor has no client session to fetch settings.
+  const clientProfile = await getTenantSettings(rowTenant).catch(() => null)
+  return c.json({
+    ok: true,
+    transactionId: txnId,
+    corrections,
+    authRef,
+    ...issued,
+    client: clientProfile
+      ? { displayName: clientProfile.displayName, address: clientProfile.address, taxId: clientProfile.taxId }
+      : undefined,
+  })
 })
 
 // Finalize: assign series number + receipt row + PDF in one flow.

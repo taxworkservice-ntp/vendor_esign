@@ -89,7 +89,19 @@ Transaction status: `draft → sent → opened → signed → issued`, plus `exp
 
 ## 9. PDF and document content
 
-- A4, print-ready, generated server-side with an embedded Thai font (Sarabun). Buddhist-era dates.
+- **Single renderer, raster for download.** The receipt is authored once as the
+  HTML/CSS sheet (`src/components/receipt/receipt-sheet.tsx`, `ReceiptSheet`) and
+  shown on screen. The download rasterises that exact DOM with html-to-image
+  (`src/lib/receipt-to-a4-pdf.ts`) so preview == PDF — same layout, same Sarabun,
+  same browser Thai shaping — for the client **and** the vendor (`ReceiptSheet` is
+  also rendered offscreen on the vendor success screen and rasterised locally).
+  Never add a second, hand-coded PDF layout: a server pdf-lib renderer drifts in
+  layout and cannot position Thai combining marks (it produced `ที่ อยู่`,
+  `รวมเป็  นเงิน`, ISO dates). The server `pdf-lib` output is kept **only** as the
+  internal/audit artifact (embeds the signature even when the image can't be
+  fetched; the fallback button uses it). The buyer block is the workspace profile
+  (`useSettings` → `displayName/address/taxId`), never the mock client registry.
+- A4, print-ready. Buddhist-era dates.
 - Amount in Thai words with a tested utility. Example: 2,910.00 → `สองพันเก้าร้อยสิบบาทถ้วน`. Cover satang, zero, millions, and the "เอ็ด" and "ยี่" rules with unit tests.
 - Contents: title "ใบเสร็จรับเงิน"; number; date; seller block (vendor name, address, ID); buyer block (client name, address, tax ID); description; gross amount; WHT rate and amount when applicable; net amount received; amount in words; transfer date and reference; a statement that the seller is not VAT-registered; vendor signature image; representative signature line with name and position; authorization statement; verification footer with time, method, code, QR, and file hash.
 - Show a stamp-duty warning on large amounts above the `[CONFIG]` threshold. `[VERIFY]` the rule, including any duty on the authorization.

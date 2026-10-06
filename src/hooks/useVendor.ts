@@ -262,6 +262,7 @@ export function useVendorActions() {
       verificationCode?: string
       pdfSha256?: string
       pdfBase64?: string
+      client?: { displayName: string; address: string; taxId: string }
     }> {
       if (hasServer) {
         if (!token) return { ok: false, error: 'invalid-link' }
@@ -286,6 +287,7 @@ export function useVendorActions() {
           verificationCode?: string
           pdfSha256?: string
           pdfBase64?: string
+          client?: { displayName: string; address: string; taxId: string }
         } | null
         if (!r.ok) return { ok: false, error: j?.error ?? 'sign-failed' }
         // Issuance runs at signing: the response carries the real receipt number
@@ -297,6 +299,7 @@ export function useVendorActions() {
           verificationCode: j?.verificationCode,
           pdfSha256: j?.pdfSha256,
           pdfBase64: j?.pdfBase64,
+          client: j?.client,
         }
       }
 

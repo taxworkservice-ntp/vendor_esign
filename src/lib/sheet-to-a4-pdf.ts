@@ -1,4 +1,5 @@
 import { toSvg } from 'html-to-image'
+import { readyForCapture } from './capture'
 import { BG_IMAGE, PAGE_H, PAGE_W } from './wht-form'
 
 // The WHT form scan is a 3.3 MB PNG. Fetch it once and keep a *decoded*
@@ -84,33 +85,6 @@ function svgToImage(svg: string): Promise<HTMLImageElement> {
   })
 }
 
-/** Wait for web fonts + in-document <img>s so nothing renders blank. */
-async function ready(el: HTMLElement): Promise<void> {
-  try {
-    await (document as Document & { fonts?: FontFaceSet }).fonts?.ready
-  } catch {
-    /* older browsers */
-  }
-  const images = Array.from(el.querySelectorAll('img'))
-  await Promise.all(
-    images.map(async (img) => {
-      if (!img.complete) {
-        await new Promise<void>((resolve) => {
-          img.addEventListener('load', () => resolve(), { once: true })
-          img.addEventListener('error', () => resolve(), { once: true })
-        })
-      }
-      // `complete` means bytes arrived; `decode()` means it is ready to draw —
-      // required so the first capture is not blank.
-      try {
-        await img.decode?.()
-      } catch {
-        /* decode unsupported or failed; draw anyway */
-      }
-    }),
-  )
-}
-
 /** Draw an image with object-fit: contain inside a box (default 50% 50% anchor). */
 function drawContain(ctx: CanvasRenderingContext2D, img: HTMLImageElement, box: OverlayImage, ratio: number) {
   if (!img.naturalWidth || !img.naturalHeight) return
@@ -139,7 +113,7 @@ export async function composeSheetToA4Pdf(
   overlays: OverlayImage[] = [],
 ): Promise<Uint8Array> {
   const { jsPDF } = await import('jspdf')
-  await ready(el)
+  await readyForCapture(el)
   const width = el.clientWidth || PAGE_W
   const height = el.clientHeight || PAGE_H
   const svg = await toSvg(el, {

@@ -32,7 +32,7 @@ const SELECT = `
     v.name as vendor_name, v.address as vendor_address, v.prefix as vendor_prefix, v.vendor_no as vendor_no,
     v.id_number_encrypted as vendor_id_encrypted,
     (select row_to_json(x) from (
-       select number, issue_date from vendor_receipts rr where rr.transaction_id = p.id
+       select number, issue_date, verification_code from vendor_receipts rr where rr.transaction_id = p.id
        order by rr.issue_date desc limit 1) x) as receipt,
     (select row_to_json(x) from (
        select token, created_at, opened_at, used_at, revoked_at, expires_at
@@ -105,6 +105,7 @@ export function toTxn(r: Record<string, unknown>): PaymentTransaction {
   const last4 = String(r.tax_id_last4 ?? '')
   const receipt = sub(r.receipt)
   const receiptNumber = receipt ? (String(receipt.number ?? '') || undefined) : undefined
+  const verificationCode = receipt ? (String(receipt.verification_code ?? '') || undefined) : undefined
   // Only a live, unspent, unexpired link can actually be opened by the vendor.
   const req = sub(r.req)
   const live = req ? new Date(String(req.expires_at ?? 0)) > new Date() : false
@@ -143,6 +144,7 @@ export function toTxn(r: Record<string, unknown>): PaymentTransaction {
     slipName: String(r.slip_file_path ?? ''),
     status: (r.status as PaymentTransaction['status']) ?? 'draft',
     receiptNumber,
+    verificationCode,
     inviteToken,
     voidReason: (r.void_reason as string | null) ?? undefined,
     taxIdLast4: last4 || undefined,
