@@ -18,6 +18,17 @@ export interface ReceiptAuthorization extends VendorAuthMeta {
   signaturePng: string | null
   /** The authorization's own reference (assigned at signing). */
   authRef?: string
+  /** Masked vendor ID from the authorization snapshot. */
+  maskedId?: string
+  // Signing trail (evidence panel).
+  ip?: string
+  userAgent?: string
+  lineUserId?: string
+  openedAt?: string
+  unlockedAt?: string
+  /** Current payable status ('issued' | 'void' | …). */
+  status?: string
+  voidReason?: string
 }
 
 const QK = ['receipt-auth'] as const

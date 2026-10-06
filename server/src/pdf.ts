@@ -67,6 +67,14 @@ const PANEL = rgb(0.965, 0.973, 0.98)
 const RULE = rgb(0.886, 0.91, 0.941)
 const ZEBRA = rgb(0.98, 0.984, 0.99)
 
+// How the vendor's signature was captured (stored on the authorization).
+const METHOD_TH: Record<string, string> = {
+  'stub-deferred': 'ลายเซ็น (วาดด้วยนิ้ว/เมาส์)',
+  'typed-consent': 'พิมพ์ชื่อเพื่อลงนาม',
+  'uploaded-signature': 'ลายเซ็นจากไฟล์ที่อัปโหลด',
+  'line-liff': 'ยืนยันด้วย LINE',
+}
+
 const A4 = { w: 595.28, h: 841.89 }
 const M = 48
 const GUTTER = 14
@@ -306,6 +314,14 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
   page.drawLine({ start: { x: sigX, y: sigY }, end: { x: sigX + sigW, y: sigY }, thickness: 1, color: FAINT })
   centerText('ผู้มีอำนาจลงนาม', sigY - 14, 9.5, bold, INK)
   centerText(vendorDisplayName(input.vendor.prefix, input.vendor.name), sigY - 28, 9, regular, MUTED)
+  // The signing record (time + how it was signed) — the non-repudiation line.
+  centerText(
+    `ลงนามเมื่อ ${String(input.signedAt).slice(0, 10)} · ${METHOD_TH[input.verificationMethod] ?? 'ลายเซ็น'}`,
+    sigY - 40,
+    8.5,
+    regular,
+    FAINT,
+  )
 
   // ── Verification footer (audit copy only) ──
   if (input.showVerification) {

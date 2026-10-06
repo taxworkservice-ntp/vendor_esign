@@ -294,6 +294,7 @@ function build(
       },
       sig,
       signedAt: auth?.signedAt,
+      sigMethod: auth?.verificationMethod,
     },
   }
 }

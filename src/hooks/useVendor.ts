@@ -22,7 +22,8 @@ export interface VendorAuthMeta {
   vendorIdLast4: string
   vendorPhone?: string
   vendorEmail?: string
-  verificationMethod: 'stub-deferred'
+  /** How the vendor authorized: drawn (default), typed name, or uploaded image. */
+  verificationMethod: 'stub-deferred' | 'typed-consent' | 'uploaded-signature'
   consentVersion: 'v1'
   signedAt: string
   corrections: VendorCorrection[] // vendor edits to prefilled info, reported to client
@@ -278,6 +279,8 @@ export function useVendorActions() {
             idLast4: auth.vendorIdLast4,
             signaturePng: auth.signaturePng,
             consentVersion: 'v1',
+            // 'drawn' is the default; the fallbacks store their own method.
+            signMethod: auth.verificationMethod === 'stub-deferred' ? 'drawn' : auth.verificationMethod,
           }),
         })
         const j = (await r.json().catch(() => null)) as {

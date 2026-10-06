@@ -5,6 +5,7 @@ import { amountToThaiWords } from '../../lib/thai-words'
 import { fmtDateTH, fmtTHB } from '../../lib/format'
 import { lineTotal } from '../../lib/line-items'
 import { vendorDisplayName } from '../../lib/vendor-name'
+import { signMethodLabel } from '../../lib/typed-signature'
 import type { LineItem } from '../../lib/types'
 
 // The one receipt document. Rendered on screen (client + vendor) AND rasterised
@@ -34,6 +35,8 @@ export interface ReceiptSheetData {
   }
   sig: SignatureState
   signedAt?: string
+  /** How the signature was captured (shown when not a drawn signature). */
+  sigMethod?: string
 }
 
 const label = 'text-micro font-semibold uppercase tracking-[0.14em] text-ink-400'
@@ -198,6 +201,9 @@ export const ReceiptSheet = forwardRef<
             <p className="text-label text-ink-400">{vendorDisplayName(vendor.prefix, vendor.name)}</p>
             {data.signedAt && (
               <p className="mt-0.5 text-micro text-ink-400">ลงนามเมื่อ {fmtDateTH(data.signedAt.slice(0, 10))}</p>
+            )}
+            {data.sigMethod && data.sigMethod !== 'stub-deferred' && (
+              <p className="text-micro text-ink-400">{signMethodLabel(data.sigMethod)}</p>
             )}
           </div>
         )}

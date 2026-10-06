@@ -5,6 +5,8 @@ import { GATE_MAX_TRIES, gateRemaining, isGateUnlocked, tryGateUnlock, useVendor
 import { saveBlob } from '../lib/api-client'
 import { receiptSheetToA4PdfBytes } from '../lib/receipt-to-a4-pdf'
 import { normalizeLineItem } from '../lib/line-items'
+import { renderTypedSignature, SIGNATURE_FONT } from '../lib/typed-signature'
+import { cn } from '../lib/cn'
 import { ReceiptSheet, type ReceiptSheetData } from '../components/receipt/receipt-sheet'
 import { maskTaxId } from '../lib/taxid'
 import { loadSettings } from '../lib/settings'
@@ -72,6 +74,9 @@ export function VendorSign() {
   const [tid, setTid] = useState('')
   const [consent, setConsent] = useState(false)
   const [drew, setDrew] = useState(false)
+  // 'draw' = canvas signature; 'type' = typed-name e-signature (fallback).
+  const [signMode, setSignMode] = useState<'draw' | 'type'>('draw')
+  const [typedName, setTypedName] = useState('')
   const [done, setDone] = useState(false)
   const [signedId, setSignedId] = useState<string>()
   const [tried, setTried] = useState(false)
@@ -189,9 +194,11 @@ export function VendorSign() {
   // Length-only for now — checksum policy comes later. Once the gate is passed
   // on this device the ID is already proven, so it need not be retyped.
   const idOk = tid.replace(/\D/g, '').length === 13 || (gatePassed && !!t.taxIdLast4)
-  const emptyPad = !drew || padRef.current?.isEmpty()
+  const drawnEmpty = !drew || padRef.current?.isEmpty()
+  const typedEmpty = signMode === 'type' && typedName.trim().length < 2
+  const signatureOk = signMode === 'type' ? !typedEmpty : !drawnEmpty
   const prefixOk = !prefixRequired(name) || isVendorPrefix(prefix)
-  const valid = name.trim().length >= 2 && prefixOk && address.trim().length >= 6 && idOk && consent && !emptyPad
+  const valid = name.trim().length >= 2 && prefixOk && address.trim().length >= 6 && idOk && consent && signatureOk
 
   const needsGate = !!t.taxIdHash && !unlocked
 
@@ -261,9 +268,11 @@ export function VendorSign() {
   const submit = async () => {
     setTried(true)
     setSubmitErr('')
-    if (!valid || !padRef.current) return
+    if (!valid) return
+    if (signMode === 'draw' && !padRef.current) return
     setSubmitting(true)
     try {
+      const signaturePng = signMode === 'type' ? await renderTypedSignature(typedName) : padRef.current!.toPng()
       const auth: VendorAuth = {
         vendorPrefix: isVendorPrefix(prefix) ? prefix : '',
         vendorName: name.trim(),
@@ -271,8 +280,8 @@ export function VendorSign() {
         vendorPhone: phone.trim(),
         vendorEmail: email.trim(),
         vendorIdLast4: tid.replace(/\D/g, '').slice(-4) || (t.taxIdLast4 ?? ''),
-        signaturePng: padRef.current.toPng(),
-        verificationMethod: 'stub-deferred',
+        signaturePng,
+        verificationMethod: signMode === 'type' ? 'typed-consent' : 'stub-deferred',
         consentVersion: 'v1',
         signedAt: new Date().toISOString(),
         corrections: [], // computed at submit (diff vs client records)
@@ -316,6 +325,7 @@ export function VendorSign() {
         },
         sig: { kind: 'ready', png: auth.signaturePng },
         signedAt: auth.signedAt,
+        sigMethod: auth.verificationMethod,
       })
       // Allow this browser to open the receipt copy right after signing (the
       // single-use invite token is consumed, so a URL flag is the only handle).
@@ -437,20 +447,64 @@ export function VendorSign() {
 
         <Card>
           <CardBody className="space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <h2 className="font-semibold">2 · ลงนามรับเงิน</h2>
-              <button
-                className="inline-flex items-center gap-1 rounded-control bg-ink-100 px-3 py-2 text-body font-semibold"
-                onClick={() => { padRef.current?.clear(); setDrew(false) }}
-              >
-                <Eraser size={14} /> ล้าง
-              </button>
+              {signMode === 'draw' && (
+                <button
+                  className="inline-flex items-center gap-1 rounded-control bg-ink-100 px-3 py-2 text-body font-semibold"
+                  onClick={() => { padRef.current?.clear(); setDrew(false) }}
+                >
+                  <Eraser size={14} /> ล้าง
+                </button>
+              )}
             </div>
-            <div className="rounded-control border-2 border-dashed border-ink-300 p-1">
-              <SigPad ref={padRef} onDraw={() => setDrew(true)} />
+
+            {/* Choose how to sign. Drawing is the default; typing is the fallback
+                for a vendor who cannot or will not use mouse/touch. */}
+            <div className="grid grid-cols-2 gap-1.5 rounded-control bg-ink-100 p-1">
+              {([['draw', 'วาดลายเซ็น'], ['type', 'พิมพ์ชื่อเพื่อลงนาม']] as const).map(([v, th]) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => {
+                    setSignMode(v)
+                    if (v === 'type' && !typedName.trim()) setTypedName(name.trim())
+                  }}
+                  className={cn(
+                    'rounded-control px-3 py-2 text-body transition',
+                    signMode === v ? 'bg-primary-soft font-semibold text-primary-text' : 'font-medium text-ink-500 hover:text-ink-900',
+                  )}
+                >
+                  {th}
+                </button>
+              ))}
             </div>
-            <p className="text-body text-ink-500">ใช้นิ้วหรือเมาส์ลงนามในช่องลงนาม — ลายเซ็นนี้ยืนยันว่าได้รับเงินและมอบอำนาจสำหรับธุรกรรมนี้เท่านั้น</p>
-            {tried && emptyPad && <FieldError msg="กรุณาลงนามก่อนส่งข้อมูล" />}
+
+            {signMode === 'draw' ? (
+              <>
+                <div className="rounded-control border-2 border-dashed border-ink-300 p-1">
+                  <SigPad ref={padRef} onDraw={() => setDrew(true)} />
+                </div>
+                <p className="text-body text-ink-500">ใช้นิ้วหรือเมาส์ลงนามในช่องลงนาม — ลายเซ็นนี้ยืนยันว่าได้รับเงินและมอบอำนาจสำหรับธุรกรรมนี้เท่านั้น</p>
+              </>
+            ) : (
+              <div className="space-y-2">
+                <Label>ชื่อ–นามสกุลที่ใช้ลงนาม</Label>
+                <Input value={typedName} onChange={(e) => setTypedName(e.target.value)} placeholder="เช่น สมชาย ใจดี" autoComplete="name" />
+                <div className="rounded-control border-2 border-dashed border-ink-300 bg-white px-4 py-6">
+                  <p className="text-center text-3xl leading-snug" style={{ fontFamily: SIGNATURE_FONT }}>
+                    {typedName.trim() || 'ตัวอย่าง ลายเซ็น'}
+                  </p>
+                </div>
+                <p className="text-body text-ink-500">
+                  พิมพ์ชื่อ–นามสกุลเพื่อลงนาม (เหมาะเมื่อไม่สะดวกวาด) — การพิมพ์ชื่อพร้อมการยืนยันด้านล่างถือเป็นการลงนามอิเล็กทรอนิกส์
+                </p>
+              </div>
+            )}
+
+            {tried && !signatureOk && (
+              <FieldError msg={signMode === 'type' ? 'กรุณาพิมพ์ชื่อ–นามสกุลเพื่อลงนาม' : 'กรุณาลงนามก่อนส่งข้อมูล'} />
+            )}
           </CardBody>
         </Card>
 

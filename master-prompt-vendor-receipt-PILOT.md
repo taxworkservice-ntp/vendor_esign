@@ -83,9 +83,11 @@ Transaction status: `draft → sent → opened → signed → issued`, plus `exp
 ## 8. Signature and verification
 
 - Draw-signature on a canvas (touch and mouse), exported as PNG, with a clear button. Reject an empty canvas.
+- **Fallback signing method:** a vendor who cannot or will not draw can **type their name** ("type to sign"). The name is rendered to a PNG in the Mali handwriting face (`src/lib/typed-signature.ts`) through the same storage pipeline, with the same versioned consent. The method is stored on the authorization as `verification_method` (`stub-deferred` for drawn, `typed-consent` for typed) and shown on the receipt and in the evidence panel. Do **not** add a bypass for a vendor unwilling to authorize — record refusal instead.
 - Verification is **LINE Login through LIFF only**. Store the LINE user id and the time. No SMS in the pilot.
 - The consent text is versioned and the version is stored. It states: I received this amount; I authorize [client name] to issue a receipt in my name for this transaction only.
 - The signing audit event records time, IP, user agent, verification method, and LINE user id.
+- **Non-repudiation — surface the signing trail (do not re-capture it).** `vendor_authorizations` already stores signed_at, auth_ref, the signature image, ip, user_agent, consent version, and the tax-ID gate (`vendor_requests.unlocked_at`/`opened_at`). A transaction's detail page shows a **"หลักฐานการลงนาม"** panel from that data (signed-by + masked ID, signed-at, method, AUTH ref, receipt no. + verification code, signature image; device/IP behind a "รายละเอียดทางเทคนิค" disclosure). The public `/verify/:code` page proves the same facts (number, status incl. void, issue date, signed-at, method, masked vendor) so a vendor can check it themselves. The server `/api/verify/:code` is the source; the page must call it (never the mock).
 
 ## 9. PDF and document content
 

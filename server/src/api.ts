@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { sql, withTenant } from '../../src/server/db'
 import { isVendorPrefix, prefixRequired } from '../../src/lib/vendor-name'
+import { isoDay } from './dates'
 import { saveBytesDurable } from './storage'
 import { sha256hex } from './auth'
 import { authRoutes } from './client-auth'
@@ -215,6 +216,7 @@ app.post('/api/vendor/:token/sign', async (c) => {
   const body = await c.req.json().catch(() => null) as {
     vendorPrefix?: string; vendorName?: string; vendorAddress?: string; vendorPhone?: string; vendorEmail?: string;
     idNumberEncrypted?: string; idLast4?: string; signaturePng?: string; consentVersion?: string; lineUserId?: string;
+    signMethod?: string;
   } | null
   if (!body?.vendorName || !body?.vendorAddress || !body?.signaturePng || body.consentVersion !== 'v1')
     return c.json({ error: 'invalid-body' }, 400)
@@ -250,6 +252,11 @@ app.post('/api/vendor/:token/sign', async (c) => {
 
   const txnId = String(r.id)
   const rowTenant = String(r.user_id)
+  // How the vendor authorized. Allowlisted (never free text); a drawn signature
+  // keeps the historical 'stub-deferred' value, the fallbacks store their method.
+  const signMethod: 'drawn' | 'typed-consent' | 'uploaded-signature' =
+    body.signMethod === 'typed-consent' || body.signMethod === 'uploaded-signature' ? body.signMethod : 'drawn'
+  const verificationMethod = signMethod === 'drawn' ? 'stub-deferred' : signMethod
   // Corrections: diff submitted info against client records server-side,
   // stored on the authorization and reported back to the client.
   const corrections: { field: string; from: string; to: string }[] = []
@@ -277,14 +284,14 @@ app.post('/api/vendor/:token/sign', async (c) => {
     values (${rowTenant}, ${txnId}, ${subPrefix}, ${subName}, ${subAddr},
       ${`x-xxxx-xxxxx-${last4.slice(0, 2)}-${last4.slice(2)}`},
       ${subPhone}, ${subEmail}, ${authRef},
-      ${sigPath}, 'stub-deferred', ${body.lineUserId ?? null}, ${ip},
+      ${sigPath}, ${verificationMethod}, ${body.lineUserId ?? null}, ${ip},
       ${(c.req.header('user-agent') ?? '').slice(0, 500)}, 'v1',
       ${JSON.stringify(corrections)})`
   await db`update vendor_requests set used_at = now() where id = ${String(r.req_id)}`
   await db`update vendor_payables set status = 'signed' where id = ${txnId}`
   await withTenant(rowTenant, 'client', async () =>
     audit(rowTenant, 'vendor_payables', txnId, 'vendor.signed', 'vendor',
-      { verificationMethod: 'stub-deferred', consentVersion: 'v1', corrections, authRef }, ip))
+      { verificationMethod, signMethod, consentVersion: 'v1', corrections, authRef }, ip))
 
   // Issue the receipt now so the vendor gets the real series number and the PDF
   // immediately — no client round-trip. If issuance fails, the row stays
@@ -428,12 +435,25 @@ app.get('/api/verify/:code', async (c) => {
   const code = c.req.param('code').toLowerCase()
   const db = sql()
   const rows = await db`
-    select r.number, r.status, r.issue_date,
+    select r.number, r.status as receipt_status, r.issue_date,
+      a.signed_at, a.verification_method,
+      p.status as txn_status, p.void_reason,
       left(a.vendor_name, 6) || '••' as vendor_masked
     from vendor_receipts r
     join vendor_authorizations a on a.transaction_id = r.transaction_id
+    join vendor_payables p on p.id = r.transaction_id
     where lower(r.verification_code) = ${code}`
   const r = one<Record<string, unknown>>(rows)
   if (!r) return c.json({ error: 'not-found' }, 404)
-  return c.json({ number: r.number, status: r.status, issueDate: r.issue_date, vendorMasked: r.vendor_masked })
+  const voided = String(r.txn_status ?? '') === 'void'
+  return c.json({
+    number: r.number,
+    // A voided receipt is not a live document, whichever row says what.
+    status: voided ? 'void' : r.receipt_status,
+    issueDate: isoDay(r.issue_date),
+    signedAt: r.signed_at,
+    verificationMethod: r.verification_method,
+    vendorMasked: r.vendor_masked,
+    voidReason: voided ? (r.void_reason ?? null) : null,
+  })
 })

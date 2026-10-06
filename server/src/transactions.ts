@@ -265,11 +265,20 @@ txnRoutes.get('/transactions/:id/authorization', async (c) => {
     const db = sql()
     return (await db.query(
       `select a.vendor_prefix, a.vendor_name, a.vendor_address, a.vendor_masked_id,
-         a.vendor_phone, a.vendor_email, a.auth_ref,
+         a.vendor_phone, a.vendor_email, a.auth_ref, a.line_user_id,
          a.signature_image_path, a.signed_at, a.verification_method, a.consent_text_version,
+         a.ip, a.user_agent,
+         p.status as txn_status, p.void_reason,
+         req.opened_at, req.unlocked_at,
          v.prefix as client_prefix, v.name as client_name, v.address as client_address
        from vendor_authorizations a
-       join vendor_payees v on v.id = (select vendor_id from vendor_payables where id = a.transaction_id and user_id = a.user_id)
+       join vendor_payables p on p.id = a.transaction_id and p.user_id = a.user_id
+       join vendor_payees v on v.id = p.vendor_id
+       left join lateral (
+         select opened_at, unlocked_at from vendor_requests vr
+         where vr.transaction_id = a.transaction_id and vr.user_id = a.user_id
+         order by vr.used_at desc nulls last, vr.created_at desc limit 1
+       ) req on true
        where a.transaction_id = $1 and a.user_id = $2`,
       [id, g.ws],
     )) as unknown as Record<string, unknown>[]
@@ -304,6 +313,15 @@ txnRoutes.get('/transactions/:id/authorization', async (c) => {
     vendorEmail: String(a.vendor_email ?? ''),
     authRef: String(a.auth_ref ?? ''),
     maskedId: String(a.vendor_masked_id ?? ''),
+    // Signing trail (already stored) — surfaced so the client can show the
+    // vendor the record of when/where/how they signed.
+    ip: a.ip ? String(a.ip) : undefined,
+    userAgent: a.user_agent ? String(a.user_agent) : undefined,
+    lineUserId: a.line_user_id ? String(a.line_user_id) : undefined,
+    openedAt: iso(a.opened_at),
+    unlockedAt: iso(a.unlocked_at),
+    status: String(a.txn_status ?? ''),
+    voidReason: a.void_reason ? String(a.void_reason) : undefined,
     corrections,
     signaturePng: sig ? `data:image/png;base64,${Buffer.from(sig).toString('base64')}` : null,
   })

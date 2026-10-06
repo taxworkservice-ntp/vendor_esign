@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, Copy, ExternalLink, FileSearch, Link2, RotateCcw, ShieldAlert, UploadCloud } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Copy, ExternalLink, FileSearch, Link2, RotateCcw, ShieldAlert, ShieldCheck, UploadCloud } from 'lucide-react'
 import { useTransaction, useTransactionActions } from '../hooks/useTransactions'
 import { useSettings } from '../hooks/useSettings'
 import { useReceiptAuthorization } from '../hooks/useReceiptAuthorization'
@@ -15,7 +15,8 @@ import { PanelSkeleton } from '../components/ui/table-skeleton'
 import { defaultSettings, renderInviteMessage } from '../lib/settings'
 import { itemsTotal, normalizeLineItem } from '../lib/line-items'
 import { vendorDisplayName } from '../lib/vendor-name'
-import { fmtTHB, fmtDateTH } from '../lib/format'
+import { fmtTHB, fmtDateTH, fmtDateTimeTH } from '../lib/format'
+import { signMethodLabel } from '../lib/typed-signature'
 import { NextActionBand } from '../components/transactions/transaction-stage'
 
 export function TransactionDetail() {
@@ -307,6 +308,41 @@ export function TransactionDetail() {
         <div className="space-y-4">
           {receiptCard}
 
+          {auth && (
+            <Card>
+              <CardBody className="space-y-3">
+                <h2 className="flex items-center gap-2 font-semibold"><ShieldCheck size={16} /> หลักฐานการลงนาม</h2>
+                <div className="space-y-1.5 text-body">
+                  <EvidenceRow label="ผู้ลงนาม" value={vendorDisplayName(auth.vendorPrefix, auth.vendorName)} />
+                  <EvidenceRow label="เลขบัตรประชาชน" value={auth.maskedId || '—'} mono />
+                  <EvidenceRow label="ลงนามเมื่อ" value={auth.signedAt ? fmtDateTimeTH(auth.signedAt) : '—'} />
+                  <EvidenceRow label="วิธีการลงนาม" value={signMethodLabel(auth.verificationMethod)} />
+                  {auth.authRef && <EvidenceRow label="เลขอ้างอิงการลงนาม" value={auth.authRef} mono />}
+                  {t.receiptNumber && <EvidenceRow label="เลขที่ใบเสร็จ" value={t.receiptNumber} mono />}
+                  {t.verificationCode && <EvidenceRow label="รหัสตรวจสอบ" value={t.verificationCode} mono />}
+                </div>
+                {auth.signaturePng && (
+                  <div className="rounded-control border border-card-border bg-white p-2">
+                    <img src={auth.signaturePng} alt="ลายเซ็นผู้ขาย" className="mx-auto max-h-20 object-contain" />
+                  </div>
+                )}
+                <details className="text-label text-ink-500">
+                  <summary className="cursor-pointer font-medium">รายละเอียดทางเทคนิค</summary>
+                  <div className="mt-2 space-y-1 font-mono text-micro">
+                    {auth.openedAt && <p>เปิดลิงก์: {fmtDateTimeTH(auth.openedAt)}</p>}
+                    {auth.unlockedAt && <p>ยืนยันตัวตน: {fmtDateTimeTH(auth.unlockedAt)}</p>}
+                    {auth.ip && <p>IP: {maskIp(auth.ip)}</p>}
+                    {auth.userAgent && <p className="break-all">อุปกรณ์: {auth.userAgent}</p>}
+                    <p>consent: {auth.consentVersion}</p>
+                  </div>
+                </details>
+                <p className="text-micro text-ink-400">
+                  บันทึกจากฝั่งเซิร์ฟเวอร์ ณ เวลาที่ผู้ขายลงนาม — ใช้ยืนยันได้ว่าผู้ขายได้ลงนามด้วยตนเองสำหรับธุรกรรมนี้
+                </p>
+              </CardBody>
+            </Card>
+          )}
+
           <Card>
             <CardBody className="space-y-3">
               <h2 className="flex items-center gap-2 font-semibold"><Link2 size={16} /> ส่งลิงก์ให้ผู้ขาย</h2>
@@ -411,4 +447,20 @@ export function TransactionDetail() {
       />
     </div>
   )
+}
+
+function EvidenceRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="text-ink-500">{label}</span>
+      <span className={mono ? 'font-mono text-label font-semibold text-ink-900' : 'font-semibold text-ink-900'}>{value}</span>
+    </div>
+  )
+}
+
+/** Mask the last octet of an IPv4 address; length-cap anything else. */
+function maskIp(ip: string): string {
+  const v4 = /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\d{1,3}$/.exec(ip)
+  if (v4) return `${v4[1]}.•••`
+  return ip.length > 24 ? `${ip.slice(0, 24)}…` : ip
 }

@@ -98,6 +98,7 @@ export function ReceiptView() {
     },
     sig,
     signedAt: auth?.signedAt,
+    sigMethod: auth?.verificationMethod,
   }
 
   // Fallback only: the server's pdf-lib artifact embeds the signature even when

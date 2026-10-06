@@ -67616,6 +67616,20 @@ function vendorDisplayName(prefix, name) {
   return p2 ? `${p2} ${n}` : n;
 }
 
+// server/src/dates.ts
+function isoDay(v2) {
+  if (v2 == null) return "";
+  if (v2 instanceof Date) {
+    if (Number.isNaN(v2.getTime())) return "";
+    const y = v2.getFullYear();
+    const m2 = String(v2.getMonth() + 1).padStart(2, "0");
+    const d2 = String(v2.getDate()).padStart(2, "0");
+    return `${y}-${m2}-${d2}`;
+  }
+  const s = String(v2);
+  return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : s;
+}
+
 // server/src/storage.ts
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -69219,20 +69233,6 @@ function totalsClause(q, userId) {
   };
 }
 
-// server/src/dates.ts
-function isoDay(v2) {
-  if (v2 == null) return "";
-  if (v2 instanceof Date) {
-    if (Number.isNaN(v2.getTime())) return "";
-    const y = v2.getFullYear();
-    const m2 = String(v2.getMonth() + 1).padStart(2, "0");
-    const d2 = String(v2.getDate()).padStart(2, "0");
-    return `${y}-${m2}-${d2}`;
-  }
-  const s = String(v2);
-  return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : s;
-}
-
 // src/lib/download-name.ts
 function seg(s) {
   return s.trim().replace(/[^\p{L}\p{M}\p{N}._ -]+/gu, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 120);
@@ -69467,11 +69467,20 @@ txnRoutes.get("/transactions/:id/authorization", async (c) => {
     const db = sql();
     return await db.query(
       `select a.vendor_prefix, a.vendor_name, a.vendor_address, a.vendor_masked_id,
-         a.vendor_phone, a.vendor_email, a.auth_ref,
+         a.vendor_phone, a.vendor_email, a.auth_ref, a.line_user_id,
          a.signature_image_path, a.signed_at, a.verification_method, a.consent_text_version,
+         a.ip, a.user_agent,
+         p.status as txn_status, p.void_reason,
+         req.opened_at, req.unlocked_at,
          v.prefix as client_prefix, v.name as client_name, v.address as client_address
        from vendor_authorizations a
-       join vendor_payees v on v.id = (select vendor_id from vendor_payables where id = a.transaction_id and user_id = a.user_id)
+       join vendor_payables p on p.id = a.transaction_id and p.user_id = a.user_id
+       join vendor_payees v on v.id = p.vendor_id
+       left join lateral (
+         select opened_at, unlocked_at from vendor_requests vr
+         where vr.transaction_id = a.transaction_id and vr.user_id = a.user_id
+         order by vr.used_at desc nulls last, vr.created_at desc limit 1
+       ) req on true
        where a.transaction_id = $1 and a.user_id = $2`,
       [id, g.ws]
     );
@@ -69499,6 +69508,15 @@ txnRoutes.get("/transactions/:id/authorization", async (c) => {
     vendorEmail: String(a2.vendor_email ?? ""),
     authRef: String(a2.auth_ref ?? ""),
     maskedId: String(a2.vendor_masked_id ?? ""),
+    // Signing trail (already stored) — surfaced so the client can show the
+    // vendor the record of when/where/how they signed.
+    ip: a2.ip ? String(a2.ip) : void 0,
+    userAgent: a2.user_agent ? String(a2.user_agent) : void 0,
+    lineUserId: a2.line_user_id ? String(a2.line_user_id) : void 0,
+    openedAt: iso(a2.opened_at),
+    unlockedAt: iso(a2.unlocked_at),
+    status: String(a2.txn_status ?? ""),
+    voidReason: a2.void_reason ? String(a2.void_reason) : void 0,
     corrections,
     signaturePng: sig ? `data:image/png;base64,${Buffer.from(sig).toString("base64")}` : null
   });
@@ -70141,6 +70159,12 @@ var ACCENT = (0, import_pdf_lib.rgb)(0.059, 0.463, 0.431);
 var PANEL = (0, import_pdf_lib.rgb)(0.965, 0.973, 0.98);
 var RULE = (0, import_pdf_lib.rgb)(0.886, 0.91, 0.941);
 var ZEBRA = (0, import_pdf_lib.rgb)(0.98, 0.984, 0.99);
+var METHOD_TH = {
+  "stub-deferred": "\u0E25\u0E32\u0E22\u0E40\u0E0B\u0E47\u0E19 (\u0E27\u0E32\u0E14\u0E14\u0E49\u0E27\u0E22\u0E19\u0E34\u0E49\u0E27/\u0E40\u0E21\u0E32\u0E2A\u0E4C)",
+  "typed-consent": "\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E0A\u0E37\u0E48\u0E2D\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E25\u0E07\u0E19\u0E32\u0E21",
+  "uploaded-signature": "\u0E25\u0E32\u0E22\u0E40\u0E0B\u0E47\u0E19\u0E08\u0E32\u0E01\u0E44\u0E1F\u0E25\u0E4C\u0E17\u0E35\u0E48\u0E2D\u0E31\u0E1B\u0E42\u0E2B\u0E25\u0E14",
+  "line-liff": "\u0E22\u0E37\u0E19\u0E22\u0E31\u0E19\u0E14\u0E49\u0E27\u0E22 LINE"
+};
 var A4 = { w: 595.28, h: 841.89 };
 var M = 48;
 var ITEMS_LIMIT = M + 40;
@@ -70337,6 +70361,13 @@ async function buildReceiptPdf(input) {
   page.drawLine({ start: { x: sigX, y: sigY }, end: { x: sigX + sigW, y: sigY }, thickness: 1, color: FAINT });
   centerText("\u0E1C\u0E39\u0E49\u0E21\u0E35\u0E2D\u0E33\u0E19\u0E32\u0E08\u0E25\u0E07\u0E19\u0E32\u0E21", sigY - 14, 9.5, bold, INK);
   centerText(vendorDisplayName(input.vendor.prefix, input.vendor.name), sigY - 28, 9, regular, MUTED);
+  centerText(
+    `\u0E25\u0E07\u0E19\u0E32\u0E21\u0E40\u0E21\u0E37\u0E48\u0E2D ${String(input.signedAt).slice(0, 10)} \xB7 ${METHOD_TH[input.verificationMethod] ?? "\u0E25\u0E32\u0E22\u0E40\u0E0B\u0E47\u0E19"}`,
+    sigY - 40,
+    8.5,
+    regular,
+    FAINT
+  );
   if (input.showVerification) {
     const qrSize = 64;
     drawQr(page, input.verifyUrl, right - qrSize, M - 6, qrSize, INK);
@@ -70671,6 +70702,8 @@ app.post("/api/vendor/:token/sign", async (c) => {
     return c.json({ error: "already-signed" }, 409);
   const txnId = String(r.id);
   const rowTenant = String(r.user_id);
+  const signMethod = body.signMethod === "typed-consent" || body.signMethod === "uploaded-signature" ? body.signMethod : "drawn";
+  const verificationMethod = signMethod === "drawn" ? "stub-deferred" : signMethod;
   const corrections = [];
   const subName = String(body.vendorName).slice(0, 200);
   const subAddr = String(body.vendorAddress).slice(0, 500);
@@ -70691,7 +70724,7 @@ app.post("/api/vendor/:token/sign", async (c) => {
     values (${rowTenant}, ${txnId}, ${subPrefix}, ${subName}, ${subAddr},
       ${`x-xxxx-xxxxx-${last4.slice(0, 2)}-${last4.slice(2)}`},
       ${subPhone}, ${subEmail}, ${authRef},
-      ${sigPath}, 'stub-deferred', ${body.lineUserId ?? null}, ${ip},
+      ${sigPath}, ${verificationMethod}, ${body.lineUserId ?? null}, ${ip},
       ${(c.req.header("user-agent") ?? "").slice(0, 500)}, 'v1',
       ${JSON.stringify(corrections)})`;
   await db`update vendor_requests set used_at = now() where id = ${String(r.req_id)}`;
@@ -70702,7 +70735,7 @@ app.post("/api/vendor/:token/sign", async (c) => {
     txnId,
     "vendor.signed",
     "vendor",
-    { verificationMethod: "stub-deferred", consentVersion: "v1", corrections, authRef },
+    { verificationMethod, signMethod, consentVersion: "v1", corrections, authRef },
     ip
   ));
   let issued;
@@ -70812,14 +70845,27 @@ app.get("/api/verify/:code", async (c) => {
   const code = c.req.param("code").toLowerCase();
   const db = sql();
   const rows = await db`
-    select r.number, r.status, r.issue_date,
+    select r.number, r.status as receipt_status, r.issue_date,
+      a.signed_at, a.verification_method,
+      p.status as txn_status, p.void_reason,
       left(a.vendor_name, 6) || '••' as vendor_masked
     from vendor_receipts r
     join vendor_authorizations a on a.transaction_id = r.transaction_id
+    join vendor_payables p on p.id = r.transaction_id
     where lower(r.verification_code) = ${code}`;
   const r = one(rows);
   if (!r) return c.json({ error: "not-found" }, 404);
-  return c.json({ number: r.number, status: r.status, issueDate: r.issue_date, vendorMasked: r.vendor_masked });
+  const voided = String(r.txn_status ?? "") === "void";
+  return c.json({
+    number: r.number,
+    // A voided receipt is not a live document, whichever row says what.
+    status: voided ? "void" : r.receipt_status,
+    issueDate: isoDay(r.issue_date),
+    signedAt: r.signed_at,
+    verificationMethod: r.verification_method,
+    vendorMasked: r.vendor_masked,
+    voidReason: voided ? r.void_reason ?? null : null
+  });
 });
 
 // src/lib/permissions.ts
