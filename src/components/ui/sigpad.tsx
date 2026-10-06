@@ -39,7 +39,7 @@ const SigPad = forwardRef<SigPadHandle, { className?: string; onDraw?: () => voi
       ctx.scale(dpr, dpr)
       ctx.lineWidth = 2.4
       ctx.lineCap = 'round'
-      ctx.strokeStyle = colors.ink[900]
+      ctx.strokeStyle = colors.signature
 
       const pos = (e: PointerEvent) => {
         const r = c.getBoundingClientRect()

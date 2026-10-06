@@ -75,6 +75,11 @@ export const colors = {
   'warning-soft': '#FAEEDA',
   danger: '#791F1F',
   'danger-soft': '#FCEBEB',
+  // Signature ink. Signatures are written in blue/black by convention; navy
+  // reads unmistakably as a signature on white paper and is distinct from the
+  // UI accent (`primary`, a bright blue). Used by the drawn pad and the
+  // type-to-sign renderer; not a surface/role colour.
+  signature: '#1f3a5f',
   // accent-teal removed. "signed" is a success state, not a fourth hue — a
   // single-badge reason to carry an extra colour is the opposite of a system.
 } as const

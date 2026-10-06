@@ -24,7 +24,7 @@ import { EmptyState } from '../components/ui/empty-state'
 import { ErrorState } from '../components/ui/error-state'
 import { TableSkeleton } from '../components/ui/table-skeleton'
 import { Pagination } from '../components/ui/pagination'
-import { ClickableRow, SortableTh, Td, tableCls } from '../components/ui/data-table'
+import { ClickableRow, SortableTh, Td, Th, tableCls } from '../components/ui/data-table'
 import { cn } from '../lib/cn'
 
 // Receipt register — issued receipts, scoped by the receipt's own issue date
@@ -176,17 +176,13 @@ export function ReceiptsList() {
                 <thead>
                   <tr>
                     {th('date', 'วันที่ออก')}
-                    <th scope="col" className="px-4 py-2.5 text-left text-label font-medium text-ink-500">
-                      วันที่โอน
-                    </th>
+                    <Th>วันที่โอน</Th>
                     {th('number', 'เลขที่ใบเสร็จ')}
                     {th('vendor', 'ผู้ขาย')}
                     {th('gross', 'ยอดเงิน (ฐานภาษี)', 'right')}
                     {th('wht', 'หัก ณ ที่จ่าย', 'right')}
                     {th('net', 'สุทธิ', 'right')}
-                    <th scope="col" className="w-24 px-4 py-2.5 text-right text-label font-medium text-ink-500">
-                      <span className="sr-only">จัดการ</span>
-                    </th>
+                    <Th align="right" className="w-24">จัดการ</Th>
                   </tr>
                 </thead>
                 <tbody>

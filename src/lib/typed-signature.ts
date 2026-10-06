@@ -44,17 +44,19 @@ export async function renderTypedSignature(name: string): Promise<string> {
     /* older browsers: fall through and draw with whatever is available */
   }
 
-  let size = 96
+  // Sized so the name sits in the signature slot like a signature, not a
+  // headline (the receipt scales this canvas into a ~56px slot).
+  let size = 77
   ctx.font = `${size}px ${SIGNATURE_FONT}`
   let w = ctx.measureText(text).width
   const maxW = W - 80
   if (w > maxW) {
-    size = Math.max(28, Math.floor(size * (maxW / w)))
+    size = Math.max(22, Math.floor(size * (maxW / w)))
     ctx.font = `${size}px ${SIGNATURE_FONT}`
     w = ctx.measureText(text).width
   }
 
-  ctx.fillStyle = colors.ink[900]
+  ctx.fillStyle = colors.signature
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.fillText(text, W / 2, H / 2)

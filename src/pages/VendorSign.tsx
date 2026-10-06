@@ -492,7 +492,7 @@ export function VendorSign() {
                 <Label>ชื่อ–นามสกุลที่ใช้ลงนาม</Label>
                 <Input value={typedName} onChange={(e) => setTypedName(e.target.value)} placeholder="เช่น สมชาย ใจดี" autoComplete="name" />
                 <div className="rounded-control border-2 border-dashed border-ink-300 bg-white px-4 py-6">
-                  <p className="text-center text-3xl leading-snug" style={{ fontFamily: SIGNATURE_FONT }}>
+                  <p className="text-center text-3xl leading-snug text-signature" style={{ fontFamily: SIGNATURE_FONT }}>
                     {typedName.trim() || 'ตัวอย่าง ลายเซ็น'}
                   </p>
                 </div>
