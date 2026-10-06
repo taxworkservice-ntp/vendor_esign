@@ -124,7 +124,7 @@ export function ReceiptsList() {
     <div className="space-y-5" onKeyDown={onKey}>
       <PageHeader
         title="ใบเสร็จรับเงิน"
-        sub={`ทะเบียนใบเสร็จที่ออกแล้ว — ${month ? `รอบ ${formatMonthTH(month)}` : 'ทั้งหมด'} · ตามวันที่ออกใบเสร็จ`}
+        sub={`ทะเบียนใบเสร็จที่ออกแล้ว — ${month ? `รอบ ${formatMonthTH(month)}` : 'ทั้งหมด'} · ตามวันที่รับชำระ`}
         actions={
           <a href={downloadAllHref} target="_blank" rel="noopener noreferrer" aria-disabled={total === 0}>
             <Button disabled={total === 0} title={`ดาวน์โหลดใบเสร็จทั้งหมด ${total} ฉบับที่ตรงเงื่อนไข (PDF แยกต่อฉบับ, รวมเป็น ZIP)`}>
@@ -175,8 +175,8 @@ export function ReceiptsList() {
               <table className={cn(tableCls, 'min-w-[1000px]')}>
                 <thead>
                   <tr>
-                    {th('date', 'วันที่ออก')}
-                    <Th>วันที่โอน</Th>
+                    {th('date', 'วันที่รับชำระ')}
+                    <Th>ออกเมื่อ</Th>
                     {th('number', 'เลขที่ใบเสร็จ')}
                     {th('vendor', 'ผู้ขาย')}
                     {th('gross', 'ยอดเงิน (ฐานภาษี)', 'right')}
@@ -191,8 +191,8 @@ export function ReceiptsList() {
                   ) : (
                     rows.map((r) => (
                       <ClickableRow key={r.id} label={`เปิดใบเสร็จ ${r.number}`} onOpen={() => nav(`/receipts/${r.id}`)}>
-                        <Td className="whitespace-nowrap tabular-nums">{fmtDateTH(r.issueDate)}</Td>
-                        <Td className="whitespace-nowrap tabular-nums text-ink-500">{fmtDateTH(r.transferDate)}</Td>
+                        <Td className="whitespace-nowrap tabular-nums">{fmtDateTH(r.transferDate)}</Td>
+                        <Td className="whitespace-nowrap tabular-nums text-ink-500">{fmtDateTH(r.issueDate)}</Td>
                         <Td className="whitespace-nowrap font-mono font-semibold">{r.number}</Td>
                         <Td>
                           <span className="truncate font-medium">{r.vendorName || '—'}</span>

@@ -15,6 +15,8 @@ import type { LineItem } from '../../lib/types'
 export interface ReceiptSheetData {
   number: string
   transferDate: string
+  /** Real issuance date (the document date follows transferDate). */
+  issueDate?: string
   items: LineItem[]
   grossAmount: number
   whtRate: number
@@ -96,9 +98,15 @@ export const ReceiptSheet = forwardRef<
               <span className="text-left font-mono font-semibold">{number}</span>
             </div>
             <div className="flex items-baseline gap-3">
-              <span className="w-12 shrink-0 text-left text-ink-500">วันที่:</span>
+              <span className="w-20 shrink-0 text-left text-ink-500">วันที่รับชำระ</span>
               <span className="text-left">{fmtDateTH(data.transferDate)}</span>
             </div>
+            {data.issueDate && (
+              <div className="flex items-baseline gap-3">
+                <span className="w-20 shrink-0 text-left text-ink-500">ออกเมื่อ</span>
+                <span className="text-left">{fmtDateTH(data.issueDate.slice(0, 10))}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>

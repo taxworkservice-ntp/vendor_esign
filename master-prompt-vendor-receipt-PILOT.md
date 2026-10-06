@@ -104,11 +104,19 @@ Transaction status: `draft → sent → opened → signed → issued`, plus `exp
   fetched; the fallback button uses it). The buyer block is the workspace profile
   (`useSettings` → `displayName/address/taxId`), never the mock client registry.
 - A4, print-ready. Buddhist-era dates.
+- **Date model (Model A — payment-dated document).** The receipt's document date
+  is the **payment date** (`transferDate`); the receipts register is scoped by the
+  payment date too, so the transaction, its receipt and its WHT all fall in the
+  same accounting period. The **real issuance** is recorded immutably
+  (`vendor_receipts.issue_date`, `signed_at`) and shown as **"ออกเมื่อ …"** on the
+  document/register — late issuance is visible, never back-dated or hidden. The
+  receipt **series year follows the payment year** (matching the WHT number), and
+  the server audit PDF is dated the payment date. The vendor always signs at the
+  real time; the signature block prints "ลงนามเมื่อ …" so both dates are on the
+  document.
 - **Receipt register + batch ZIP.** Issued receipts are listed at `/receipts`
-  (nav "ใบเสร็จรับเงิน"), scoped by the receipt's **issue date** — a document
-  belongs to the period it was issued, not the payment date (mirrors the WHT
-  register). `GET /api/client/receipts` returns the register (server
-  `server/src/receipts-register.ts`; sort/search/ORDER BY whitelisted). The
+  (nav "ใบเสร็จรับเงิน"), scoped by the **payment date** (`GET /api/client/receipts`,
+  server `server/src/receipts-register.ts`; sort/search/ORDER BY whitelisted). The
   "ดาวน์โหลดทั้งหมด" button opens `/receipts/download?...&download=1`, which
   renders each row through `ReceiptSheet` offscreen, rasterises one PDF per
   receipt and zips them (`fflate`, one file per receipt). A receipt whose

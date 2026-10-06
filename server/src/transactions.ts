@@ -106,6 +106,7 @@ export function toTxn(r: Record<string, unknown>): PaymentTransaction {
   const receipt = sub(r.receipt)
   const receiptNumber = receipt ? (String(receipt.number ?? '') || undefined) : undefined
   const verificationCode = receipt ? (String(receipt.verification_code ?? '') || undefined) : undefined
+  const receiptIssueDate = receipt ? isoDay(receipt.issue_date) : undefined
   // Only a live, unspent, unexpired link can actually be opened by the vendor.
   const req = sub(r.req)
   const live = req ? new Date(String(req.expires_at ?? 0)) > new Date() : false
@@ -145,6 +146,7 @@ export function toTxn(r: Record<string, unknown>): PaymentTransaction {
     status: (r.status as PaymentTransaction['status']) ?? 'draft',
     receiptNumber,
     verificationCode,
+    receiptIssueDate,
     inviteToken,
     voidReason: (r.void_reason as string | null) ?? undefined,
     taxIdLast4: last4 || undefined,

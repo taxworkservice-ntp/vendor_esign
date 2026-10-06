@@ -276,6 +276,7 @@ function build(
     data: {
       number: row.number,
       transferDate: txn?.transferDate ?? row.transferDate,
+      issueDate: row.issueDate,
       items,
       grossAmount: row.grossAmount,
       whtRate: txn?.whtRate ?? row.whtRate,

@@ -60,12 +60,17 @@ export async function finalizeReceipt(txnId: string, ip: string): Promise<Finali
       where transaction_id = ${txnId} and user_id = ${rowTenant}`
     if (!one(auth)) return { ok: false, error: 'not-signed' }
     code = randomBytes(6).toString('hex')
-    // RCT-{VENDORNO}-{BE_YEAR}-{NNN} via generate_doc_number(user_id, doc_type, year, vendor_no)
-    const vno = one<{ vendor_no: number }>(await db`
-      select v.vendor_no from vendor_payables p
+    const vno = one<{ vendor_no: number; transfer_date: unknown }>(await db`
+      select v.vendor_no, p.transfer_date from vendor_payables p
       join vendor_payees v on v.id = p.vendor_id
       where p.id = ${txnId} and p.user_id = ${rowTenant}`)
-    const n = await db`select generate_doc_number(${rowTenant}, 'vendor_receipt', ${currentBeYear()}, ${Number(vno?.vendor_no ?? 0)}) as number`
+    // RCT-{VENDORNO}-{BE_YEAR}-{NNN}. The series year follows the PAYMENT date —
+    // the receipt's accounting period — so a late-issued receipt is numbered in
+    // the same BE year as its printed date and its WHT certificate (never a
+    // year ahead just because it was signed in a later January).
+    const payDate = isoDay(vno?.transfer_date)
+    const beYear = payDate ? Number(payDate.slice(0, 4)) + 543 : currentBeYear()
+    const n = await db`select generate_doc_number(${rowTenant}, 'vendor_receipt', ${beYear}, ${Number(vno?.vendor_no ?? 0)}) as number`
     number = String(one<Record<string, unknown>>(n)?.number)
     await db`insert into vendor_receipts (user_id, transaction_id, number, issue_date, verification_code, status)
       values (${rowTenant}, ${txnId}, ${number}, CURRENT_DATE, ${code}, 'issued')`
@@ -146,7 +151,9 @@ export async function finalizeReceipt(txnId: string, ip: string): Promise<Finali
   const verifyUrl = `${PUBLIC_BASE}/verify/${code.toUpperCase()}`
   const { bytes, sha256 } = await buildReceiptPdf({
     number,
-    issueDate: new Date().toISOString().slice(0, 10),
+    // The document's date is the payment date (Model A), matching the on-screen
+    // receipt; the real issuance is recorded separately (vendor_receipts.issue_date).
+    issueDate: isoDay(d.transfer_date),
     verifyUrl,
     verificationCode: code.toUpperCase(),
     verificationMethod: d.verification_method,

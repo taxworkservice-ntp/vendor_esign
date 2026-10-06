@@ -3,9 +3,10 @@ import { loadTxns } from './mock'
 import { monthRange } from './global-month'
 import type { PaymentTransaction } from './types'
 
-// Client receipt register: one row per issued receipt, scoped by the receipt's
-// own issue date. Mirrors the WHT register so the two document registers behave
-// the same (month = document period, not payment date).
+// Client receipt register: one row per issued receipt, scoped by the PAYMENT
+// date (the receipt's accounting period), so the transaction, its receipt and
+// its WHT all fall in the same period. The real issuance date is carried
+// separately as `issueDate` and shown as "ออกเมื่อ".
 
 export interface ReceiptRegisterRow {
   id: string // source transaction id (drives /receipts/:id)

@@ -305,6 +305,7 @@ export function VendorSign() {
       setVendorData({
         number,
         transferDate: t.transferDate,
+        issueDate: new Date().toISOString().slice(0, 10),
         items: (t.lineItems.some((it) => it.description || it.amount)
           ? t.lineItems
           : [{ description: t.description, amount: t.grossAmount }]

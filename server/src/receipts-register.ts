@@ -36,7 +36,9 @@ export const receiptRoutes = new Hono()
 
 /** Whitelisted sort expressions. Keys match the client sort fields. */
 const ORDER_BY: Record<string, string> = {
-  date: 'r.issue_date',
+  // The register is scoped by the payment date (the receipt's accounting
+  // period), matching the transaction list and the WHT register.
+  date: 'p.transfer_date',
   number: 'r.number',
   vendor: 'vendor_name',
   gross: 'p.gross_amount',
@@ -92,7 +94,7 @@ receiptRoutes.get('/receipts', async (c) => {
     const a = `$${params.length}`
     params.push(month.to)
     const b = `$${params.length}`
-    conds.push(`r.issue_date >= ${a}::date`, `r.issue_date <= ${b}::date`)
+    conds.push(`p.transfer_date >= ${a}::date`, `p.transfer_date <= ${b}::date`)
   }
   if (q) {
     params.push('%' + q + '%')

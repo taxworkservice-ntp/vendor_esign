@@ -69339,6 +69339,7 @@ function toTxn(r) {
   const receipt = sub(r.receipt);
   const receiptNumber = receipt ? String(receipt.number ?? "") || void 0 : void 0;
   const verificationCode = receipt ? String(receipt.verification_code ?? "") || void 0 : void 0;
+  const receiptIssueDate = receipt ? isoDay(receipt.issue_date) : void 0;
   const req = sub(r.req);
   const live = req ? new Date(String(req.expires_at ?? 0)) > /* @__PURE__ */ new Date() : false;
   const inviteToken = req && !req.used_at && !req.revoked_at && live ? String(req.token ?? "") || void 0 : void 0;
@@ -69379,6 +69380,7 @@ function toTxn(r) {
     status: r.status ?? "draft",
     receiptNumber,
     verificationCode,
+    receiptIssueDate,
     inviteToken,
     voidReason: r.void_reason ?? void 0,
     taxIdLast4: last4 || void 0,
@@ -70000,7 +70002,9 @@ function parseMonthParam(raw2) {
 // server/src/receipts-register.ts
 var receiptRoutes = new Hono2();
 var ORDER_BY3 = {
-  date: "r.issue_date",
+  // The register is scoped by the payment date (the receipt's accounting
+  // period), matching the transaction list and the WHT register.
+  date: "p.transfer_date",
   number: "r.number",
   vendor: "vendor_name",
   gross: "p.gross_amount",
@@ -70048,7 +70052,7 @@ receiptRoutes.get("/receipts", async (c) => {
     const a2 = `$${params.length}`;
     params.push(month.to);
     const b2 = `$${params.length}`;
-    conds.push(`r.issue_date >= ${a2}::date`, `r.issue_date <= ${b2}::date`);
+    conds.push(`p.transfer_date >= ${a2}::date`, `p.transfer_date <= ${b2}::date`);
   }
   if (q) {
     params.push("%" + q + "%");
@@ -70417,10 +70421,12 @@ async function finalizeReceipt(txnId, ip) {
     if (!one(auth)) return { ok: false, error: "not-signed" };
     code = randomBytes4(6).toString("hex");
     const vno = one(await db`
-      select v.vendor_no from vendor_payables p
+      select v.vendor_no, p.transfer_date from vendor_payables p
       join vendor_payees v on v.id = p.vendor_id
       where p.id = ${txnId} and p.user_id = ${rowTenant}`);
-    const n = await db`select generate_doc_number(${rowTenant}, 'vendor_receipt', ${currentBeYear()}, ${Number(vno?.vendor_no ?? 0)}) as number`;
+    const payDate = isoDay(vno?.transfer_date);
+    const beYear = payDate ? Number(payDate.slice(0, 4)) + 543 : currentBeYear();
+    const n = await db`select generate_doc_number(${rowTenant}, 'vendor_receipt', ${beYear}, ${Number(vno?.vendor_no ?? 0)}) as number`;
     number = String(one(n)?.number);
     await db`insert into vendor_receipts (user_id, transaction_id, number, issue_date, verification_code, status)
       values (${rowTenant}, ${txnId}, ${number}, CURRENT_DATE, ${code}, 'issued')`;
@@ -70480,7 +70486,9 @@ async function finalizeReceipt(txnId, ip) {
   const verifyUrl = `${PUBLIC_BASE}/verify/${code.toUpperCase()}`;
   const { bytes, sha256: sha2562 } = await buildReceiptPdf({
     number,
-    issueDate: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
+    // The document's date is the payment date (Model A), matching the on-screen
+    // receipt; the real issuance is recorded separately (vendor_receipts.issue_date).
+    issueDate: isoDay(d2.transfer_date),
     verifyUrl,
     verificationCode: code.toUpperCase(),
     verificationMethod: d2.verification_method,

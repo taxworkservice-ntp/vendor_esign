@@ -78,6 +78,7 @@ export function ReceiptView() {
   const data: ReceiptSheetData = {
     number,
     transferDate: t.transferDate,
+    issueDate: t.receiptIssueDate,
     items,
     grossAmount: t.grossAmount,
     whtRate: t.whtRate,
