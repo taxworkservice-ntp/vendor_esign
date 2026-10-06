@@ -154,6 +154,7 @@ export async function finalizeReceipt(txnId: string, ip: string): Promise<Finali
     // The document's date is the payment date (Model A), matching the on-screen
     // receipt; the real issuance is recorded separately (vendor_receipts.issue_date).
     issueDate: isoDay(d.transfer_date),
+    issuedAt: new Date().toISOString(),
     verifyUrl,
     verificationCode: code.toUpperCase(),
     verificationMethod: d.verification_method,

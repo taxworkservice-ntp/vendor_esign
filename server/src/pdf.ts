@@ -29,7 +29,9 @@ export interface ReceiptLine {
 
 export interface ReceiptPdfInput {
   number: string
-  issueDate: string // ISO date
+  issueDate: string // ISO date — the document date (payment date)
+  /** The real issuance datetime; shown as the "issued on" remark. */
+  issuedAt?: string // ISO datetime
   verifyUrl: string // encoded in QR
   verificationCode: string
   verificationMethod: string
@@ -294,6 +296,9 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
   rightText(`${thb(input.netAmount)}`, right, y - 3, 18, bold, INK)
   y -= 22
   text(`(${input.amountWords})`, M, y, 9.5, regular, MUTED)
+  y -= 14
+  // The document date is the payment date; state the real issuance date here.
+  text(`เอกสารฉบับนี้ออกเมื่อ ${String(input.issuedAt ?? input.issueDate).slice(0, 10)}`, M, y, 9, regular, FAINT)
 
   // ── Signature, centered above the bottom margin ──
   const sigY = input.showVerification ? SIG_Y + 60 : SIG_Y

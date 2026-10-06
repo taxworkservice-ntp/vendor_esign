@@ -70349,6 +70349,8 @@ async function buildReceiptPdf(input) {
   rightText(`${thb(input.netAmount)}`, right, y - 3, 18, bold, INK);
   y -= 22;
   text(`(${input.amountWords})`, M, y, 9.5, regular, MUTED);
+  y -= 14;
+  text(`\u0E40\u0E2D\u0E01\u0E2A\u0E32\u0E23\u0E09\u0E1A\u0E31\u0E1A\u0E19\u0E35\u0E49\u0E2D\u0E2D\u0E01\u0E40\u0E21\u0E37\u0E48\u0E2D ${String(input.issuedAt ?? input.issueDate).slice(0, 10)}`, M, y, 9, regular, FAINT);
   const sigY = input.showVerification ? SIG_Y + 60 : SIG_Y;
   const sigW = 220;
   const sigX = (A4.w - sigW) / 2;
@@ -70489,6 +70491,7 @@ async function finalizeReceipt(txnId, ip) {
     // The document's date is the payment date (Model A), matching the on-screen
     // receipt; the real issuance is recorded separately (vendor_receipts.issue_date).
     issueDate: isoDay(d2.transfer_date),
+    issuedAt: (/* @__PURE__ */ new Date()).toISOString(),
     verifyUrl,
     verificationCode: code.toUpperCase(),
     verificationMethod: d2.verification_method,

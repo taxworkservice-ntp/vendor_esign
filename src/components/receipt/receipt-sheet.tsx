@@ -92,21 +92,17 @@ export const ReceiptSheet = forwardRef<
           <h1 className="text-page font-semibold leading-none tracking-tight">ใบเสร็จรับเงิน</h1>
           <p className="mt-1.5 text-micro font-semibold uppercase tracking-[0.2em] text-ink-400">Receipt</p>
           <p className="mt-0.5 text-body font-semibold text-ink-600">ต้นฉบับ</p>
+          {/* Same label width on both rows so the values start on the same
+              vertical line. */}
           <div className="ml-auto mt-3 w-max space-y-1 text-body">
             <div className="flex items-baseline gap-3">
-              <span className="w-12 shrink-0 text-left text-ink-500">เลขที่:</span>
+              <span className="w-16 shrink-0 text-left text-ink-500">เลขที่:</span>
               <span className="text-left font-mono font-semibold">{number}</span>
             </div>
             <div className="flex items-baseline gap-3">
-              <span className="w-20 shrink-0 text-left text-ink-500">วันที่รับชำระ</span>
+              <span className="w-16 shrink-0 text-left text-ink-500">วันที่:</span>
               <span className="text-left">{fmtDateTH(data.transferDate)}</span>
             </div>
-            {data.issueDate && (
-              <div className="flex items-baseline gap-3">
-                <span className="w-20 shrink-0 text-left text-ink-500">ออกเมื่อ</span>
-                <span className="text-left">{fmtDateTH(data.issueDate.slice(0, 10))}</span>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -171,6 +167,11 @@ export const ReceiptSheet = forwardRef<
           <span className="text-xl font-semibold tabular-nums">{fmtTHB(data.netAmount)}</span>
         </div>
         <p className="mt-1.5 text-body text-ink-500">({amountToThaiWords(data.netAmount)})</p>
+        {/* Issuance remark: the document date is the payment date, so the real
+            issuance date is stated here. */}
+        {data.issueDate && (
+          <p className="mt-2 text-label text-ink-400">เอกสารฉบับนี้ออกเมื่อ {fmtDateTH(data.issueDate.slice(0, 10))}</p>
+        )}
       </div>
 
       {isVoid && <p className="mt-4 text-label text-ink-400">ยกเลิกเอกสาร: {data.voidReason}</p>}
