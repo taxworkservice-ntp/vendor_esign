@@ -69623,7 +69623,8 @@ txnRoutes.post("/transactions/:id/send", async (c) => {
       await db`insert into vendor_requests (user_id, transaction_id, token_hash, token, expires_at)
         values (${g.ws}, ${id}, ${sha256hex(tok)}, ${tok}, now() + interval '7 days')`;
     }
-    await db`update vendor_payables set status = 'sent' where id = ${id} and user_id = ${g.ws} and status = 'draft'`;
+    await db`update vendor_payables set status = 'sent'
+      where id = ${id} and user_id = ${g.ws} and status in ('draft', 'expired', 'cancelled')`;
     return tok;
   });
   return c.json({ ok: true, token });

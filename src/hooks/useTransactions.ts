@@ -256,23 +256,27 @@ export function useTransactionActions() {
   const stampSent = (t: PaymentTransaction, at: string): PaymentTransaction => ({ ...t, sentAt: t.sentAt ?? at })
 
   return {
-    send: async (id: string) => {
+    send: async (id: string): Promise<{ token?: string }> => {
       if (hasServer) {
-        await apiSend(`/api/client/transactions/${id}/send`, 'POST')
+        const res = await apiSend<{ ok: boolean; token?: string }>(`/api/client/transactions/${id}/send`, 'POST')
         refresh()
-        return
+        return { token: res.token }
       }
       const at = new Date().toISOString()
+      let token: string | undefined
       apply((all) =>
-        all.map((t) =>
-          t.id === id && t.status === 'draft'
-            ? stampSent(
-                { ...t, status: 'sent', inviteToken: t.inviteToken ?? `tok_${Math.random().toString(36).slice(2, 10)}`, timeline: [...t.timeline, { at, label: 'ส่งลิงก์ให้ผู้ขาย' }] },
-                at,
-              )
-            : t,
-        ),
+        all.map((t) => {
+          // Re-activate anything not yet signed (draft, expired, cancelled) so a
+          // re-sent link can actually be opened again.
+          if (t.id !== id || !['draft', 'expired', 'cancelled'].includes(t.status)) return t
+          token = `tok_${Math.random().toString(36).slice(2, 10)}`
+          return stampSent(
+            { ...t, status: 'sent', inviteToken: token, timeline: [...t.timeline, { at, label: 'ส่งลิงก์ให้ผู้ขาย' }] },
+            at,
+          )
+        }),
       )
+      return { token }
     },
     revoke: async (id: string) => {
       if (hasServer) {

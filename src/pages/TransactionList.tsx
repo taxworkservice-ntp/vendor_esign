@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Download, FileSearch, Plus, Rows3, Rows4 } from 'lucide-react'
-import { useAllTransactions, useTransactions } from '../hooks/useTransactions'
+import { useAllTransactions, useTransactionActions, useTransactions } from '../hooks/useTransactions'
 import { useGlobalMonth } from '../hooks/useGlobalMonth'
 import { useAllVendors } from '../hooks/useVendors'
 import { useSettings } from '../hooks/useSettings'
 import { useDebounced } from '../hooks/useDebounced'
 import { useClientAuth } from '../lib/client-auth'
 import { readStoredMonth } from '../lib/global-month'
-import { defaultSettings } from '../lib/settings'
+import { defaultSettings, renderInviteMessage } from '../lib/settings'
+import { fmtDateTH, fmtTHB } from '../lib/format'
+import { vendorDisplayName } from '../lib/vendor-name'
 import {
   activeFilterCount,
   clampPage,
@@ -40,6 +42,7 @@ import { Button } from '../components/ui/button'
 import { SummaryBar } from '../components/ui/summary-bar'
 import { Pagination } from '../components/ui/pagination'
 import { useToast } from '../components/ui/toast'
+import { ConfirmDialog } from '../components/ui/confirm-dialog'
 import { TxnToolbar } from '../components/transactions/txn-toolbar'
 import { TxnFiltersPanel } from '../components/transactions/txn-filters-panel'
 import { TxnTable, TxnTableFrame } from '../components/transactions/txn-table'
@@ -260,6 +263,65 @@ export function TransactionList() {
   }, [globalMonth])
 
   const open = useCallback((id: string) => nav(`/transactions/${id}`), [nav])
+
+  // Row-level lifecycle actions (mirror the detail band's "one job per status").
+  const acts = useTransactionActions()
+  const [rowConfirm, setRowConfirm] = useState<{ kind: 'issue' | 'revoke'; t: PaymentTransaction } | null>(null)
+
+  const writeClipboard = useCallback(
+    async (text: string, ok: string) => {
+      try {
+        await navigator.clipboard.writeText(text)
+        toast.show(ok)
+      } catch {
+        toast.show('คัดลอกไม่สำเร็จ — กรุณาคัดลอกด้วยตนเอง', 'error')
+      }
+    },
+    [toast],
+  )
+
+  const onRowCopyLink = useCallback(
+    (t: PaymentTransaction) => {
+      const link = inviteUrl(t.inviteToken)
+      if (!link) {
+        toast.show('รายการนี้ยังไม่มีลิงก์ผู้ขาย', 'error')
+        return
+      }
+      void writeClipboard(link, 'คัดลอกลิงก์ผู้ขายแล้ว')
+    },
+    [writeClipboard, toast],
+  )
+
+  const onRowCopyMessage = useCallback(
+    (t: PaymentTransaction) => {
+      const message = renderInviteMessage(cfg.inviteMessageTemplate, {
+        vendor: t.vendor.name,
+        vendorPrefix: t.vendor.prefix ?? '',
+        date: fmtDateTH(t.transferDate),
+        amount: fmtTHB(t.netAmount),
+        link: inviteUrl(t.inviteToken),
+        client: cfg.displayName,
+      })
+      void writeClipboard(message, 'คัดลอกข้อความเชิญแล้ว')
+    },
+    [cfg, writeClipboard],
+  )
+
+  const onRowSend = useCallback(
+    async (t: PaymentTransaction) => {
+      try {
+        const { token } = await acts.send(t.id)
+        if (token) await writeClipboard(inviteUrl(token), 'สร้างและคัดลอกลิงก์แล้ว')
+        else toast.show('สร้างลิงก์แล้ว')
+      } catch {
+        toast.show('สร้างลิงก์ไม่สำเร็จ', 'error')
+      }
+    },
+    [acts, writeClipboard, toast],
+  )
+
+  const onRowIssue = useCallback((t: PaymentTransaction) => setRowConfirm({ kind: 'issue', t }), [])
+  const onRowRevoke = useCallback((t: PaymentTransaction) => setRowConfirm({ kind: 'revoke', t }), [])
 
   const toggle = useCallback((id: string) => {
     setSelected((prev) => {
@@ -500,6 +562,11 @@ export function TransactionList() {
                 onToggle={toggle}
                 onTogglePage={togglePage}
                 onOpen={open}
+                onSend={onRowSend}
+                onCopyLink={onRowCopyLink}
+                onCopyMessage={onRowCopyMessage}
+                onIssue={onRowIssue}
+                onRevoke={onRowRevoke}
                 loading={isLoading}
                 dense={dense}
               />
@@ -566,6 +633,48 @@ export function TransactionList() {
           </>
         )}
       </Card>
+
+      <ConfirmDialog
+        open={rowConfirm !== null}
+        tone={rowConfirm?.kind === 'issue' ? 'primary' : 'danger'}
+        title={rowConfirm?.kind === 'issue' ? 'ยืนยันการออกใบเสร็จ' : 'ยืนยันการเพิกถอนลิงก์'}
+        confirmLabel={rowConfirm?.kind === 'issue' ? 'ออกใบเสร็จ' : 'เพิกถอนลิงก์'}
+        message={
+          rowConfirm ? (
+            rowConfirm.kind === 'issue' ? (
+              <>
+                ออกใบเสร็จและออกเลขที่ให้{' '}
+                <b>{vendorDisplayName(rowConfirm.t.vendor.prefix, rowConfirm.t.vendor.name)}</b> ใช่หรือไม่ —
+                ดำเนินการแล้วแก้ไขหรือลบไม่ได้
+              </>
+            ) : (
+              <>
+                เพิกถอนลิงก์ของ{' '}
+                <b>{vendorDisplayName(rowConfirm.t.vendor.prefix, rowConfirm.t.vendor.name)}</b> ใช่หรือไม่ — ผู้ขายจะเปิดลิงก์นี้ไม่ได้อีก
+              </>
+            )
+          ) : (
+            ''
+          )
+        }
+        onConfirm={async () => {
+          const c = rowConfirm
+          setRowConfirm(null)
+          if (!c) return
+          try {
+            if (c.kind === 'issue') {
+              await acts.issue(c.t.id)
+              toast.show('ออกใบเสร็จแล้ว')
+            } else {
+              await acts.revoke(c.t.id)
+              toast.show('เพิกถอนลิงก์แล้ว')
+            }
+          } catch {
+            toast.show('ดำเนินการไม่สำเร็จ', 'error')
+          }
+        }}
+        onCancel={() => setRowConfirm(null)}
+      />
     </div>
   )
 }

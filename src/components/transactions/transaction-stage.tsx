@@ -36,6 +36,32 @@ const TONE: Record<Tone, { box: string; icon: string; title: string }> = {
   danger: { box: 'border-danger/30 bg-danger-soft', icon: 'bg-white text-danger', title: 'text-danger' },
 }
 
+// The one action that matters for a status, shared by the detail band and the
+// list-row actions so the two can never disagree on "what's next".
+export type PrimaryActionKind = 'send' | 'copy' | 'issue' | 'open'
+export interface PrimaryActionSpec {
+  kind: PrimaryActionKind
+  label: string
+}
+export function primaryActionFor(status: TxnStatus): PrimaryActionSpec | null {
+  switch (status) {
+    case 'draft':
+      return { kind: 'send', label: 'สร้างลิงก์' }
+    case 'expired':
+    case 'cancelled':
+      return { kind: 'send', label: 'สร้างลิงก์ใหม่' }
+    case 'sent':
+    case 'opened':
+      return { kind: 'copy', label: 'คัดลอกลิงก์' }
+    case 'signed':
+      return { kind: 'issue', label: 'ออกใบเสร็จ' }
+    case 'issued':
+      return { kind: 'open', label: 'เปิดใบเสร็จ' }
+    default:
+      return null
+  }
+}
+
 function stageFor(status: TxnStatus, receiptNumber?: string): Stage {
   switch (status) {
     case 'draft':
