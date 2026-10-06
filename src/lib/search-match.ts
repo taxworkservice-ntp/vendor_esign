@@ -31,6 +31,7 @@ export function matchesSearch(fields: SearchField[], q: string): boolean {
 
 /** Every field a vendor can be found by, in the order shown in the UI hint. */
 export function vendorSearchFields(v: {
+  prefix?: string
   name?: string
   address?: string
   phone?: string
@@ -41,9 +42,26 @@ export function vendorSearchFields(v: {
   maskedId?: string
 }): SearchField[] {
   // vendorNo is matched raw, zero-padded, and as the displayed code (VEN-001),
-  // so "1", "001" and "VEN-001" all find the same supplier.
+  // so "1", "001" and "VEN-001" all find the same supplier. The title is matched
+  // alone and combined with the name ("นาย", "นาย สมชาย", "นายสมชาย").
   const no = v.vendorNo ?? 0
-  return [v.name, v.address, v.phone, v.email, v.lineUserId, String(no), String(no).padStart(3, '0'), vendorCode(no), v.taxLast4, v.maskedId]
+  const pfx = v.prefix ?? ''
+  const name = v.name ?? ''
+  return [
+    pfx,
+    v.name,
+    pfx ? `${pfx} ${name}` : '',
+    pfx ? `${pfx}${name}` : '',
+    v.address,
+    v.phone,
+    v.email,
+    v.lineUserId,
+    String(no),
+    String(no).padStart(3, '0'),
+    vendorCode(no),
+    v.taxLast4,
+    v.maskedId,
+  ]
 }
 
 /** Every field a catalog item can be found by. */

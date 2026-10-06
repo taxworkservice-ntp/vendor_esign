@@ -177,7 +177,10 @@ export function filterTransactions(
     if (f.vendorId && t.vendor.id !== f.vendorId) return false
     if (f.attention && !attentionFor(t, opts.today, opts.attentionThresholds)) return false
     if (q) {
-      const hay = `${t.vendor.name} ${t.description} ${t.id} ${t.note ?? ''} ${t.slipReference}`.toLowerCase()
+      // Include the vendor title and the combined name, matching the server's
+      // search columns ("นาย" / "นาย สมชาย" / "นายสมชาย").
+      const pfx = t.vendor.prefix ?? ''
+      const hay = `${pfx} ${t.vendor.name} ${pfx}${t.vendor.name} ${t.description} ${t.id} ${t.note ?? ''} ${t.slipReference}`.toLowerCase()
       if (!hay.includes(q)) return false
     }
     return true

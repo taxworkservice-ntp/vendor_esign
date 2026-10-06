@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { AlertTriangle, Ban, Copy, FileCheck2, FileSearch, FileText, MessageSquareText, Paperclip, Send } from 'lucide-react'
+import { AlertTriangle, Copy, FileCheck2, FileText, Paperclip, Send } from 'lucide-react'
 import { attentionFor } from '../../lib/attention'
 import { fmtDateTH, fmtDateTimeTH, fmtTHB } from '../../lib/format'
 import { vendorDisplayName } from '../../lib/vendor-name'
@@ -7,7 +7,6 @@ import type { PaymentTransaction } from '../../lib/types'
 import { StatusBadge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Checkbox } from '../ui/checkbox'
-import { ActionsMenu, type MenuItem } from '../ui/menu'
 import { primaryActionFor } from './transaction-stage'
 import { cn } from '../../lib/cn'
 
@@ -19,9 +18,7 @@ export function TxnRow({
   onOpen,
   onSend,
   onCopyLink,
-  onCopyMessage,
   onIssue,
-  onRevoke,
   dense,
 }: {
   t: PaymentTransaction
@@ -30,50 +27,41 @@ export function TxnRow({
   onOpen: (id: string) => void
   onSend: (t: PaymentTransaction) => void
   onCopyLink: (t: PaymentTransaction) => void
-  onCopyMessage: (t: PaymentTransaction) => void
   onIssue: (t: PaymentTransaction) => void
-  onRevoke: (t: PaymentTransaction) => void
   dense: boolean
 }) {
   const attention = attentionFor(t)
   const pad = dense ? 'py-1.5' : 'py-2.5'
   const primary = primaryActionFor(t.status)
 
-  // Secondary/rare actions live in the menu; the primary action is a clear,
-  // labeled button. Both derive from the same status mapping as the detail band.
-  const menuItems: MenuItem[] = []
-  if (t.status === 'sent' || t.status === 'opened') {
-    menuItems.push({ label: 'คัดลอกข้อความเชิญ', icon: <MessageSquareText size={15} aria-hidden />, onSelect: () => onCopyMessage(t) })
-    menuItems.push({ label: 'เพิกถอนลิงก์', icon: <Ban size={15} aria-hidden />, danger: true, onSelect: () => onRevoke(t) })
-  }
-  menuItems.push({ label: 'เปิดรายละเอียด', icon: <FileSearch size={15} aria-hidden />, onSelect: () => onOpen(t.id) })
-
+  // The one next action for this row, as a small, clearly-labeled button
+  // (shared status mapping with the detail band). Never wraps.
   const renderPrimary = () => {
     if (!primary) return null
-    const cls = 'h-9 px-3.5'
+    const cls = 'h-8 whitespace-nowrap px-2.5 gap-1.5 text-label'
     if (primary.kind === 'send')
       return (
-        <Button variant="primary" className={cls} onClick={() => onSend(t)} title="สร้างลิงก์และคัดลอกให้ทันที">
-          <Send size={15} aria-hidden /> {primary.label}
+        <Button variant="soft" className={cls} onClick={() => onSend(t)} title="สร้างลิงก์และคัดลอกให้ทันที">
+          <Send size={14} aria-hidden /> {primary.label}
         </Button>
       )
     if (primary.kind === 'copy')
       return (
-        <Button variant="secondary" className={cls} onClick={() => onCopyLink(t)}>
-          <Copy size={15} aria-hidden /> {primary.label}
+        <Button variant="soft" className={cls} onClick={() => onCopyLink(t)}>
+          <Copy size={14} aria-hidden /> {primary.label}
         </Button>
       )
     if (primary.kind === 'issue')
       return (
-        <Button variant="primary" className={cls} onClick={() => onIssue(t)} title="ออกเลขที่ใบเสร็จและสร้างเอกสาร">
-          <FileCheck2 size={15} aria-hidden /> {primary.label}
+        <Button variant="soft-success" className={cls} onClick={() => onIssue(t)} title="ออกเลขที่ใบเสร็จและสร้างเอกสาร">
+          <FileCheck2 size={14} aria-hidden /> {primary.label}
         </Button>
       )
     // 'open'
     return (
       <Link to={`/receipts/${t.id}`} onClick={(e) => e.stopPropagation()} className="inline-flex">
-        <Button variant="secondary" className={cls}>
-          <FileText size={15} aria-hidden /> {primary.label}
+        <Button variant="soft-neutral" className={cls}>
+          <FileText size={14} aria-hidden /> {primary.label}
         </Button>
       </Link>
     )
@@ -179,10 +167,7 @@ export function TxnRow({
       </td>
 
       <td className={cn('border-b border-card-border px-3 text-right', pad)} onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-end gap-1.5">
-          {renderPrimary()}
-          <ActionsMenu items={menuItems} />
-        </div>
+        <div className="flex items-center justify-end">{renderPrimary()}</div>
       </td>
     </tr>
   )

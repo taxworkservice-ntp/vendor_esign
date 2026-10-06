@@ -101,9 +101,7 @@ export function TxnTable({
   onOpen,
   onSend,
   onCopyLink,
-  onCopyMessage,
   onIssue,
-  onRevoke,
   loading,
   dense,
 }: {
@@ -116,9 +114,7 @@ export function TxnTable({
   onOpen: (id: string) => void
   onSend: (t: PaymentTransaction) => void
   onCopyLink: (t: PaymentTransaction) => void
-  onCopyMessage: (t: PaymentTransaction) => void
   onIssue: (t: PaymentTransaction) => void
-  onRevoke: (t: PaymentTransaction) => void
   loading: boolean
   dense: boolean
 }) {
@@ -151,7 +147,7 @@ export function TxnTable({
           <SortHeader field="wht" label="หัก ณ ที่จ่าย" sort={sort} onSort={onSort} align="right" />
           <SortHeader field="net" label="สุทธิ (บาท)" sort={sort} onSort={onSort} align="right" />
           <SortHeader field="status" label="สถานะ" sort={sort} onSort={onSort} />
-          <th className={cn(thBase, 'w-56 text-right')}>จัดการ</th>
+          <th className={cn(thBase, 'w-36 text-right')}>จัดการ</th>
         </tr>
       </thead>
       <tbody>
@@ -168,9 +164,7 @@ export function TxnTable({
               onOpen={onOpen}
               onSend={onSend}
               onCopyLink={onCopyLink}
-              onCopyMessage={onCopyMessage}
               onIssue={onIssue}
-              onRevoke={onRevoke}
             />
           ))
         )}

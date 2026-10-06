@@ -56,6 +56,13 @@ describe('vendorSearchFields', () => {
     expect(matchesSearch(vendorSearchFields(v), 'การช่าง')).toBe(true)
   })
 
+  it('finds by the title alone and combined with the name', () => {
+    const p = { prefix: 'นาย', name: 'สมชาย การช่าง' }
+    expect(matchesSearch(vendorSearchFields(p), 'นาย')).toBe(true)
+    expect(matchesSearch(vendorSearchFields(p), 'นาย สมชาย')).toBe(true)
+    expect(matchesSearch(vendorSearchFields(p), 'นายสมชาย')).toBe(true)
+  })
+
   it('finds by the last four digits of the tax ID', () => {
     // The whole reason the register is filtered client-side: the stored number
     // is encrypted at rest, so no server-side search can reach this.

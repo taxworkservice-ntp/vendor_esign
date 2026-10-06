@@ -53,7 +53,7 @@ export function TxnToolbar({
             id="txn-search"
             ref={inputRef}
             className={cn('pl-10', search && 'pr-10')}
-            placeholder="ค้นหาชื่อผู้ขาย / รายละเอียด / เลขรายการ / สลิป…"
+            placeholder="ค้นหาชื่อ/คำนำหน้าผู้ขาย / รายละเอียด / เลขรายการ / สลิป…"
             value={search}
             onChange={(e) => onSearch(e.target.value)}
             onKeyDown={(e) => {

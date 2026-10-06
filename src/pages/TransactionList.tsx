@@ -8,8 +8,7 @@ import { useSettings } from '../hooks/useSettings'
 import { useDebounced } from '../hooks/useDebounced'
 import { useClientAuth } from '../lib/client-auth'
 import { readStoredMonth } from '../lib/global-month'
-import { defaultSettings, renderInviteMessage } from '../lib/settings'
-import { fmtDateTH, fmtTHB } from '../lib/format'
+import { defaultSettings } from '../lib/settings'
 import { vendorDisplayName } from '../lib/vendor-name'
 import {
   activeFilterCount,
@@ -33,6 +32,7 @@ import { attentionFor } from '../lib/attention'
 import { downloadCsv, txnsToCsv } from '../lib/csv'
 import { downloadName } from '../lib/download-name'
 import { inviteUrl } from '../lib/app-url'
+import { buildBulkInviteMessage } from '../lib/invite-message'
 import { cn } from '../lib/cn'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
@@ -61,6 +61,11 @@ const STATUS_CHIPS: { v: StatusFilter; th: string }[] = [
 ]
 
 const DENSE_KEY = 'tw:txn-dense'
+
+// Statuses that still need (or already have) a vendor link — the ones a bulk
+// "send to vendors" message covers. Signed/issued/void are excluded.
+const LINK_STATUSES = ['draft', 'sent', 'opened', 'expired', 'cancelled'] as const
+const isLinkStatus = (s: string) => (LINK_STATUSES as readonly string[]).includes(s)
 
 function readDense(): boolean {
   try {
@@ -266,7 +271,7 @@ export function TransactionList() {
 
   // Row-level lifecycle actions (mirror the detail band's "one job per status").
   const acts = useTransactionActions()
-  const [rowConfirm, setRowConfirm] = useState<{ kind: 'issue' | 'revoke'; t: PaymentTransaction } | null>(null)
+  const [rowConfirm, setRowConfirm] = useState<PaymentTransaction | null>(null)
 
   const writeClipboard = useCallback(
     async (text: string, ok: string) => {
@@ -292,21 +297,6 @@ export function TransactionList() {
     [writeClipboard, toast],
   )
 
-  const onRowCopyMessage = useCallback(
-    (t: PaymentTransaction) => {
-      const message = renderInviteMessage(cfg.inviteMessageTemplate, {
-        vendor: t.vendor.name,
-        vendorPrefix: t.vendor.prefix ?? '',
-        date: fmtDateTH(t.transferDate),
-        amount: fmtTHB(t.netAmount),
-        link: inviteUrl(t.inviteToken),
-        client: cfg.displayName,
-      })
-      void writeClipboard(message, 'คัดลอกข้อความเชิญแล้ว')
-    },
-    [cfg, writeClipboard],
-  )
-
   const onRowSend = useCallback(
     async (t: PaymentTransaction) => {
       try {
@@ -320,8 +310,7 @@ export function TransactionList() {
     [acts, writeClipboard, toast],
   )
 
-  const onRowIssue = useCallback((t: PaymentTransaction) => setRowConfirm({ kind: 'issue', t }), [])
-  const onRowRevoke = useCallback((t: PaymentTransaction) => setRowConfirm({ kind: 'revoke', t }), [])
+  const onRowIssue = useCallback((t: PaymentTransaction) => setRowConfirm(t), [])
 
   const toggle = useCallback((id: string) => {
     setSelected((prev) => {
@@ -363,25 +352,58 @@ export function TransactionList() {
     }
   }, [needAll, allRows])
 
-  const copyLinks = useCallback(async () => {
+  // Bulk: mint links for the selected rows that still need one.
+  const bulkCreateLinks = useCallback(async () => {
     if (!fullSetReady) {
       toast.show('กำลังโหลดรายการที่เลือก…', 'info')
       return
     }
-    const links = selectedRows()
-      .map((t) => inviteUrl(t.inviteToken))
-      .filter(Boolean)
-    if (links.length === 0) {
-      toast.show('ไม่มีรายการที่มีลิงก์ผู้ขาย', 'error')
+    const need = selectedRows().filter((t) => isLinkStatus(t.status) && !t.inviteToken)
+    if (need.length === 0) {
+      toast.show('ทุกรายการที่เลือกมีลิงก์แล้ว', 'info')
       return
     }
     try {
-      await navigator.clipboard.writeText(links.join('\n'))
-      toast.show(`คัดลอกลิงก์ ${links.length} รายการแล้ว`)
+      for (const t of need) await acts.send(t.id)
+      toast.show(`สร้างลิงก์ ${need.length} รายการแล้ว`)
     } catch {
-      toast.show('คัดลอกไม่สำเร็จ — กรุณาคัดลอกด้วยตนเอง', 'error')
+      toast.show('สร้างลิงก์ไม่สำเร็จ', 'error')
     }
-  }, [fullSetReady, selectedRows, toast])
+  }, [fullSetReady, selectedRows, acts, toast])
+
+  // Bulk: compose the grouped message (creating any missing links first) and
+  // show it for the client to copy.
+  const [preview, setPreview] = useState('')
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [preparing, setPreparing] = useState(false)
+
+  const openBulkPreview = useCallback(async () => {
+    if (!fullSetReady) {
+      toast.show('กำลังโหลดรายการที่เลือก…', 'info')
+      return
+    }
+    const picked = selectedRows().filter((t) => isLinkStatus(t.status))
+    if (picked.length === 0) {
+      toast.show('ไม่มีรายการที่ต้องส่งลิงก์ให้ผู้ขาย', 'error')
+      return
+    }
+    setPreparing(true)
+    try {
+      const tokenById = new Map<string, string>()
+      for (const t of picked) {
+        if (t.inviteToken) continue
+        const { token } = await acts.send(t.id)
+        if (token) tokenById.set(t.id, token)
+      }
+      const patched = picked.map((t) => (t.inviteToken ? t : { ...t, inviteToken: tokenById.get(t.id) ?? t.inviteToken }))
+      setPreview(buildBulkInviteMessage(patched, cfg))
+      setPreviewOpen(true)
+    } catch {
+      toast.show('สร้างข้อความไม่สำเร็จ', 'error')
+    } finally {
+      setPreparing(false)
+    }
+  }, [fullSetReady, selectedRows, acts, cfg, toast])
 
   const saveCsv = useCallback(
     (pool: PaymentTransaction[]) => {
@@ -453,10 +475,12 @@ export function TransactionList() {
     return () => document.removeEventListener('keydown', onKey)
   }, [])
 
-  const selectedLinkCount = useMemo(
-    () => (allRows ?? rows).filter((t) => selected.has(t.id) && t.inviteToken).length,
+  const selectedLinkRows = useMemo(
+    () => (allRows ?? rows).filter((t) => selected.has(t.id) && isLinkStatus(t.status)),
     [allRows, rows, selected],
   )
+  const createCount = useMemo(() => selectedLinkRows.filter((t) => !t.inviteToken).length, [selectedLinkRows])
+  const messageCount = selectedLinkRows.length
   // Offer "select all matching" only while some matching row is NOT selected.
   const canSelectAll = total > rows.length && selected.size < total
 
@@ -564,9 +588,7 @@ export function TransactionList() {
                 onOpen={open}
                 onSend={onRowSend}
                 onCopyLink={onRowCopyLink}
-                onCopyMessage={onRowCopyMessage}
                 onIssue={onRowIssue}
-                onRevoke={onRowRevoke}
                 loading={isLoading}
                 dense={dense}
               />
@@ -611,8 +633,10 @@ export function TransactionList() {
 
             <TxnBulkBar
               count={selected.size}
-              linkCount={selectedLinkCount}
-              onCopyLinks={() => void copyLinks()}
+              createCount={createCount}
+              messageCount={messageCount}
+              onCreateLinks={() => void bulkCreateLinks()}
+              onPreviewMessages={() => void openBulkPreview()}
               onExport={exportSelected}
               onClear={() => setSelected(new Set())}
             />
@@ -636,44 +660,58 @@ export function TransactionList() {
 
       <ConfirmDialog
         open={rowConfirm !== null}
-        tone={rowConfirm?.kind === 'issue' ? 'primary' : 'danger'}
-        title={rowConfirm?.kind === 'issue' ? 'ยืนยันการออกใบเสร็จ' : 'ยืนยันการเพิกถอนลิงก์'}
-        confirmLabel={rowConfirm?.kind === 'issue' ? 'ออกใบเสร็จ' : 'เพิกถอนลิงก์'}
+        tone="primary"
+        title="ยืนยันการออกใบเสร็จ"
+        confirmLabel="ออกใบเสร็จ"
         message={
           rowConfirm ? (
-            rowConfirm.kind === 'issue' ? (
-              <>
-                ออกใบเสร็จและออกเลขที่ให้{' '}
-                <b>{vendorDisplayName(rowConfirm.t.vendor.prefix, rowConfirm.t.vendor.name)}</b> ใช่หรือไม่ —
-                ดำเนินการแล้วแก้ไขหรือลบไม่ได้
-              </>
-            ) : (
-              <>
-                เพิกถอนลิงก์ของ{' '}
-                <b>{vendorDisplayName(rowConfirm.t.vendor.prefix, rowConfirm.t.vendor.name)}</b> ใช่หรือไม่ — ผู้ขายจะเปิดลิงก์นี้ไม่ได้อีก
-              </>
-            )
+            <>
+              ออกใบเสร็จและออกเลขที่ให้{' '}
+              <b>{vendorDisplayName(rowConfirm.vendor.prefix, rowConfirm.vendor.name)}</b> ใช่หรือไม่ —
+              ดำเนินการแล้วแก้ไขหรือลบไม่ได้
+            </>
           ) : (
             ''
           )
         }
         onConfirm={async () => {
-          const c = rowConfirm
+          const t = rowConfirm
           setRowConfirm(null)
-          if (!c) return
+          if (!t) return
           try {
-            if (c.kind === 'issue') {
-              await acts.issue(c.t.id)
-              toast.show('ออกใบเสร็จแล้ว')
-            } else {
-              await acts.revoke(c.t.id)
-              toast.show('เพิกถอนลิงก์แล้ว')
-            }
+            await acts.issue(t.id)
+            toast.show('ออกใบเสร็จแล้ว')
           } catch {
             toast.show('ดำเนินการไม่สำเร็จ', 'error')
           }
         }}
         onCancel={() => setRowConfirm(null)}
+      />
+
+      <ConfirmDialog
+        open={previewOpen}
+        size="lg"
+        tone="primary"
+        title={`ข้อความส่งผู้ขาย · ${messageCount} รายการ`}
+        confirmLabel={preparing ? 'กำลังเตรียม…' : 'คัดลอกข้อความ'}
+        cancelLabel="ปิด"
+        busy={preparing}
+        message={
+          <div className="space-y-2">
+            <p className="text-label text-ink-500">
+              เลือกแต่ละบล็อก (คั่นด้วย ━━━) แล้ววางในแชท LINE ของผู้ขายรายนั้น
+            </p>
+            <textarea
+              readOnly
+              value={preview}
+              rows={14}
+              aria-label="ข้อความสำหรับส่งให้ผู้ขาย"
+              className="w-full resize-y rounded-control border border-card-border bg-white p-3 font-mono text-label leading-relaxed"
+            />
+          </div>
+        }
+        onConfirm={() => void writeClipboard(preview, 'คัดลอกข้อความแล้ว')}
+        onCancel={() => setPreviewOpen(false)}
       />
     </div>
   )

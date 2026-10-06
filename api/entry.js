@@ -69155,7 +69155,19 @@ function limitClause(q) {
   if (q.limit === 0) return "";
   return `limit ${Math.trunc(q.limit)} offset ${Math.trunc(q.offset)}`;
 }
-var SEARCH_COLUMNS = ["v.name", "p.description", "p.note", "p.id::text", "p.ref", "p.slip_reference"];
+var SEARCH_COLUMNS = [
+  "v.name",
+  // The vendor title (คำนำหน้าชื่อ) is a separate column; include it and the
+  // combined name so "นาย", "นาย สมชาย" and "นายสมชาย" all match.
+  "v.prefix",
+  "(v.prefix || ' ' || v.name)",
+  "replace(v.prefix || ' ' || v.name, ' ', '')",
+  "p.description",
+  "p.note",
+  "p.id::text",
+  "p.ref",
+  "p.slip_reference"
+];
 function buildWhere(q, b2, userId) {
   const parts = [`p.user_id = ${b2.bind(userId)}`];
   const statuses = statusSet(q.status);

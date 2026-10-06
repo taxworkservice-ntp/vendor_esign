@@ -43,7 +43,19 @@ export function limitClause(q: TxnListQuery): string {
  * Columns the search box matches against — what a bookkeeper would type.
  * `p.id` is a uuid, so it must be cast before a text operator is applied.
  */
-const SEARCH_COLUMNS = ['v.name', 'p.description', 'p.note', 'p.id::text', 'p.ref', 'p.slip_reference']
+const SEARCH_COLUMNS = [
+  'v.name',
+  // The vendor title (คำนำหน้าชื่อ) is a separate column; include it and the
+  // combined name so "นาย", "นาย สมชาย" and "นายสมชาย" all match.
+  'v.prefix',
+  "(v.prefix || ' ' || v.name)",
+  "replace(v.prefix || ' ' || v.name, ' ', '')",
+  'p.description',
+  'p.note',
+  'p.id::text',
+  'p.ref',
+  'p.slip_reference',
+]
 
 function buildWhere(q: TxnListQuery, b: Builder, userId: string): string[] {
   // Always the first binding, so the tenant scope is $1 (or $3 once the

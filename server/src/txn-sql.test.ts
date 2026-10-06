@@ -138,11 +138,14 @@ describe('whereClause — filters', () => {
     expect(w.params[1]).toBe('abc-123')
   })
 
-  it('searches across vendor, description, note, id, ref and slip', () => {
+  it('searches across vendor (incl. title), description, note, id, ref and slip', () => {
     const w = whereClause(q('q=สมชาย'), USER)
-    for (const col of ['v.name', 'p.description', 'p.note', 'p.ref', 'p.slip_reference']) {
+    for (const col of ['v.name', 'v.prefix', 'p.description', 'p.note', 'p.ref', 'p.slip_reference']) {
       expect(w.text).toContain(`${col} ilike`)
     }
+    // The title is matched alone and combined with the name.
+    expect(w.text).toContain("(v.prefix || ' ' || v.name) ilike")
+    expect(w.text).toContain("replace(v.prefix || ' ' || v.name, ' ', '') ilike")
     // p.id is a uuid, so it must be cast before a text operator is applied —
     // otherwise the whole list request 500s as soon as anyone types.
     expect(w.text).toContain('p.id::text ilike')
