@@ -60,6 +60,9 @@ export function TxnFiltersPanel({
         >
           <option value="all">{statusLabel('all')}</option>
           <optgroup label="กลุ่มสถานะ">
+            <option value="needs-link">{statusLabel('needs-link')}</option>
+            <option value="awaiting">{statusLabel('awaiting')}</option>
+            <option value="ready">{statusLabel('ready')}</option>
             <option value="active">{statusLabel('active')}</option>
             <option value="done">{statusLabel('done')}</option>
             <option value="voided">{statusLabel('voided')}</option>

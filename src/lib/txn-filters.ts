@@ -5,10 +5,12 @@ import type { PaymentTransaction, TxnStatus } from './types'
 // and the mock/server paths stay identical.
 
 export type SlipFilter = 'all' | 'with' | 'without'
-export type SortField = 'date' | 'created' | 'gross' | 'wht' | 'net' | 'vendor' | 'status'
+export type SortField = 'date' | 'created' | 'gross' | 'wht' | 'net' | 'vendor' | 'status' | 'urgency'
 export type SortKey = `${SortField}-${'asc' | 'desc'}`
-// Status filter: an exact status, or a convenience group.
-export type StatusFilter = 'all' | TxnStatus | 'active' | 'done' | 'voided'
+// Status filter: an exact status, or a convenience group. The maker queue adds
+// three workflow groups on top of the accounting groups: needs-link (owe the
+// vendor a link), awaiting (chasing a signature), ready (signed, hand off).
+export type StatusFilter = 'all' | TxnStatus | 'active' | 'done' | 'voided' | 'needs-link' | 'awaiting' | 'ready'
 
 // Thai status labels live here, not in a component, so the toolbar chips, the
 // advanced <select>, the summary and the active-filter chips can never drift
@@ -24,10 +26,13 @@ export const STATUS_LABELS: Record<TxnStatus, string> = {
   void: 'ยกเลิกเอกสาร',
 }
 
-export const STATUS_GROUP_LABELS: Record<'active' | 'done' | 'voided', string> = {
+export const STATUS_GROUP_LABELS: Record<'active' | 'done' | 'voided' | 'needs-link' | 'awaiting' | 'ready', string> = {
   active: 'กำลังดำเนินการ',
   done: 'เสร็จสิ้น',
   voided: 'ยกเลิกเอกสาร',
+  'needs-link': 'ต้องส่งลิงก์',
+  awaiting: 'รอลงนาม',
+  ready: 'พร้อมออกใบเสร็จ',
 }
 
 /** Human label for any status filter, group or exact. */
@@ -59,10 +64,13 @@ export function nextSort(current: SortKey, field: SortField): SortKey {
   return `${field}-${dir}` as SortKey
 }
 
-export const STATUS_GROUPS: Record<'active' | 'done' | 'voided', TxnStatus[]> = {
+export const STATUS_GROUPS: Record<'active' | 'done' | 'voided' | 'needs-link' | 'awaiting' | 'ready', TxnStatus[]> = {
   active: ['draft', 'sent', 'opened', 'signed'],
   done: ['issued'],
   voided: ['void', 'cancelled'],
+  'needs-link': ['draft', 'expired', 'cancelled'],
+  awaiting: ['sent', 'opened'],
+  ready: ['signed'],
 }
 
 export interface TransactionFilters {
@@ -157,12 +165,8 @@ export function filterTransactions(
   const min = f.minNet.trim() ? Number(f.minNet) : null
   const max = f.maxNet.trim() ? Number(f.maxNet) : null
   return txns.filter((t) => {
-    if (f.status === 'active') {
-      if (!STATUS_GROUPS.active.includes(t.status)) return false
-    } else if (f.status === 'done') {
-      if (!STATUS_GROUPS.done.includes(t.status)) return false
-    } else if (f.status === 'voided') {
-      if (!STATUS_GROUPS.voided.includes(t.status)) return false
+    if (f.status in STATUS_GROUPS) {
+      if (!STATUS_GROUPS[f.status as keyof typeof STATUS_GROUPS].includes(t.status)) return false
     } else if (f.status !== 'all' && t.status !== f.status) {
       return false
     }
@@ -178,19 +182,45 @@ export function filterTransactions(
     if (f.attention && !attentionFor(t, opts.today, opts.attentionThresholds)) return false
     if (q) {
       // Include the vendor title and the combined name, matching the server's
-      // search columns ("นาย" / "นาย สมชาย" / "นายสมชาย").
+      // search columns ("นาย" / "นาย สมชาย" / "นายสมชาย"), plus the receipt
+      // number and verification code the maker looks up from paper.
       const pfx = t.vendor.prefix ?? ''
-      const hay = `${pfx} ${t.vendor.name} ${pfx}${t.vendor.name} ${t.description} ${t.id} ${t.note ?? ''} ${t.slipReference}`.toLowerCase()
+      const hay = `${pfx} ${t.vendor.name} ${pfx}${t.vendor.name} ${t.description} ${t.id} ${t.note ?? ''} ${t.slipReference} ${t.receiptNumber ?? ''} ${t.verificationCode ?? ''}`.toLowerCase()
       if (!hay.includes(q)) return false
     }
     return true
   })
 }
 
-export function sortTransactions(txns: PaymentTransaction[], sort: SortKey): PaymentTransaction[] {
+export function urgencyRank(t: PaymentTransaction, today: Date = new Date()): { rank: number; days: number } {
+  const a = attentionFor(t, today)
+  if (!a) return { rank: 4, days: 0 }
+  if (a.kind === 'expired-link') return { rank: 0, days: a.days }
+  if (a.kind === 'awaiting-vendor') return { rank: 1, days: a.days }
+  if (a.kind === 'stale-draft') return { rank: 2, days: a.days }
+  return { rank: 3, days: a.days }
+}
+
+export function sortTransactions(txns: PaymentTransaction[], sort: SortKey, today: Date = new Date()): PaymentTransaction[] {
   const field = sortField(sort)
   const dir = sortDir(sort)
   const arr = [...txns]
+  if (field === 'urgency') {
+    arr.sort((a, b) => {
+      const ra = urgencyRank(a, today)
+      const rb = urgencyRank(b, today)
+      let by = ra.rank - rb.rank
+      if (by === 0) {
+        if (ra.rank < 4) {
+          by = rb.days - ra.days || (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0)
+        } else {
+          by = a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0
+        }
+      }
+      return (dir === 'desc' ? by : -by) || a.id.localeCompare(b.id)
+    })
+    return arr
+  }
   // Thai text must sort by Thai collation, not UTF-16 code units, or
   // "ก" and "ข" land in the wrong place.
   const cmpText = (a: string, b: string) => a.localeCompare(b, 'th')

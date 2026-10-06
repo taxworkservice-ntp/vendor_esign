@@ -47,17 +47,16 @@ import { TxnToolbar } from '../components/transactions/txn-toolbar'
 import { TxnFiltersPanel } from '../components/transactions/txn-filters-panel'
 import { TxnTable, TxnTableFrame } from '../components/transactions/txn-table'
 import { SelectAllMatching, TxnBulkBar } from '../components/transactions/txn-bulk-bar'
+import { ShortcutsDialog, TxnPreviewDrawer } from '../components/transactions/txn-preview-drawer'
 import { CustomRangeNotice } from '../components/transactions/custom-range-notice'
 import type { PaymentTransaction } from '../lib/types'
 
-// Quick-filter status chips. The month is a global accounting period (header
-// bar) shared with WHT + Metrics; the granular status list and date presets
-// live in the "ตัวกรอง" panel.
 const STATUS_CHIPS: { v: StatusFilter; th: string }[] = [
   { v: 'all', th: 'ทั้งหมด' },
-  { v: 'active', th: STATUS_GROUP_LABELS.active },
+  { v: 'needs-link', th: STATUS_GROUP_LABELS['needs-link'] },
+  { v: 'awaiting', th: STATUS_GROUP_LABELS.awaiting },
+  { v: 'ready', th: STATUS_GROUP_LABELS.ready },
   { v: 'done', th: STATUS_GROUP_LABELS.done },
-  { v: 'voided', th: STATUS_GROUP_LABELS.voided },
 ]
 
 const DENSE_KEY = 'tw:txn-dense'
@@ -219,6 +218,20 @@ export function TransactionList() {
     setFilters((f) => ({ ...f, ...patch }))
   }, [])
 
+  const onToolbarPatch = useCallback(
+    (patch: Partial<TransactionFilters>) => {
+      setFilters((f) => {
+        const next = { ...f, ...patch }
+        if (patch.status === 'needs-link' || patch.status === 'awaiting') next.sort = 'urgency-desc'
+        else if (patch.status === 'ready' || patch.status === 'done' || patch.status === 'all') {
+          if (f.sort === 'urgency-desc' || f.sort === 'urgency-asc') next.sort = 'created-desc'
+        }
+        return next
+      })
+    },
+    [],
+  )
+
   // A custom range is a LIST-LOCAL override. It deliberately leaves the header
   // period alone: narrowing this list must not silently re-point WHT and
   // Metrics at "all time". The list shows an explicit notice while decoupled
@@ -267,7 +280,14 @@ export function TransactionList() {
     setFilters({ ...emptyFilters(), month: globalMonth })
   }, [globalMonth])
 
-  const open = useCallback((id: string) => nav(`/transactions/${id}`), [nav])
+  const open = useCallback(
+    (id: string) => {
+      const found = (allRows ?? rows).find((t) => t.id === id) ?? rows.find((t) => t.id === id)
+      if (found) setPreviewTxn(found)
+      else nav(`/transactions/${id}`)
+    },
+    [allRows, rows, nav],
+  )
 
   // Row-level lifecycle actions (mirror the detail band's "one job per status").
   const acts = useTransactionActions()
@@ -352,6 +372,28 @@ export function TransactionList() {
     }
   }, [needAll, allRows])
 
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null)
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [previewTxn, setPreviewTxn] = useState<PaymentTransaction | null>(null)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [focusedId, setFocusedId] = useState<string | null>(null)
+  const [queueDismissed, setQueueDismissed] = useState(() => {
+    try {
+      return sessionStorage.getItem(`tw:queue-banner:${activeTenant}:${new Date().toISOString().slice(0, 10)}`) === '1'
+    } catch {
+      return false
+    }
+  })
+
+  const dismissQueueBanner = useCallback(() => {
+    setQueueDismissed(true)
+    try {
+      sessionStorage.setItem(`tw:queue-banner:${activeTenant}:${new Date().toISOString().slice(0, 10)}`, '1')
+    } catch {
+      /* best-effort */
+    }
+  }, [activeTenant])
+
   // Bulk: mint links for the selected rows that still need one.
   const bulkCreateLinks = useCallback(async () => {
     if (!fullSetReady) {
@@ -363,11 +405,21 @@ export function TransactionList() {
       toast.show('ทุกรายการที่เลือกมีลิงก์แล้ว', 'info')
       return
     }
+    setBulkBusy(true)
     try {
-      for (const t of need) await acts.send(t.id)
+      let done = 0
+      setBulkProgress({ done: 0, total: need.length })
+      for (const t of need) {
+        await acts.send(t.id)
+        done += 1
+        setBulkProgress({ done, total: need.length })
+      }
       toast.show(`สร้างลิงก์ ${need.length} รายการแล้ว`)
     } catch {
       toast.show('สร้างลิงก์ไม่สำเร็จ', 'error')
+    } finally {
+      setBulkBusy(false)
+      setBulkProgress(null)
     }
   }, [fullSetReady, selectedRows, acts, toast])
 
@@ -388,12 +440,17 @@ export function TransactionList() {
       return
     }
     setPreparing(true)
+    setBulkBusy(true)
     try {
       const tokenById = new Map<string, string>()
-      for (const t of picked) {
-        if (t.inviteToken) continue
+      const missing = picked.filter((t) => !t.inviteToken)
+      let done = 0
+      setBulkProgress({ done: 0, total: missing.length })
+      for (const t of missing) {
         const { token } = await acts.send(t.id)
         if (token) tokenById.set(t.id, token)
+        done += 1
+        setBulkProgress({ done, total: missing.length })
       }
       const patched = picked.map((t) => (t.inviteToken ? t : { ...t, inviteToken: tokenById.get(t.id) ?? t.inviteToken }))
       setPreview(buildBulkInviteMessage(patched, cfg))
@@ -402,6 +459,8 @@ export function TransactionList() {
       toast.show('สร้างข้อความไม่สำเร็จ', 'error')
     } finally {
       setPreparing(false)
+      setBulkBusy(false)
+      setBulkProgress(null)
     }
   }, [fullSetReady, selectedRows, acts, cfg, toast])
 
@@ -457,7 +516,28 @@ export function TransactionList() {
     })
   }, [])
 
-  // Keyboard shortcuts: "/" focuses search, "f" toggles the filter panel.
+  const focusRow = useCallback(
+    (dir: 1 | -1) => {
+      const els = Array.from(document.querySelectorAll<HTMLElement>('tr[data-txn-id]'))
+      if (els.length === 0) return
+      const active = document.activeElement as HTMLElement | null
+      const curId = active?.dataset?.txnId ?? focusedId
+      let idx = els.findIndex((el) => el.dataset.txnId === curId)
+      idx = idx < 0 ? (dir === 1 ? 0 : els.length - 1) : Math.min(els.length - 1, Math.max(0, idx + dir))
+      const el = els[idx]
+      setFocusedId(el.dataset.txnId ?? null)
+      el.focus()
+    },
+    [focusedId],
+  )
+
+  const focusedTxn = useCallback((): PaymentTransaction | undefined => {
+    const el = document.activeElement as HTMLElement | null
+    const id = el?.dataset?.txnId ?? focusedId
+    if (!id) return undefined
+    return (allRows ?? rows).find((t) => t.id === id) ?? rows.find((t) => t.id === id)
+  }, [allRows, rows, focusedId])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null
@@ -469,11 +549,41 @@ export function TransactionList() {
       } else if (e.key === 'f') {
         e.preventDefault()
         setShowPanel((v) => !v)
+      } else if (e.key === 'j') {
+        e.preventDefault()
+        focusRow(1)
+      } else if (e.key === 'k') {
+        e.preventDefault()
+        focusRow(-1)
+      } else if (e.key === 'Enter') {
+        const t = focusedTxn()
+        if (t && (document.activeElement as HTMLElement | null)?.dataset?.txnId) {
+          e.preventDefault()
+          setPreviewTxn(t)
+        }
+      } else if (e.key === 'c') {
+        const t = focusedTxn()
+        if (t) {
+          e.preventDefault()
+          onRowCopyLink(t)
+        }
+      } else if (e.key === 's') {
+        const t = focusedTxn()
+        if (t) {
+          e.preventDefault()
+          void onRowSend(t)
+        }
+      } else if (e.key === '?') {
+        e.preventDefault()
+        setShortcutsOpen((v) => !v)
+      } else if (e.key === 'Escape') {
+        setPreviewTxn(null)
+        setShortcutsOpen(false)
       }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [])
+  }, [focusRow, focusedTxn, onRowCopyLink, onRowSend])
 
   const selectedLinkRows = useMemo(
     () => (allRows ?? rows).filter((t) => selected.has(t.id) && isLinkStatus(t.status)),
@@ -527,13 +637,14 @@ export function TransactionList() {
             filters={queryFilters}
             search={search}
             onSearch={setSearch}
-            onPatch={set}
+            onPatch={onToolbarPatch}
             onTogglePanel={() => setShowPanel((v) => !v)}
             panelOpen={showPanel}
             active={activeFilters}
             searchRef={searchRef}
             chips={STATUS_CHIPS}
             onClearFilter={clearFilter}
+            onOpenShortcuts={() => setShortcutsOpen(true)}
           />
           {showPanel && (
             <TxnFiltersPanel
@@ -558,10 +669,34 @@ export function TransactionList() {
         onClearRange={() => clearFilter('from')}
       />
 
-      {/* Totals describe the whole filtered set, above the table — the previous
-          layout buried them in a tfoot inside a scrolling region. */}
+      {!queueDismissed && attentionOnPage > 0 && !queryFilters.attention && activeFilterCount(queryFilters) === 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-card border border-warning/30 bg-warning-soft px-4 py-3" role="status">
+          <p className="text-body font-semibold text-ink-900">
+            วันนี้มี {attentionOnPage} รายการในหน้านี้ที่ต้องติดตาม
+          </p>
+          <div className="ml-auto flex items-center gap-1.5">
+            <Button variant="secondary" onClick={() => set({ attention: true })}>
+              ดูรายการที่ต้องติดตาม
+            </Button>
+            <button
+              type="button"
+              onClick={dismissQueueBanner}
+              className="rounded-control px-2.5 py-2 text-body font-semibold text-ink-600 transition hover:bg-white/60"
+            >
+              ภายหลัง
+            </button>
+          </div>
+        </div>
+      )}
+
       {totals && (
-        <SummaryBar totals={totals} attentionOnPage={attentionOnPage} loading={isLoading} />
+        <SummaryBar
+          totals={totals}
+          attentionOnPage={attentionOnPage}
+          loading={isLoading}
+          onShowAttention={attentionOnPage > 0 && !queryFilters.attention ? () => set({ attention: true }) : undefined}
+          onShowAll={filtered ? clearAll : undefined}
+        />
       )}
 
       <Card className="overflow-hidden">
@@ -639,6 +774,8 @@ export function TransactionList() {
               onPreviewMessages={() => void openBulkPreview()}
               onExport={exportSelected}
               onClear={() => setSelected(new Set())}
+              busy={bulkBusy || preparing}
+              progress={bulkProgress}
             />
 
             {!isLoading && (
@@ -713,6 +850,18 @@ export function TransactionList() {
         onConfirm={() => void writeClipboard(preview, 'คัดลอกข้อความแล้ว')}
         onCancel={() => setPreviewOpen(false)}
       />
+
+      <TxnPreviewDrawer
+        t={previewTxn}
+        onClose={() => setPreviewTxn(null)}
+        onSend={(t: PaymentTransaction) => void onRowSend(t)}
+        onCopyLink={onRowCopyLink}
+        onIssue={(t: PaymentTransaction) => {
+          setPreviewTxn(null)
+          onRowIssue(t)
+        }}
+      />
+      <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     </div>
   )
 }

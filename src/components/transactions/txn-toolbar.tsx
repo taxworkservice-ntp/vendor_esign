@@ -1,17 +1,19 @@
 import { useRef } from 'react'
-import { AlertTriangle, SlidersHorizontal, X } from 'lucide-react'
-import type { ActiveFilter, TransactionFilters } from '../../lib/txn-filters'
+import { AlertTriangle, Keyboard, SlidersHorizontal, X } from 'lucide-react'
+import type { ActiveFilter, SortKey, TransactionFilters } from '../../lib/txn-filters'
 import { activeFilterCount } from '../../lib/txn-filters'
 import { cn } from '../../lib/cn'
 import { Input } from '../ui/input'
+import { Select } from '../ui/select'
 import { FilterChip } from '../ui/filter-chip'
 import { FilterSummary } from '../ui/filter-summary'
 
-// Search, status chips and the filter-panel toggle.
-//
-// Search is controlled locally and reported upward already debounced (the page
-// owns the debounce) so typing stays instant while the query only fires once
-// the user pauses.
+const SORTS: { v: SortKey; th: string }[] = [
+  { v: 'urgency-desc', th: 'เร่งด่วนสุด' },
+  { v: 'created-desc', th: 'แก้ไขล่าสุด' },
+  { v: 'date-desc', th: 'วันที่โอน' },
+  { v: 'net-desc', th: 'ยอดสุทธิ' },
+]
 
 export function TxnToolbar({
   filters,
@@ -24,6 +26,7 @@ export function TxnToolbar({
   searchRef,
   chips,
   onClearFilter,
+  onOpenShortcuts,
   className,
 }: {
   filters: TransactionFilters
@@ -36,6 +39,7 @@ export function TxnToolbar({
   searchRef: React.RefObject<HTMLInputElement>
   chips: { v: TransactionFilters['status']; th: string }[]
   onClearFilter: (key: ActiveFilter['key']) => void
+  onOpenShortcuts?: () => void
   className?: string
 }) {
   const count = activeFilterCount(filters)
@@ -53,7 +57,7 @@ export function TxnToolbar({
             id="txn-search"
             ref={inputRef}
             className={cn('pl-10', search && 'pr-10')}
-            placeholder="ค้นหาชื่อ/คำนำหน้าผู้ขาย / รายละเอียด / เลขรายการ / สลิป…"
+            placeholder="ค้นหาชื่อผู้ขาย / รายละเอียด / เลขใบเสร็จ / สลิป…  ( / )"
             value={search}
             onChange={(e) => onSearch(e.target.value)}
             onKeyDown={(e) => {
@@ -80,11 +84,25 @@ export function TxnToolbar({
         </div>
 
         <div className="flex items-center gap-1.5">
+          <Select
+            value={SORTS.some((s) => s.v === filters.sort) ? filters.sort : 'created-desc'}
+            onChange={(e) => onPatch({ sort: e.target.value as SortKey })}
+            aria-label="เรียงลำดับ"
+            title="เรียงลำดับรายการ"
+            className="h-8 w-auto rounded-full text-body"
+          >
+            {SORTS.map((s) => (
+              <option key={s.v} value={s.v}>
+                {s.th}
+              </option>
+            ))}
+          </Select>
           <button
             type="button"
             onClick={onTogglePanel}
             aria-expanded={panelOpen}
             aria-controls="txn-filter-panel"
+            title="ตัวกรอง (f)"
             className={cn(
               'inline-flex h-8 items-center gap-1.5 rounded-full border px-3.5 text-body transition',
               panelOpen || count > 0
@@ -97,20 +115,28 @@ export function TxnToolbar({
               <span className="rounded-full bg-primary/15 px-1.5 text-label tabular-nums">{count}</span>
             )}
           </button>
+          {onOpenShortcuts && (
+            <button
+              type="button"
+              onClick={onOpenShortcuts}
+              title="คีย์ลัด (?)"
+              aria-label="ดูคีย์ลัด"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-ink-500 transition hover:bg-ink-100 hover:text-ink-700"
+            >
+              <Keyboard size={15} aria-hidden />
+            </button>
+          )}
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5 border-t border-card-border pt-3">
-        <span className="mr-1 text-label font-medium text-ink-500">สถานะ</span>
+        <span className="mr-1 text-label font-medium text-ink-500">คิวงาน</span>
         {chips.map((c) => (
           <FilterChip key={c.v} active={filters.status === c.v} onClick={() => onPatch({ status: c.v })}>
             {c.th}
           </FilterChip>
         ))}
         <span className="mx-1 h-4 w-px bg-card-border" aria-hidden />
-        {/* Own toggle, not a status value: this narrows to the actionable queue
-            rather than selecting one status, so it cannot be expressed as a
-            StatusFilter. */}
         <FilterChip
           active={filters.attention}
           onClick={() => onPatch({ attention: !filters.attention })}

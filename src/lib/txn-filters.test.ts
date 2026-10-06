@@ -397,7 +397,47 @@ describe('statusLabel', () => {
     expect(statusLabel('active')).toBe('กำลังดำเนินการ')
     expect(statusLabel('done')).toBe('เสร็จสิ้น')
     expect(statusLabel('voided')).toBe('ยกเลิกเอกสาร')
+    expect(statusLabel('needs-link')).toBe('ต้องส่งลิงก์')
+    expect(statusLabel('awaiting')).toBe('รอลงนาม')
+    expect(statusLabel('ready')).toBe('พร้อมออกใบเสร็จ')
     expect(statusLabel('draft')).toBe('ฉบับร่าง')
     expect(statusLabel('void')).toBe('ยกเลิกเอกสาร')
+  })
+})
+
+describe('maker queue groups', () => {
+  const NOW = new Date('2026-09-30T09:00:00+07:00')
+  const daysAgo = (n: number) => new Date(NOW.getTime() - n * 86400000).toISOString()
+  it('resolves needs-link / awaiting / ready', () => {
+    const rows = [
+      txn('draft', '2026-09-01', 1, { status: 'draft' }),
+      txn('expired', '2026-09-01', 1, { status: 'expired' }),
+      txn('cancelled', '2026-09-01', 1, { status: 'cancelled' }),
+      txn('sent', '2026-09-01', 1, { status: 'sent' }),
+      txn('opened', '2026-09-01', 1, { status: 'opened' }),
+      txn('signed', '2026-09-01', 1, { status: 'signed' }),
+      txn('issued', '2026-09-01', 1, { status: 'issued' }),
+    ]
+    expect(filterTransactions(rows, F({ status: 'needs-link' })).map((t) => t.id)).toEqual(['draft', 'expired', 'cancelled'])
+    expect(filterTransactions(rows, F({ status: 'awaiting' })).map((t) => t.id)).toEqual(['sent', 'opened'])
+    expect(filterTransactions(rows, F({ status: 'ready' })).map((t) => t.id)).toEqual(['signed'])
+  })
+
+  it('sorts the queue most-urgent first', () => {
+    const rows = [
+      txn('fresh-draft', '2026-09-29', 1, { status: 'draft', createdAt: daysAgo(1) }),
+      txn('old-wait', '2026-09-01', 1, { status: 'sent', createdAt: daysAgo(9), sentAt: daysAgo(9), slipReference: 'TRF-1' }),
+      txn('expired', '2026-09-01', 1, { status: 'expired', createdAt: daysAgo(9) }),
+      txn('done', '2026-09-01', 1, { status: 'issued', createdAt: daysAgo(9) }),
+    ]
+    expect(sortTransactions(rows, 'urgency-desc', NOW).map((t) => t.id)).toEqual(['expired', 'old-wait', 'fresh-draft', 'done'])
+  })
+
+  it('finds a receipt number from paper', () => {
+    const rows = [
+      txn('a', '2026-09-01', 1, { receiptNumber: 'RCT-002-2569-001' }),
+      txn('b', '2026-09-01', 1, { receiptNumber: 'RCT-003-2569-007' }),
+    ]
+    expect(filterTransactions(rows, F({ search: 'RCT-003' })).map((t) => t.id)).toEqual(['b'])
   })
 })

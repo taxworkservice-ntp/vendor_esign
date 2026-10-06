@@ -17,7 +17,7 @@ import { statusSet, type TxnListQuery } from '../../src/lib/txn-list-query'
 // on two pages, or on none.
 
 /** Whitelisted sort expressions. Keys are exactly SortField. */
-const ORDER_BY: Record<SortField, string> = {
+const ORDER_BY: Record<Exclude<SortField, 'urgency'>, string> = {
   date: 'p.transfer_date',
   created: 'p.created_at',
   gross: 'p.gross_amount',
@@ -27,8 +27,25 @@ const ORDER_BY: Record<SortField, string> = {
   status: 'p.status',
 }
 
+const LAST_ACTIVITY_SQL = `coalesce(
+       (select min(vr.opened_at) from vendor_requests vr where vr.transaction_id = p.id),
+       (select min(vr.created_at) from vendor_requests vr where vr.transaction_id = p.id),
+       p.created_at)`;
+
+const URGENCY_RANK = `case
+    when p.status = 'expired' then 0
+    when p.status in ('sent', 'opened') and ${LAST_ACTIVITY_SQL} < now() - make_interval(days => ${DEFAULT_THRESHOLDS.awaitingDays}) then 1
+    when p.status = 'draft' and p.created_at < now() - make_interval(days => ${DEFAULT_THRESHOLDS.draftDays}) then 2
+    when p.status in ('sent', 'opened', 'signed') and p.slip_reference = '' then 3
+    else 4
+  end`;
+
 export function orderByClause(sort: SortKey): string {
-  const col = ORDER_BY[sortField(sort)] ?? ORDER_BY.date
+  if (sortField(sort) === 'urgency') {
+    const rankDir = sortDir(sort) === 'asc' ? 'desc' : 'asc'
+    return `order by ${URGENCY_RANK} ${rankDir}, ${LAST_ACTIVITY_SQL} asc, p.id asc`
+  }
+  const col = ORDER_BY[sortField(sort) as Exclude<SortField, 'urgency'>] ?? ORDER_BY.date
   const dir = sortDir(sort) === 'asc' ? 'asc' : 'desc'
   return `order by ${col} ${dir}, p.id asc`
 }
@@ -55,6 +72,8 @@ const SEARCH_COLUMNS = [
   'p.id::text',
   'p.ref',
   'p.slip_reference',
+  `(select rr.number from vendor_receipts rr where rr.transaction_id = p.id order by rr.issue_date desc limit 1)`,
+  `(select rr.verification_code from vendor_receipts rr where rr.transaction_id = p.id order by rr.issue_date desc limit 1)`,
 ]
 
 function buildWhere(q: TxnListQuery, b: Builder, userId: string): string[] {

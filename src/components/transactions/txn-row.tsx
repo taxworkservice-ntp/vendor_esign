@@ -76,11 +76,9 @@ export function TxnRow({
 
   return (
     <tr
-      // The row is the click target, so it carries the link semantics and the
-      // keyboard handler. Without this, a keyboard user could not open a
-      // transaction from the list at all.
       role="link"
       tabIndex={0}
+      data-txn-id={t.id}
       aria-label={`เปิดรายการ ${t.id} ของ ${vendorDisplayName(t.vendor.prefix, t.vendor.name)}`}
       onClick={() => onOpen(t.id)}
       onKeyDown={onKeyDown}
@@ -160,6 +158,23 @@ export function TxnRow({
 
       <td className={cn('whitespace-nowrap border-b border-card-border px-3 text-right font-semibold tabular-nums', pad)}>
         {fmtTHB(t.netAmount)}
+      </td>
+
+      <td className={cn('whitespace-nowrap border-b border-card-border px-3', pad)}>
+        {attention ? (
+          <span
+            className={cn(
+              'inline-flex items-center gap-1 text-label font-semibold tabular-nums',
+              attention.tone === 'danger' ? 'text-danger' : 'text-warning',
+            )}
+            title={attention.label}
+          >
+            <AlertTriangle size={12} aria-hidden />
+            {attention.days > 0 ? `${attention.days} วัน` : attention.label}
+          </span>
+        ) : (
+          <span className="text-label text-ink-300">—</span>
+        )}
       </td>
 
       <td className={cn('whitespace-nowrap border-b border-card-border px-3', pad)}>

@@ -48,9 +48,9 @@ export interface TxnListQuery {
 }
 
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/
-const SORT_FIELDS: readonly SortField[] = ['date', 'created', 'gross', 'wht', 'net', 'vendor', 'status']
+const SORT_FIELDS: readonly SortField[] = ['date', 'created', 'gross', 'wht', 'net', 'vendor', 'status', 'urgency']
 const SLIPS: readonly SlipFilter[] = ['all', 'with', 'without']
-const GROUPS = ['active', 'done', 'voided'] as const
+const GROUPS = ['active', 'done', 'voided', 'needs-link', 'awaiting', 'ready'] as const
 
 /** Reject impossible days (2026-02-31) that a regex alone would accept. */
 function isValidDate(v: string): boolean {

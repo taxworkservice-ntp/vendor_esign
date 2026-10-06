@@ -15,6 +15,8 @@ export function SummaryBar({
   totals,
   attentionOnPage,
   loading,
+  onShowAttention,
+  onShowAll,
 }: {
   totals: TxnTotals
   /**
@@ -24,6 +26,8 @@ export function SummaryBar({
    */
   attentionOnPage?: number
   loading?: boolean
+  onShowAttention?: () => void
+  onShowAll?: () => void
 }) {
   const cells: { label: string; value: string; icon: LucideIcon; emphasis?: boolean }[] = [
     { label: 'รายการที่ตรงเงื่อนไข', value: totals.count.toLocaleString('th-TH'), icon: FileText },
@@ -32,12 +36,27 @@ export function SummaryBar({
     { label: 'ยอดสุทธิที่ต้องจ่าย', value: fmtTHB(totals.payableNet), icon: Coins },
   ]
 
+  const firstCell = cells[0]
+  const FirstIcon = firstCell.icon
   return (
     <div
       className="grid grid-cols-2 gap-px overflow-hidden rounded-card border border-card-border bg-card-border sm:grid-cols-4"
       aria-busy={loading || undefined}
     >
-      {cells.map(({ label, value, icon: Icon, emphasis }) => (
+      <button
+        type="button"
+        onClick={onShowAll}
+        disabled={!onShowAll}
+        title={onShowAll ? 'ล้างตัวกรอง เห็นทุกรายการ' : undefined}
+        className="bg-white px-4 py-3 text-left transition enabled:hover:bg-ink-50 disabled:cursor-default"
+      >
+        <p className="flex items-center gap-1.5 text-label text-ink-500">
+          <FirstIcon size={13} aria-hidden />
+          {firstCell.label}
+        </p>
+        <p className="mt-0.5 text-title font-semibold tabular-nums">{loading ? '—' : firstCell.value}</p>
+      </button>
+      {cells.slice(1).map(({ label, value, icon: Icon, emphasis }) => (
         <div
           key={label}
           className={emphasis ? 'bg-primary px-4 py-3 text-white' : 'bg-white px-4 py-3'}
@@ -64,12 +83,22 @@ export function SummaryBar({
               {totals.net !== totals.payableNet && ` (มูลค่ารวมทั้งหมด ${fmtTHB(totals.net)} บาท)`}
             </span>
           )}
-          {(attentionOnPage ?? 0) > 0 && (
-            <span className="inline-flex items-center gap-1.5 font-semibold text-warning">
-              <AlertTriangle size={13} aria-hidden />
-              ต้องติดตาม {attentionOnPage} รายการในหน้านี้
-            </span>
-          )}
+          {(attentionOnPage ?? 0) > 0 &&
+            (onShowAttention ? (
+              <button
+                type="button"
+                onClick={onShowAttention}
+                className="inline-flex items-center gap-1.5 rounded-full font-semibold text-warning transition hover:underline"
+              >
+                <AlertTriangle size={13} aria-hidden />
+                ต้องติดตาม {attentionOnPage} รายการในหน้านี้ →
+              </button>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 font-semibold text-warning">
+                <AlertTriangle size={13} aria-hidden />
+                ต้องติดตาม {attentionOnPage} รายการในหน้านี้
+              </span>
+            ))}
         </p>
       )}
     </div>

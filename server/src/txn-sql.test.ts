@@ -35,6 +35,14 @@ describe('orderByClause', () => {
       expect(orderByClause(key).endsWith(', p.id asc')).toBe(true)
     }
   })
+
+  it('orders the maker queue by urgency rank, oldest activity first', () => {
+    const sql = orderByClause('urgency-desc')
+    expect(sql).toContain("p.status = 'expired'")
+    expect(sql).toContain('p.id asc')
+    const reverse = orderByClause('urgency-asc')
+    expect(reverse).not.toBe(sql)
+  })
 })
 
 describe('limitClause', () => {
@@ -143,6 +151,7 @@ describe('whereClause — filters', () => {
     for (const col of ['v.name', 'v.prefix', 'p.description', 'p.note', 'p.ref', 'p.slip_reference']) {
       expect(w.text).toContain(`${col} ilike`)
     }
+    expect(w.text).toContain('vendor_receipts')
     // The title is matched alone and combined with the name.
     expect(w.text).toContain("(v.prefix || ' ' || v.name) ilike")
     expect(w.text).toContain("replace(v.prefix || ' ' || v.name, ' ', '') ilike")

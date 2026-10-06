@@ -45,6 +45,9 @@ describe('parseListQuery — validation', () => {
     expect(parseListQuery(sp('status=active')).status).toBe('active')
     expect(parseListQuery(sp('status=done')).status).toBe('done')
     expect(parseListQuery(sp('status=voided')).status).toBe('voided')
+    expect(parseListQuery(sp('status=needs-link')).status).toBe('needs-link')
+    expect(parseListQuery(sp('status=awaiting')).status).toBe('awaiting')
+    expect(parseListQuery(sp('status=ready')).status).toBe('ready')
     expect(parseListQuery(sp('status=sent')).status).toBe('sent')
     expect(parseListQuery(sp('status=issued')).status).toBe('issued')
     expect(parseListQuery(sp('status=drop-table')).status).toBe('all')
@@ -59,7 +62,7 @@ describe('parseListQuery — validation', () => {
   })
 
   it('accepts only the six sort fields, defaulting direction safely', () => {
-    for (const f of ['date', 'gross', 'wht', 'net', 'vendor', 'status']) {
+    for (const f of ['date', 'gross', 'wht', 'net', 'vendor', 'status', 'urgency']) {
       expect(parseListQuery(sp(`sort=${f}-asc`)).sort).toBe(`${f}-asc`)
       // A missing direction means desc, never a malformed key.
       expect(parseListQuery(sp(`sort=${f}`)).sort).toBe(`${f}-desc`)
@@ -110,6 +113,12 @@ describe('statusSet', () => {
     expect(statusSet('active')).toEqual(['draft', 'sent', 'opened', 'signed'])
     expect(statusSet('done')).toEqual(['issued'])
     expect(statusSet('voided')).toEqual(['void', 'cancelled'])
+  })
+
+  it('expands the maker queue groups', () => {
+    expect(statusSet('needs-link')).toEqual(['draft', 'expired', 'cancelled'])
+    expect(statusSet('awaiting')).toEqual(['sent', 'opened'])
+    expect(statusSet('ready')).toEqual(['signed'])
   })
 
   it('passes an exact status through as a single value', () => {
