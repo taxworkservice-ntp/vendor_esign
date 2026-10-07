@@ -124,7 +124,7 @@ export const WHT_COLUMNS: CsvColumn<WhtRecordWithVendor>[] = [
   { header: 'ยอดเงิน (ฐานภาษี)', value: (r) => r.amount, text: false },
   { header: 'อัตราหัก (%)', value: (r) => r.whtRate, text: false },
   { header: 'ภาษีที่หักไว้', value: (r) => r.whtAmount, text: false },
-  { header: 'สถานะ', value: (r) => (r.status === 'done' ? 'ยื่นแล้ว' : 'ยังไม่ยื่น') },
+  { header: 'สถานะ', value: (r) => (r.status === 'done' ? 'ยื่นแล้ว' : r.status === 'void' ? 'ยกเลิก' : r.status === 'superseded' ? 'แทนที่แล้ว' : 'ยังไม่ยื่น') },
   { header: 'หมายเหตุ', value: (r) => r.note ?? '' },
 ]
 

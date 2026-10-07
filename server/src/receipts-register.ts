@@ -107,7 +107,11 @@ receiptRoutes.get('/receipts', async (c) => {
   const offset = Math.max(0, Math.trunc(Number(c.req.query('offset') ?? 0)) || 0)
 
   const params: unknown[] = [g.ws]
-  const conds = ['r.user_id = $1', "r.status = 'issued'"]
+  // One row per live issued receipt. The `p.status` guard is defensive: voiding
+  // now mirrors onto `vendor_receipts.status` (so `r.status = 'issued'` already
+  // drops voided rows), but a payable can also be cancelled without the receipt
+  // row changing, so exclude those here too.
+  const conds = ['r.user_id = $1', "r.status = 'issued'", "p.status not in ('void', 'cancelled')"]
   if (month) {
     params.push(month.from)
     const a = `$${params.length}`

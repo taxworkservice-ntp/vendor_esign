@@ -40,7 +40,9 @@ export function whtWhereClause(q: WhtListQuery, userId: string): SqlFragment {
   const b = makeBuilder()
   // Only certificates that actually withheld something belong in the register;
   // 0-WHT rows (มาตรา 50/1 waivers, imports, legacy) are not forms to file.
-  const parts: string[] = [`r.user_id = ${b.bind(userId)}`, 'r.wht_amount > 0']
+  // Voided (receipt cancelled) and superseded (cancelled after filing) are
+  // corrections, not live certificates — excluded from the register and totals.
+  const parts: string[] = [`r.user_id = ${b.bind(userId)}`, 'r.wht_amount > 0', "r.status in ('active','done')"]
 
   if (q.month) {
     const { from, to } = monthRange(q.month)
@@ -73,7 +75,7 @@ export function whtTotalsClause(q: WhtListQuery, userId: string): SqlFragment {
     coalesce(sum(r.amount), 0)::numeric as amount,
     coalesce(sum(r.wht_amount), 0)::numeric as wht_amount,
     count(*) filter (where r.status = 'done')::int as filed_count,
-    count(*) filter (where r.status <> 'done')::int as active_count,
+    count(*) filter (where r.status = 'active')::int as active_count,
     count(distinct r.vendor_id)::int as vendors
   from wht_records r
   join wht_vendors v on v.id = r.vendor_id

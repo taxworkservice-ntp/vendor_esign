@@ -52,7 +52,7 @@ function toRecord(r: Record<string, unknown>): WhtRecordWithVendor {
     certificateNo: (r.certificate_no as string | null) ?? undefined,
     description: (r.description as string | null) ?? undefined,
     note: (r.note as string | null) ?? undefined,
-    status: r.status === 'done' ? 'done' : 'active',
+    status: r.status === 'done' ? 'done' : r.status === 'void' ? 'void' : r.status === 'superseded' ? 'superseded' : 'active',
     createdAt: new Date(String(r.created_at ?? Date.now())).toISOString(),
     sourceTransactionId: (r.source_transaction_id as string | null) ?? undefined,
     // Joined in, so the list does not need a second full /wht/vendors fetch

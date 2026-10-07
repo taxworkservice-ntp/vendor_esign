@@ -23,11 +23,12 @@ export function whtSearchFields(r: WhtRecordWithVendor): (string | number | unde
 
 /** The mock-side reference filter; the server's SQL builder is the other executor. */
 export function filterWht(records: WhtRecordWithVendor[], q: WhtListQuery): WhtRecordWithVendor[] {
-  // Mirror the server: 0-WHT rows are not certificates to file.
-  let out = records.filter((r) => r.whtAmount > 0)
+  // Mirror the server: 0-WHT rows are not certificates to file, and voided /
+  // superseded certificates are corrections that stay out of the register.
+  let out = records.filter((r) => r.whtAmount > 0 && r.status !== 'void' && r.status !== 'superseded')
   if (q.month) out = filterWhtByMonth(out, q.month)
   if (q.formType) out = out.filter((r) => r.formType === q.formType)
-  if (q.status === 'active') out = out.filter((r) => r.status !== 'done')
+  if (q.status === 'active') out = out.filter((r) => r.status === 'active')
   if (q.status === 'done') out = out.filter((r) => r.status === 'done')
   if (q.q) out = out.filter((r) => matchesSearch(whtSearchFields(r), q.q))
   return out

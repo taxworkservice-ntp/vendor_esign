@@ -83,7 +83,9 @@ export interface WhtRecord {
   /** Raw payment type key (e.g. "ค่าบริการ") from the source transaction. */
   paymentType?: string
   note?: string
-  status: 'active' | 'done'
+  /** active = not yet filed; done = filed; void = receipt voided before filing;
+   *  superseded = receipt voided after the certificate was already filed. */
+  status: 'active' | 'done' | 'void' | 'superseded'
   createdAt: string
   // Set when the certificate was auto-generated from an issued receipt.
   sourceTransactionId?: string

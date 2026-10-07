@@ -12,6 +12,7 @@ import { limitClause, orderByClause, totalsClause, whereClause } from './txn-sql
 import { readStoredDurable } from './storage'
 import { decryptId } from './crypto'
 import { isoDay } from './dates'
+import { audit, one } from './shared'
 import { contentDisposition, documentFileName } from '../../src/lib/download-name'
 import type { PaymentTransaction } from '../../src/lib/types'
 
@@ -32,7 +33,7 @@ const SELECT = `
     v.name as vendor_name, v.address as vendor_address, v.prefix as vendor_prefix, v.vendor_no as vendor_no,
     v.id_number_encrypted as vendor_id_encrypted,
     (select row_to_json(x) from (
-       select number, issue_date, verification_code from vendor_receipts rr where rr.transaction_id = p.id
+       select number, issue_date, verification_code, voided_at from vendor_receipts rr where rr.transaction_id = p.id
        order by rr.issue_date desc limit 1) x) as receipt,
     (select row_to_json(x) from (
        select token, created_at, opened_at, used_at, revoked_at, expires_at
@@ -91,7 +92,10 @@ function buildTimeline(r: Record<string, unknown>, receiptNumber: string | undef
   push(iso(req?.used_at), EV.signed)
   push(iso(receipt?.issue_date) ?? (receiptNumber ? iso(r.created_at) : undefined), EV.issued, receiptNumber)
   push(iso(req?.revoked_at), EV.revoked)
-  if (r.void_reason) push(iso(r.created_at), EV.voided, String(r.void_reason))
+  // The void is stamped with the receipt's voided_at (the real moment), not the
+  // transaction's created_at — otherwise the history shows the cancellation on
+  // the day the document was drafted.
+  if (r.void_reason) push(iso(receipt?.voided_at) ?? iso(r.created_at), EV.voided, String(r.void_reason))
 
   return out.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))
 }
@@ -473,12 +477,37 @@ txnRoutes.post('/transactions/:id/void', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
   const b = (await c.req.json().catch(() => null)) as { reason?: string } | null
+  const reason = (b?.reason ?? '').trim()
+  if (!reason) return c.json({ error: 'reason-required' }, 400)
   const id = c.req.param('id')
-  await withTenant(g.ws, 'owner', async () => {
+  const ip = c.req.header('x-forwarded-for') ?? 'local'
+  const res = await withTenant(g.ws, 'owner', async () => {
     const db = sql()
-    await db`update vendor_payables set status = 'void', void_reason = ${(b?.reason ?? '').trim()}
+    const cur = one<{ status: string }>(
+      await db`select status from vendor_payables where id = ${id} and user_id = ${g.ws}`,
+    )
+    if (!cur) return { ok: false as const, error: 'not-found' as const }
+    // A repeat void is a no-op, not a second effect.
+    if (cur.status === 'void') return { ok: true as const }
+    await db`update vendor_payables set status = 'void', void_reason = ${reason}, updated_at = now()
       where id = ${id} and user_id = ${g.ws}`
+    // The issued receipt is an artifact: keep the row and its number, but mirror
+    // the void so the register, exports and public verification all agree it is
+    // no longer a live document. (Once `vendor_receipts.status` is synced, the
+    // register's `r.status = 'issued'` filter drops it from totals.)
+    await db`update vendor_receipts set status = 'void', void_reason = ${reason}, voided_at = now()
+      where transaction_id = ${id} and user_id = ${g.ws}`
+    // Cancel any still-live vendor link so the document cannot be opened.
+    await db`update vendor_requests set revoked_at = now()
+      where transaction_id = ${id} and user_id = ${g.ws} and used_at is null and revoked_at is null`
+    // The auto-created withholding certificate is no longer valid: void it if it
+    // is unfiled, mark it superseded if it was already filed (keep the record).
+    await db`update wht_records set status = case when status = 'done' then 'superseded' else 'void' end
+      where source_transaction_id = ${id} and user_id = ${g.ws} and status in ('active','done')`
+    await audit(g.ws, 'vendor_receipts', id, 'receipt.voided', g.actor, { reason }, ip)
+    return { ok: true as const }
   })
+  if (!res.ok) return c.json({ error: res.error }, 404)
   return c.json({ ok: true })
 })
 

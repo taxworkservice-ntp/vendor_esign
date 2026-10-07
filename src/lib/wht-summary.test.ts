@@ -243,6 +243,34 @@ describe('filterWht', () => {
   })
 })
 
+describe('voided / superseded certificates', () => {
+  const q = (s: string) => parseWhtListQuery(new URLSearchParams(s))
+
+  it('are excluded from the summary totals and counts', () => {
+    const s = summarizeWht([
+      rec({ id: 'a', status: 'active', amount: 1000, whtAmount: 30 }),
+      rec({ id: 'v', status: 'void', amount: 2000, whtAmount: 60 }),
+      rec({ id: 's', status: 'superseded', amount: 3000, whtAmount: 90 }),
+    ])
+    expect(s.count).toBe(1)
+    expect(s.amount).toBe(1000)
+    expect(s.whtAmount).toBe(30)
+    expect(s.activeCount).toBe(1)
+    expect(s.filedCount).toBe(0)
+  })
+
+  it('are dropped from the register whatever the status filter', () => {
+    const rows = [
+      rec({ id: 'a', status: 'active' }),
+      rec({ id: 'v', status: 'void' }),
+      rec({ id: 's', status: 'superseded' }),
+    ]
+    expect(filterWht(rows, q('')).map((r) => r.id)).toEqual(['a'])
+    expect(filterWht(rows, q('status=active')).map((r) => r.id)).toEqual(['a'])
+    expect(filterWht(rows, q('status=done')).map((r) => r.id)).toEqual([])
+  })
+})
+
 describe('parseWhtListQuery', () => {
   const p = (s: string) => parseWhtListQuery(new URLSearchParams(s))
 

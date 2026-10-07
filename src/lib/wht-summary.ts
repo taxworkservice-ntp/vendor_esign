@@ -45,6 +45,9 @@ export function summarizeWht(records: WhtRecord[]): WhtSummary {
   const vendorIds = new Set<string>()
 
   for (const r of records) {
+    // Corrections (voided / superseded certificates) are not part of the live
+    // register figures even if a caller passes them unfiltered.
+    if (r.status === 'void' || r.status === 'superseded') continue
     out.count++
     out.amount += r.amount
     out.whtAmount += r.whtAmount

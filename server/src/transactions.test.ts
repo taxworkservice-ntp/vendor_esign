@@ -158,6 +158,22 @@ describe('toTxn — timeline', () => {
     expect(t.voidReason).toBe('ยอดไม่ถูกต้อง')
   })
 
+  it('dates the void with the receipt voided_at, not the created_at', () => {
+    const t = toTxn(
+      row({
+        status: 'void',
+        void_reason: 'ยอดไม่ถูกต้อง',
+        created_at: '2026-09-20T09:00:00.000Z',
+        receipt: {
+          number: 'RCT-001-2569-001',
+          issue_date: '2026-09-21T13:00:00.000Z',
+          voided_at: '2026-09-30T08:00:00.000Z',
+        },
+      }),
+    )
+    expect(t.timeline.find((e) => e.label === 'ยกเลิกเอกสาร')?.at).toBe('2026-09-30T08:00:00.000Z')
+  })
+
   it('is ordered oldest to newest', () => {
     const t = toTxn(
       row({
