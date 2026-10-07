@@ -310,10 +310,10 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
   if (input.signaturePng) {
     try {
       const img = await doc.embedPng(input.signaturePng)
-      // A typed name prints ~30% smaller than a drawn signature, matching the
-      // on-screen receipt slot (max-h-10 vs max-h-14).
+      // A typed name prints half the height of a drawn signature, matching the
+      // on-screen receipt slot (max-h-7 vs max-h-14).
       const typed = input.verificationMethod === 'typed-consent'
-      const scale = Math.min((typed ? 105 : 150) / img.width, (typed ? 38 : 54) / img.height)
+      const scale = Math.min((typed ? 75 : 150) / img.width, (typed ? 27 : 54) / img.height)
       const w = img.width * scale
       page.drawImage(img, { x: A4.w / 2 - w / 2, y: sigY + 6, width: w, height: img.height * scale })
     } catch {

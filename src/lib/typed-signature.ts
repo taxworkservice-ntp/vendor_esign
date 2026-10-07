@@ -44,29 +44,30 @@ export interface TypedSignatureLayout {
   width: number
   /** Canvas height in CSS px — the ink plus padding. */
   height: number
-  /** x to pass to fillText with textAlign='center'. */
+  /** Left origin to pass to fillText with textAlign='left'. */
   x: number
-  /** y to pass to fillText with textBaseline='alphabetic'. */
+  /** Baseline to pass to fillText with textBaseline='alphabetic'. */
   y: number
 }
 
 /**
- * Lay the name out in a canvas cropped to its advance and ink.
+ * Lay the name out in a canvas cropped to its advance and ink, centred by
+ * construction.
  *
- * The name is centred on its **advance width**, not on `actualBoundingBoxLeft/
- * Right`. Those two are unreliable in some engines (Safari in particular) and,
- * because the old code used them for both the canvas width and the draw origin,
- * a bad value made the name drift right and clip. The advance is stable across
- * engines. The vertical crop still uses the measured ink box.
- *
- * The result is deterministic and identical on screen, in the raster PDF, and
- * in the server PDF.
+ * The canvas is sized to the measured advance plus symmetric padding, and the
+ * draw origin is the left padding — so the glyphs occupy exactly the middle of
+ * the canvas. We anchor the origin explicitly instead of relying on
+ * `ctx.textAlign='center'`: some engines ignore the alignment for complex
+ * (Thai) text, which made the name start at the canvas centre and clip on the
+ * right. `actualBoundingBoxLeft/Right` are likewise avoided (unreliable in
+ * Safari). The advance is stable across engines, so this is deterministic and
+ * identical on screen, in the raster PDF, and in the server PDF.
  */
 export function fitTypedSignature(m: TypedSignatureMetrics): TypedSignatureLayout {
   const pad = Math.max(6, Math.round(m.size * TYPED_SIGNATURE_PADDING_RATIO))
   const width = Math.ceil(m.advance + pad * 2)
   const height = Math.ceil(m.ascent + m.descent + pad * 2)
-  return { width, height, x: width / 2, y: pad + m.ascent }
+  return { width, height, x: pad, y: pad + m.ascent }
 }
 
 // Fallbacks when `actualBoundingBox*` is unavailable (older engines): approximate
@@ -104,8 +105,10 @@ export async function renderTypedSignature(name: string): Promise<string> {
     ctx.font = `${size}px ${SIGNATURE_FONT}`
   }
 
-  // Centre on the advance width; only the vertical crop uses the ink box.
-  ctx.textAlign = 'center'
+  // Measure the full name so the crop and the draw origin agree on one width.
+  // Only the vertical crop uses the ink box; the horizontal centre falls out of
+  // `x = pad` with a canvas of `advance + 2·pad`.
+  ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
   const m = ctx.measureText(text)
   const ascent = Number.isFinite(m.actualBoundingBoxAscent) ? m.actualBoundingBoxAscent : size * ASCENT_RATIO
@@ -118,7 +121,7 @@ export async function renderTypedSignature(name: string): Promise<string> {
   ctx.scale(dpr, dpr)
   ctx.font = `${size}px ${SIGNATURE_FONT}`
   ctx.fillStyle = colors.signature
-  ctx.textAlign = 'center'
+  ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
   ctx.fillText(text, layout.x, layout.y)
   return canvas.toDataURL('image/png')

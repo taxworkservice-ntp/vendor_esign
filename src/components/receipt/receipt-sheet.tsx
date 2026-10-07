@@ -213,7 +213,10 @@ export const ReceiptSheet = forwardRef<
                 src={sig.png}
                 alt="ลายเซ็นผู้มีอำนาจลงนาม"
                 data-role="overlay"
-                className={cn('max-w-full object-contain', data.sigMethod === 'typed-consent' ? 'max-h-10' : 'max-h-14')}
+                className={cn(
+                  'mx-auto block min-w-0 max-w-full object-contain',
+                  data.sigMethod === 'typed-consent' ? 'max-h-7' : 'max-h-14',
+                )}
               />
             </div>
             <p className="border-t border-ink-300 pt-2 text-body font-semibold">ผู้มีอำนาจลงนาม</p>
