@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Eye, KeyRound, PauseCircle, Pencil, PlayCircle, Power, PowerOff, ShieldOff, Trash2 } from 'lucide-react'
+import { Copy, Eye, KeyRound, PauseCircle, Pencil, PlayCircle, Power, PowerOff, ShieldOff, Trash2 } from 'lucide-react'
 import {
   useAdminTenant,
   useCreateUser,
@@ -17,6 +17,7 @@ import { FieldError, Input, Label } from '../../components/ui/input'
 import { Select } from '../../components/ui/select'
 import { ConfirmDialog } from '../../components/ui/confirm-dialog'
 import { useToast } from '../../components/ui/toast'
+import { buildFirstLoginMessage } from '../../lib/admin-invite-message'
 
 type AdminConfirm =
   | { kind: 'suspend' }
@@ -38,6 +39,8 @@ export function ClientDetail() {
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<'owner' | 'manager' | 'officer'>('officer')
   const [tempPw, setTempPw] = useState('')
+  const [createdEmail, setCreatedEmail] = useState('')
+  const [copied, setCopied] = useState(false)
   const [err, setErr] = useState('')
   const [impErr, setImpErr] = useState('')
   const [confirm, setConfirm] = useState<AdminConfirm | null>(null)
@@ -60,13 +63,35 @@ export function ClientDetail() {
   const makeUser = async () => {
     setErr('')
     setTempPw('')
+    setCreatedEmail('')
+    setCopied(false)
     try {
-      const j = await createUser.mutateAsync({ email, role })
+      const created = email.trim()
+      const j = await createUser.mutateAsync({ email: created, role })
       setTempPw(j.tempPassword)
+      setCreatedEmail(created)
       setEmail('')
       void refetch()
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'สร้างผู้ใช้ไม่สำเร็จ')
+    }
+  }
+
+  const copyInvite = async () => {
+    if (!tempPw || !createdEmail) return
+    try {
+      await navigator.clipboard.writeText(
+        buildFirstLoginMessage({
+          loginUrl: `${window.location.origin}/login`,
+          email: createdEmail,
+          tempPassword: tempPw,
+        }),
+      )
+      setCopied(true)
+      toast.show('คัดลอกข้อความแจ้งผู้ใช้แล้ว')
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      toast.show('คัดลอกไม่สำเร็จ — กรุณาคัดลอกด้วยตนเอง', 'error')
     }
   }
 
@@ -163,6 +188,9 @@ export function ClientDetail() {
                   <p className="font-semibold text-warning">รหัสผ่านชั่วคราว (แสดงเพียงครั้งเดียว — โปรดส่งให้ผู้ใช้ผ่านช่องทางอื่น แล้วระบบจะบังคับให้เปลี่ยน):</p>
                   <p className="mt-1 font-mono text-lg font-semibold tracking-wide">{tempPw}</p>
                   <p className="mt-1 text-label text-warning">หมดอายุใน 7 วัน · จัดเก็บเฉพาะค่าแฮช scrypt</p>
+                  <Button variant="secondary" onClick={() => void copyInvite()} className="mt-2">
+                    <Copy size={15} /> {copied ? 'คัดลอกข้อความแล้ว' : 'คัดลอกข้อความแจ้งผู้ใช้'}
+                  </Button>
                 </div>
               )}
             </CardBody>

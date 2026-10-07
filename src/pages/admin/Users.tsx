@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { KeyRound, Pencil, Power, PowerOff, Search, ShieldOff, UserCog } from 'lucide-react'
+import { Copy, KeyRound, Pencil, Power, PowerOff, Search, ShieldOff, UserCog } from 'lucide-react'
 import { useAllAdminUsers, useUserActions, type AdminDirectoryUser } from '../../hooks/useAdmin'
 import { useColumnSort } from '../../hooks/useColumnSort'
 import { sortRows, type SortAccessor } from '../../lib/sort'
@@ -14,6 +14,7 @@ import { ConfirmDialog } from '../../components/ui/confirm-dialog'
 import { useToast } from '../../components/ui/toast'
 import { Row, SortableTh, Td, Th, tableCls } from '../../components/ui/data-table'
 import { cn } from '../../lib/cn'
+import { buildFirstLoginMessage } from '../../lib/admin-invite-message'
 
 const ROLE_TH: Record<string, string> = { owner: 'เจ้าของ', manager: 'ผู้จัดการ', officer: 'เจ้าหน้าที่' }
 
@@ -33,6 +34,8 @@ export function Users() {
   const toast = useToast()
   const { key: sortKey, dir: sortDir, onSort } = useColumnSort()
   const [tempPw, setTempPw] = useState('')
+  const [resetEmail, setResetEmail] = useState('')
+  const [copied, setCopied] = useState(false)
   const [confirm, setConfirm] = useState<Confirm>(null)
 
   const users = useMemo(() => sortRows(data ?? [], sortKey, sortDir, USER_SORT), [data, sortKey, sortDir])
@@ -41,9 +44,29 @@ export function Users() {
     try {
       const pw = await actions.reset(u.id)
       setTempPw(pw)
+      setResetEmail(u.email)
+      setCopied(false)
       toast.show(`ตั้งรหัสผ่านใหม่ให้ ${u.email} แล้ว`)
     } catch {
       toast.show('ตั้งรหัสใหม่ไม่สำเร็จ', 'error')
+    }
+  }
+
+  const copyInvite = async () => {
+    if (!tempPw || !resetEmail) return
+    try {
+      await navigator.clipboard.writeText(
+        buildFirstLoginMessage({
+          loginUrl: `${window.location.origin}/login`,
+          email: resetEmail,
+          tempPassword: tempPw,
+        }),
+      )
+      setCopied(true)
+      toast.show('คัดลอกข้อความแจ้งผู้ใช้แล้ว')
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      toast.show('คัดลอกไม่สำเร็จ — กรุณาคัดลอกด้วยตนเอง', 'error')
     }
   }
 
@@ -77,9 +100,14 @@ export function Users() {
         <div className="rounded-control bg-warning-soft p-3 text-body">
           <p className="font-semibold text-warning">รหัสผ่านชั่วคราว (แสดงครั้งเดียว — ส่งให้ผู้ใช้ผ่านช่องทางอื่น):</p>
           <p className="mt-1 font-mono text-lg font-semibold tracking-wide">{tempPw}</p>
-          <button type="button" onClick={() => setTempPw('')} className="mt-1 text-label font-medium text-warning underline">
-            ซ่อน
-          </button>
+          <div className="mt-2 flex items-center gap-3">
+            <Button variant="secondary" onClick={() => void copyInvite()}>
+              <Copy size={15} /> {copied ? 'คัดลอกข้อความแล้ว' : 'คัดลอกข้อความแจ้งผู้ใช้'}
+            </Button>
+            <button type="button" onClick={() => setTempPw('')} className="text-label font-medium text-warning underline">
+              ซ่อน
+            </button>
+          </div>
         </div>
       )}
 
