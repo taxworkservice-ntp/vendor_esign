@@ -112,26 +112,26 @@ export const ReceiptSheet = forwardRef<
         </div>
       </div>
 
-      <hr className="my-5 border-ink-900" />
+      <hr className="my-3 border-ink-900" />
 
       {/* Client (full width) */}
-      <div className="rounded-control bg-ink-50 p-3.5 text-body">
+      <div className="rounded-control bg-ink-50 p-2.5 text-body">
         <p className={label}>ผู้ซื้อ</p>
-        <p className="mt-1.5 font-semibold">{client.displayName}</p>
-        <p className="mt-0.5 text-body leading-relaxed text-ink-600">
+        <p className="mt-1 font-semibold">{client.displayName}</p>
+        <p className="mt-0 text-body leading-relaxed text-ink-600">
           <span className="text-ink-400">ที่อยู่: </span>{client.address}
         </p>
-        <p className="mt-0.5 text-label text-ink-600">
+        <p className="mt-0 text-label text-ink-600">
           <span className="text-ink-400">เลขประจำตัวผู้เสียภาษี: </span>
           <span className="font-mono">{client.taxId}</span>
         </p>
       </div>
 
-      {data.note && <p className="mt-4 text-body text-ink-500">{data.note}</p>}
+      {data.note && <p className="mt-2.5 text-body text-ink-500">{data.note}</p>}
 
       {/* Items */}
-      <div className="mt-5 text-bodySm">
-        <div className="flex items-baseline gap-2 border-b border-ink-900 pb-1.5">
+      <div className="mt-3.5 text-bodySm">
+        <div className="flex items-baseline gap-2 border-b border-ink-900 pb-1">
           <span className={`${label} w-6 shrink-0`}>#</span>
           <span className={label}>รายละเอียด</span>
           <span className={`${label} ml-auto w-14 shrink-0 text-right`}>จำนวน</span>
@@ -141,7 +141,7 @@ export const ReceiptSheet = forwardRef<
           <span className={`${label} w-24 shrink-0 text-right`}>จำนวนเงิน</span>
         </div>
         {items.map((it, i) => (
-          <div key={i} className="flex items-baseline gap-2 border-b border-card-border py-1.5 last:border-0">
+          <div key={i} className="flex items-baseline gap-2 border-b border-card-border py-1 last:border-0">
             <span className="w-6 shrink-0 text-left font-mono text-label text-ink-400">{i + 1}</span>
             <span className="min-w-0 flex-1 leading-snug">{it.description}</span>
             <span className="w-14 shrink-0 text-right tabular-nums">{it.quantity ?? 1}</span>
@@ -156,7 +156,7 @@ export const ReceiptSheet = forwardRef<
       </div>
 
       {/* Totals */}
-      <div className="mt-5 text-body">
+      <div className="mt-3.5 text-body">
         <div className="flex justify-between py-1">
           <span className="text-ink-500">รวมเป็นเงิน</span>
           <span className="font-semibold tabular-nums">{fmtTHB(data.grossAmount)}</span>
@@ -167,22 +167,22 @@ export const ReceiptSheet = forwardRef<
             <span className="tabular-nums text-ink-500">- {fmtTHB(data.whtAmount)}</span>
           </div>
         )}
-        <div className="mt-2 flex items-baseline justify-between border-t-2 border-ink-900 pt-2.5">
+        <div className="mt-1.5 flex items-baseline justify-between border-t-2 border-ink-900 pt-2">
           <span className="font-semibold">ยอดรับสุทธิ</span>
           <span className="text-xl font-semibold tabular-nums">{fmtTHB(data.netAmount)}</span>
         </div>
-        <p className="mt-1.5 text-body text-ink-500">({amountToThaiWords(data.netAmount)})</p>
+        <p className="mt-1 text-body text-ink-500">({amountToThaiWords(data.netAmount)})</p>
         {/* Issuance remark: the document date is the payment date, so the real
             issuance date is stated here. */}
         {data.issueDate && (
-          <p className="mt-2 text-label text-ink-400">เอกสารฉบับนี้ออกเมื่อ {fmtDateTH(data.issueDate.slice(0, 10))}</p>
+          <p className="mt-1.5 text-label text-ink-400">เอกสารฉบับนี้ออกเมื่อ {fmtDateTH(data.issueDate.slice(0, 10))}</p>
         )}
       </div>
 
       {isVoid && <p className="mt-4 text-label text-ink-400">ยกเลิกเอกสาร: {data.voidReason}</p>}
 
       {/* Signature block — each state says what is actually true. */}
-      <div className="mt-auto flex justify-center pt-6">
+      <div className="mt-auto flex justify-center pt-4">
         {sig.kind === 'unsigned' ? (
           <div className="w-[260px] text-center">
             <div className="flex h-14 items-center justify-center text-label text-ink-400">
@@ -239,7 +239,7 @@ export const ReceiptSheet = forwardRef<
       {/* Document footer — the public verification record, kept out of the
           signature block so the signature stays clean and the page compact. */}
       {data.verificationCode && (
-        <div className="mt-6 border-t border-card-border pt-2 text-center text-micro leading-tight text-ink-400">
+        <div className="mt-3 border-t border-card-border pt-2 text-center text-micro leading-tight text-ink-400">
           <p>
             รหัสตรวจสอบ <span className="font-mono font-semibold">{data.verificationCode}</span>
             {data.verifyUrl && <span className="break-all"> · {data.verifyUrl}</span>}
