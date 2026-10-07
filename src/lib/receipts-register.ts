@@ -20,6 +20,9 @@ export interface ReceiptRegisterRow {
   whtRate: number
   whtAmount: number
   netAmount: number
+  /** Last activity — issued or last edited — as an ISO datetime. Drives the
+   *  default order (needs seconds; the issue/transfer dates are day-only). */
+  updatedAt?: string
 }
 
 export interface ReceiptRegisterSummary {
@@ -37,13 +40,18 @@ export interface ReceiptRegisterQuery {
   offset: number
 }
 
-export const RECEIPT_SORT_FIELDS = ['date', 'number', 'vendor', 'gross', 'wht', 'net'] as const
+export const RECEIPT_SORT_FIELDS = ['updated', 'date', 'issue', 'number', 'vendor', 'gross', 'wht', 'net'] as const
 export type ReceiptSortField = (typeof RECEIPT_SORT_FIELDS)[number]
 export type ReceiptSortKey = `${ReceiptSortField}-${'asc' | 'desc'}`
 
+/** Default order: most recently added/edited first — a second-precision
+ *  timestamp, so same-day receipts still order deterministically. Mirrors the
+ *  transaction list's "most-recently-edited" default. */
+export const DEFAULT_RECEIPT_SORT: ReceiptSortKey = 'updated-desc'
+
 export function receiptSortField(key: ReceiptSortKey): ReceiptSortField {
   const f = key.split('-')[0]
-  return (RECEIPT_SORT_FIELDS as readonly string[]).includes(f) ? (f as ReceiptSortField) : 'date'
+  return (RECEIPT_SORT_FIELDS as readonly string[]).includes(f) ? (f as ReceiptSortField) : 'updated'
 }
 
 export function receiptSortDir(key: ReceiptSortKey): 'asc' | 'desc' {
@@ -63,14 +71,14 @@ export function asReceiptSort(v: string | null | undefined): ReceiptSortKey {
   const key = (v ?? '') as ReceiptSortKey
   return RECEIPT_SORT_FIELDS.includes(receiptSortField(key)) && /-(asc|desc)$/.test(v ?? '')
     ? key
-    : 'date-desc'
+    : DEFAULT_RECEIPT_SORT
 }
 
 export function receiptQueryToParams(q: ReceiptRegisterQuery): URLSearchParams {
   const p = new URLSearchParams()
   if (q.month) p.set('month', q.month)
   if (q.q) p.set('q', q.q)
-  if (q.sort !== 'date-desc') p.set('sort', q.sort)
+  if (q.sort !== DEFAULT_RECEIPT_SORT) p.set('sort', q.sort)
   if (q.limit !== 50) p.set('limit', String(q.limit))
   if (q.offset) p.set('offset', String(q.offset))
   return p
@@ -80,7 +88,7 @@ function rowFromTxn(t: PaymentTransaction): ReceiptRegisterRow {
   return {
     id: t.id,
     number: t.receiptNumber ?? '',
-    issueDate: t.transferDate,
+    issueDate: t.receiptIssueDate ?? t.transferDate,
     transferDate: t.transferDate,
     verificationCode: t.verificationCode,
     vendorPrefix: t.vendor.prefix,
@@ -89,6 +97,7 @@ function rowFromTxn(t: PaymentTransaction): ReceiptRegisterRow {
     whtRate: t.whtRate,
     whtAmount: t.whtAmount,
     netAmount: t.netAmount,
+    updatedAt: t.createdAt,
   }
 }
 
@@ -96,6 +105,7 @@ function sortRows(rows: ReceiptRegisterRow[], sort: ReceiptSortKey): ReceiptRegi
   const field = receiptSortField(sort)
   const dir = receiptSortDir(sort)
   const cmpStr = (a: string, b: string) => a.localeCompare(b, 'th', { numeric: true })
+  const cmpTime = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
   const out = [...rows].sort((a, b) => {
     let c = 0
     switch (field) {
@@ -104,8 +114,10 @@ function sortRows(rows: ReceiptRegisterRow[], sort: ReceiptSortKey): ReceiptRegi
       case 'gross': c = a.grossAmount - b.grossAmount; break
       case 'wht': c = a.whtAmount - b.whtAmount; break
       case 'net': c = a.netAmount - b.netAmount; break
+      case 'issue': c = cmpTime(a.issueDate, b.issueDate); break
+      case 'updated': c = cmpTime(a.updatedAt ?? a.issueDate, b.updatedAt ?? b.issueDate); break
       case 'date':
-      default: c = cmpStr(a.issueDate, b.issueDate); break
+      default: c = cmpTime(a.transferDate, b.transferDate); break
     }
     return dir === 'asc' ? c : -c
   })

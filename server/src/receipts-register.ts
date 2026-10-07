@@ -23,6 +23,8 @@ export interface ReceiptRegisterRow {
   whtRate: number
   whtAmount: number
   netAmount: number
+  /** Last activity (issued or last edited), ISO datetime — default order key. */
+  updatedAt?: string
 }
 
 export interface ReceiptRegisterSummary {
@@ -36,15 +38,22 @@ export const receiptRoutes = new Hono()
 
 /** Whitelisted sort expressions. Keys match the client sort fields. */
 const ORDER_BY: Record<string, string> = {
+  // Last activity: the receipt was added (r.created_at) or the payable edited.
+  // A second-precision timestamp, unlike the day-only issue/transfer dates, so
+  // same-day receipts still order deterministically.
+  updated: 'greatest(r.created_at, coalesce(p.updated_at, r.created_at))',
   // The register is scoped by the payment date (the receipt's accounting
   // period), matching the transaction list and the WHT register.
   date: 'p.transfer_date',
+  issue: 'r.issue_date',
   number: 'r.number',
   vendor: 'vendor_name',
   gross: 'p.gross_amount',
   wht: 'p.wht_amount',
   net: 'p.net_amount',
 }
+
+const DEFAULT_SORT = 'updated-desc'
 
 const FROM = `
   from vendor_receipts r
@@ -56,7 +65,8 @@ const SELECT = `
   select p.id, r.number, r.issue_date, p.transfer_date, r.verification_code,
     coalesce(a.vendor_prefix, v.prefix) as vendor_prefix,
     coalesce(a.vendor_name, v.name) as vendor_name,
-    p.gross_amount, p.wht_rate, p.wht_amount, p.net_amount`
+    p.gross_amount, p.wht_rate, p.wht_amount, p.net_amount,
+    greatest(r.created_at, coalesce(p.updated_at, r.created_at)) as updated_at`
 
 function toRow(r: Record<string, unknown>): ReceiptRegisterRow {
   return {
@@ -71,7 +81,16 @@ function toRow(r: Record<string, unknown>): ReceiptRegisterRow {
     whtRate: Number(r.wht_rate ?? 0),
     whtAmount: Number(r.wht_amount ?? 0),
     netAmount: Number(r.net_amount ?? 0),
+    updatedAt: isoDateTime(r.updated_at),
   }
+}
+
+/** timestamptz → ISO datetime. The driver may hand back a Date (Neon) or a
+ *  string; both are normalized here so the client always gets one shape. */
+function isoDateTime(v: unknown): string | undefined {
+  if (v == null) return undefined
+  const d = v instanceof Date ? v : new Date(String(v))
+  return Number.isNaN(d.getTime()) ? undefined : d.toISOString()
 }
 
 receiptRoutes.get('/receipts', async (c) => {
@@ -103,8 +122,8 @@ receiptRoutes.get('/receipts', async (c) => {
   }
   const where = `where ${conds.join(' and ')}`
 
-  const sortRaw = (c.req.query('sort') ?? 'date-desc').split('-')
-  const col = ORDER_BY[sortRaw[0]] ?? ORDER_BY.date
+  const sortRaw = (c.req.query('sort') ?? DEFAULT_SORT).split('-')
+  const col = ORDER_BY[sortRaw[0]] ?? ORDER_BY.updated
   const dir = sortRaw[1] === 'asc' ? 'asc' : 'desc'
   const orderBy = `order by ${col} ${dir}, r.id asc`
   const paging = limit > 0 ? `limit $${params.length + 1} offset $${params.length + 2}` : ''

@@ -20,6 +20,8 @@ describe('receipt register sort', () => {
     expect(nextReceiptSort('date-desc', 'vendor')).toBe('vendor-asc')
     expect(nextReceiptSort('date-desc', 'gross')).toBe('gross-desc')
     expect(nextReceiptSort('date-desc', 'date')).toBe('date-asc')
+    expect(nextReceiptSort('date-desc', 'issue')).toBe('issue-desc')
+    expect(nextReceiptSort('date-desc', 'updated')).toBe('updated-desc')
   })
 
   it('toggles direction on the active column', () => {
@@ -27,9 +29,10 @@ describe('receipt register sort', () => {
     expect(nextReceiptSort('gross-desc', 'gross')).toBe('gross-asc')
   })
 
-  it('falls back to date-desc for an unknown sort', () => {
-    expect(asReceiptSort('nope')).toBe('date-desc')
-    expect(asReceiptSort(null)).toBe('date-desc')
+  it('falls back to most-recently-edited for an unknown sort', () => {
+    expect(asReceiptSort('nope')).toBe('updated-desc')
+    expect(asReceiptSort(null)).toBe('updated-desc')
+    expect(asReceiptSort('issue-asc')).toBe('issue-asc')
     expect(asReceiptSort('net-asc')).toBe('net-asc')
   })
 })

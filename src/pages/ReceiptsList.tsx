@@ -9,13 +9,14 @@ import { useSettings } from '../hooks/useSettings'
 import { defaultSettings } from '../lib/settings'
 import {
   asReceiptSort,
+  DEFAULT_RECEIPT_SORT,
   nextReceiptSort,
   receiptSortDir,
   receiptSortField,
   type ReceiptRegisterQuery,
   type ReceiptSortField,
 } from '../lib/receipts-register'
-import { fmtDateTH, fmtTHB } from '../lib/format'
+import { fmtDateTH, fmtDateTimeTHSec, fmtTHB } from '../lib/format'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
 import { Button } from '../components/ui/button'
@@ -71,7 +72,7 @@ export function ReceiptsList() {
     const p = new URLSearchParams()
     if (month && month !== globalMonth) p.set('month', month)
     if (debouncedSearch) p.set('q', debouncedSearch)
-    if (sort !== 'date-desc') p.set('sort', sort)
+    if (sort !== DEFAULT_RECEIPT_SORT) p.set('sort', sort)
     if (page > 0) p.set('page', String(page + 1))
     if (pageSize !== 50) p.set('size', String(pageSize))
     setParams(p, { replace: true })
@@ -172,22 +173,23 @@ export function ReceiptsList() {
               </div>
             )}
             <div className="overflow-x-auto">
-              <table className={cn(tableCls, 'min-w-[1000px]')}>
+              <table className={cn(tableCls, 'min-w-[1120px]')}>
                 <thead>
                   <tr>
                     {th('date', 'วันที่รับชำระ')}
-                    <Th>ออกเมื่อ</Th>
+                    {th('issue', 'ออกเมื่อ')}
                     {th('number', 'เลขที่ใบเสร็จ')}
                     {th('vendor', 'ผู้ขาย')}
                     {th('gross', 'ยอดเงิน (ฐานภาษี)', 'right')}
                     {th('wht', 'หัก ณ ที่จ่าย', 'right')}
                     {th('net', 'สุทธิ', 'right')}
+                    {th('updated', 'อัปเดตล่าสุด')}
                     <Th align="right" className="w-24">จัดการ</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {isLoading ? (
-                    <TableSkeleton rows={6} cols={8} />
+                    <TableSkeleton rows={6} cols={9} />
                   ) : (
                     rows.map((r) => (
                       <ClickableRow key={r.id} label={`เปิดใบเสร็จ ${r.number}`} onOpen={() => nav(`/receipts/${r.id}`)}>
@@ -202,6 +204,9 @@ export function ReceiptsList() {
                           {r.whtAmount ? fmtTHB(r.whtAmount) : '—'}
                         </Td>
                         <Td align="right" className="whitespace-nowrap font-semibold tabular-nums">{fmtTHB(r.netAmount)}</Td>
+                        <Td className="whitespace-nowrap tabular-nums text-ink-500">
+                          {r.updatedAt ? fmtDateTimeTHSec(r.updatedAt) : '—'}
+                        </Td>
                         <Td className="px-2" onClick={(e) => e.stopPropagation()}>
                           <div className="flex justify-end gap-1">
                             <button
