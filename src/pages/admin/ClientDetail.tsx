@@ -16,7 +16,6 @@ import { Button } from '../../components/ui/button'
 import { FieldError, Input, Label } from '../../components/ui/input'
 import { Select } from '../../components/ui/select'
 import { ConfirmDialog } from '../../components/ui/confirm-dialog'
-import { MessageDialog } from '../../components/ui/message-dialog'
 import { useToast } from '../../components/ui/toast'
 import { buildFirstLoginMessage } from '../../lib/admin-invite-message'
 
@@ -42,7 +41,6 @@ export function ClientDetail() {
   const [tempPw, setTempPw] = useState('')
   const [createdEmail, setCreatedEmail] = useState('')
   const [copied, setCopied] = useState(false)
-  const [showInvite, setShowInvite] = useState(false)
   const [err, setErr] = useState('')
   const [impErr, setImpErr] = useState('')
   const [confirm, setConfirm] = useState<AdminConfirm | null>(null)
@@ -185,29 +183,23 @@ export function ClientDetail() {
                 </Button>
               </div>
               <FieldError msg={err} />
-              {tempPw && (
+              {tempPw && createdEmail && (
                 <div className="rounded-control bg-warning-soft p-3 text-body">
                   <p className="font-semibold text-warning">รหัสผ่านชั่วคราว (แสดงเพียงครั้งเดียว — โปรดส่งให้ผู้ใช้ผ่านช่องทางอื่น แล้วระบบจะบังคับให้เปลี่ยน):</p>
                   <p className="mt-1 font-mono text-lg font-semibold tracking-wide">{tempPw}</p>
                   <p className="mt-1 text-label text-warning">หมดอายุใน 7 วัน · จัดเก็บเฉพาะค่าแฮช scrypt</p>
-                  <Button variant="secondary" onClick={() => { setCopied(false); setShowInvite(true) }} className="mt-2">
-                    <Copy size={15} /> ดูข้อความแจ้งผู้ใช้
+                  <p className="mt-3 font-semibold text-warning">ข้อความแจ้งผู้ใช้ (คัดลอกไปวางได้เลย):</p>
+                  <pre className="mt-1 max-h-72 overflow-y-auto whitespace-pre-wrap rounded-control bg-white/70 p-3 text-body leading-relaxed">
+                    {buildFirstLoginMessage({
+                      loginUrl: `${window.location.origin}/login`,
+                      email: createdEmail,
+                      tempPassword: tempPw,
+                    })}
+                  </pre>
+                  <Button variant="secondary" onClick={() => void copyInvite()} className="mt-2">
+                    <Copy size={15} /> {copied ? 'คัดลอกข้อความแล้ว' : 'คัดลอกข้อความแจ้งผู้ใช้'}
                   </Button>
                 </div>
-              )}
-              {tempPw && createdEmail && (
-                <MessageDialog
-                  open={showInvite}
-                  title="ข้อความแจ้งผู้ใช้"
-                  message={buildFirstLoginMessage({
-                    loginUrl: `${window.location.origin}/login`,
-                    email: createdEmail,
-                    tempPassword: tempPw,
-                  })}
-                  copied={copied}
-                  onCopy={() => void copyInvite()}
-                  onClose={() => setShowInvite(false)}
-                />
               )}
             </CardBody>
           </Card>

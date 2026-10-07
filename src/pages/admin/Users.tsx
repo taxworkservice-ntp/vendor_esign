@@ -14,7 +14,6 @@ import { ConfirmDialog } from '../../components/ui/confirm-dialog'
 import { useToast } from '../../components/ui/toast'
 import { Row, SortableTh, Td, Th, tableCls } from '../../components/ui/data-table'
 import { cn } from '../../lib/cn'
-import { MessageDialog } from '../../components/ui/message-dialog'
 import { buildFirstLoginMessage } from '../../lib/admin-invite-message'
 
 const ROLE_TH: Record<string, string> = { owner: 'เจ้าของ', manager: 'ผู้จัดการ', officer: 'เจ้าหน้าที่' }
@@ -37,7 +36,6 @@ export function Users() {
   const [tempPw, setTempPw] = useState('')
   const [resetEmail, setResetEmail] = useState('')
   const [copied, setCopied] = useState(false)
-  const [showInvite, setShowInvite] = useState(false)
   const [confirm, setConfirm] = useState<Confirm>(null)
 
   const users = useMemo(() => sortRows(data ?? [], sortKey, sortDir, USER_SORT), [data, sortKey, sortDir])
@@ -98,33 +96,27 @@ export function Users() {
         </CardBody>
       </Card>
 
-      {tempPw && (
+      {tempPw && resetEmail && (
         <div className="rounded-control bg-warning-soft p-3 text-body">
           <p className="font-semibold text-warning">รหัสผ่านชั่วคราว (แสดงครั้งเดียว — ส่งให้ผู้ใช้ผ่านช่องทางอื่น):</p>
           <p className="mt-1 font-mono text-lg font-semibold tracking-wide">{tempPw}</p>
+          <p className="mt-3 font-semibold text-warning">ข้อความแจ้งผู้ใช้ (คัดลอกไปวางได้เลย):</p>
+          <pre className="mt-1 max-h-72 overflow-y-auto whitespace-pre-wrap rounded-control bg-white/70 p-3 text-body leading-relaxed">
+            {buildFirstLoginMessage({
+              loginUrl: `${window.location.origin}/login`,
+              email: resetEmail,
+              tempPassword: tempPw,
+            })}
+          </pre>
           <div className="mt-2 flex items-center gap-3">
-            <Button variant="secondary" onClick={() => { setCopied(false); setShowInvite(true) }}>
-              <Copy size={15} /> ดูข้อความแจ้งผู้ใช้
+            <Button variant="secondary" onClick={() => void copyInvite()}>
+              <Copy size={15} /> {copied ? 'คัดลอกข้อความแล้ว' : 'คัดลอกข้อความ'}
             </Button>
             <button type="button" onClick={() => setTempPw('')} className="text-label font-medium text-warning underline">
               ซ่อน
             </button>
           </div>
         </div>
-      )}
-      {tempPw && resetEmail && (
-        <MessageDialog
-          open={showInvite}
-          title="ข้อความแจ้งผู้ใช้"
-          message={buildFirstLoginMessage({
-            loginUrl: `${window.location.origin}/login`,
-            email: resetEmail,
-            tempPassword: tempPw,
-          })}
-          copied={copied}
-          onCopy={() => void copyInvite()}
-          onClose={() => setShowInvite(false)}
-        />
       )}
 
       <Card className="overflow-hidden">
