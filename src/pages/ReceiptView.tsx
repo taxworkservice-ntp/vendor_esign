@@ -100,6 +100,8 @@ export function ReceiptView() {
     sig,
     signedAt: auth?.signedAt,
     sigMethod: auth?.verificationMethod,
+    verificationCode: t.verificationCode,
+    verifyUrl: t.verificationCode ? `${window.location.origin}/verify/${t.verificationCode}` : undefined,
   }
 
   // Fallback only: the server's pdf-lib artifact embeds the signature even when
@@ -122,6 +124,14 @@ export function ReceiptView() {
   const downloadCopy = async () => {
     setErr('')
     if (!sheetRef.current) return
+    // Never rasterise a sheet whose signature has not resolved — that would ship
+    // an unsigned PDF. If the image is genuinely missing, the archived server
+    // artifact (which embeds it) is the correct document instead.
+    if (sig.kind !== 'ready') {
+      if (hasServer) return downloadIssued()
+      setErr('ลายเซ็นยังไม่พร้อม — โปรดลองอีกครั้ง')
+      return
+    }
     setBusy(true)
     try {
       const bytes = await receiptSheetToA4PdfBytes(sheetRef.current)
@@ -147,8 +157,19 @@ export function ReceiptView() {
           {!issued && !isVoid && <span className="text-body font-medium text-warning">· รอออกเลขที่ใบเสร็จ</span>}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={downloadCopy} loading={busy} title="ไฟล์ PDF ที่ตรงกับตัวอย่างบนหน้าจอ">
-            <Download size={15} /> {busy ? 'กำลังดาวน์โหลด…' : 'ดาวน์โหลดใบเสร็จ'}
+          <Button
+            onClick={downloadCopy}
+            loading={busy}
+            disabled={authLoading || sig.kind === 'unsigned'}
+            title={
+              authLoading
+                ? 'กำลังโหลดลายเซ็น…'
+                : sig.kind === 'unsigned'
+                  ? 'ยังไม่ได้ลงนาม — ยังไม่มีใบเสร็จให้ดาวน์โหลด'
+                  : 'ไฟล์ PDF ที่ตรงกับตัวอย่างบนหน้าจอ'
+            }
+          >
+            <Download size={15} /> {authLoading ? 'กำลังโหลดลายเซ็น…' : busy ? 'กำลังดาวน์โหลด…' : 'ดาวน์โหลดใบเสร็จ'}
           </Button>
         </div>
       </div>

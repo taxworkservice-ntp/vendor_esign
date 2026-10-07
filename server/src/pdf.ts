@@ -6,6 +6,7 @@ import { readFileSync as readFs } from 'node:fs'
 import { join } from 'node:path'
 import { normalizeLineItem } from '../../src/lib/line-items'
 import { vendorDisplayName } from '../../src/lib/vendor-name'
+import { fmtDateTimeTHLong } from '../../src/lib/format'
 
 // Server-side A4 receipt PDF. Embedded Sarabun (SIL OFL) + QR verification.
 //
@@ -260,20 +261,20 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
 
   const items = normalizeItems(input)
   items.forEach((it, i) => {
-    const lines = wrap(it.description || '—', regular, 10.5, descW)
+    const lines = wrap(it.description || '—', regular, 9.5, descW)
     const rowH = Math.max(20, lines.length * 14 + 6)
     if (y - rowH < ITEMS_LIMIT) {
       newPage(true)
       itemsHeader()
     }
     if (i % 2 === 1) page.drawRectangle({ x: M - 6, y: y - rowH + 4, width: maxW + 12, height: rowH - 4, color: ZEBRA })
-    text(String(i + 1), M + numW - regular.widthOfTextAtSize(String(i + 1), 10.5), y - 10, 10.5, regular, MUTED)
-    lines.forEach((ln, li) => text(ln, descX, y - 10 - li * 14, 10.5, regular, INK))
-    rightText(`${it.quantity ?? 1}`, qtyRight, y - 10, 10.5, regular, INK)
-    rightText(`${it.unit || 'รายการ'}`, unitRight, y - 10, 10.5, regular, INK)
-    rightText(`${thb(it.unitPrice ?? it.amount)}`, priceRight, y - 10, 10.5, regular, INK)
-    rightText(it.discount ? `${thb(it.discount)}` : '—', discRight, y - 10, 10.5, regular, MUTED)
-    rightText(`${thb(it.amount)}`, amtRight, y - 10, 10.5, bold, INK)
+    text(String(i + 1), M + numW - regular.widthOfTextAtSize(String(i + 1), 9.5), y - 10, 9.5, regular, MUTED)
+    lines.forEach((ln, li) => text(ln, descX, y - 10 - li * 14, 9.5, regular, INK))
+    rightText(`${it.quantity ?? 1}`, qtyRight, y - 10, 9.5, regular, INK)
+    rightText(`${it.unit || 'รายการ'}`, unitRight, y - 10, 9.5, regular, INK)
+    rightText(`${thb(it.unitPrice ?? it.amount)}`, priceRight, y - 10, 9.5, regular, INK)
+    rightText(it.discount ? `${thb(it.discount)}` : '—', discRight, y - 10, 9.5, regular, MUTED)
+    rightText(`${thb(it.amount)}`, amtRight, y - 10, 9.5, bold, INK)
     y -= rowH
     page.drawLine({ start: { x: M, y: y + 4 }, end: { x: right, y: y + 4 }, thickness: 0.5, color: RULE })
   })
@@ -309,7 +310,10 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
   if (input.signaturePng) {
     try {
       const img = await doc.embedPng(input.signaturePng)
-      const scale = Math.min(150 / img.width, 54 / img.height)
+      // A typed name prints ~30% smaller than a drawn signature, matching the
+      // on-screen receipt slot (max-h-10 vs max-h-14).
+      const typed = input.verificationMethod === 'typed-consent'
+      const scale = Math.min((typed ? 105 : 150) / img.width, (typed ? 38 : 54) / img.height)
       const w = img.width * scale
       page.drawImage(img, { x: A4.w / 2 - w / 2, y: sigY + 6, width: w, height: img.height * scale })
     } catch {
@@ -321,19 +325,31 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
   centerText(vendorDisplayName(input.vendor.prefix, input.vendor.name), sigY - 28, 9, regular, MUTED)
   // The signing record (time + how it was signed) — the non-repudiation line.
   centerText(
-    `ลงนามเมื่อ ${String(input.signedAt).slice(0, 10)} · ${METHOD_TH[input.verificationMethod] ?? 'ลายเซ็น'}`,
-    sigY - 40,
+    `ลงนามเมื่อ ${fmtDateTimeTHLong(input.signedAt)} · ${METHOD_TH[input.verificationMethod] ?? 'ลายเซ็น'}`,
+    sigY - 42,
     8.5,
     regular,
     FAINT,
   )
+  // A typed name is only a signature if its legal basis is stated; a drawn
+  // stroke needs no such note.
+  if (input.verificationMethod === 'typed-consent') {
+    centerText(
+      'ลายมือชื่ออิเล็กทรอนิกส์ตาม พ.ร.บ.ว่าด้วยธุรกรรมทางอิเล็กทรอนิกส์ พ.ศ. 2544',
+      sigY - 54,
+      8,
+      regular,
+      FAINT,
+    )
+  }
+  // Document footer — the public verification record sits at the page bottom,
+  // out of the signature block, on every receipt.
+  centerText(`รหัสตรวจสอบ ${input.verificationCode} · ${input.verifyUrl}`, 30, 8, regular, FAINT)
 
-  // ── Verification footer (audit copy only) ──
+  // ── Verification QR (audit copy only) ──
   if (input.showVerification) {
     const qrSize = 64
     drawQr(page, input.verifyUrl, right - qrSize, M - 6, qrSize, INK)
-    text(`รหัสตรวจสอบ  ${input.verificationCode}`, M, M + 30, 9.5, bold, INK)
-    text(input.verifyUrl, M, M + 14, 8.5, regular, MUTED)
   }
 
   // ── Page numbers ──

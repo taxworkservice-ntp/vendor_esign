@@ -5,16 +5,17 @@ import { GATE_MAX_TRIES, gateRemaining, isGateUnlocked, tryGateUnlock, useVendor
 import { saveBlob } from '../lib/api-client'
 import { receiptSheetToA4PdfBytes } from '../lib/receipt-to-a4-pdf'
 import { normalizeLineItem } from '../lib/line-items'
-import { renderTypedSignature, SIGNATURE_FONT } from '../lib/typed-signature'
+import { renderTypedSignature, SIGNATURE_FONT, signMethodLabel } from '../lib/typed-signature'
 import { cn } from '../lib/cn'
 import { ReceiptSheet, type ReceiptSheetData } from '../components/receipt/receipt-sheet'
 import { maskTaxId } from '../lib/taxid'
 import { loadSettings } from '../lib/settings'
-import { fmtTHB, fmtDateTH } from '../lib/format'
+import { fmtTHB, fmtDateTH, fmtDateTimeTHLong } from '../lib/format'
 import { amountToThaiWords } from '../lib/thai-words'
 import { VENDOR_PREFIXES, isVendorPrefix, prefixRequired } from '../lib/vendor-name'
 import { Card, CardBody } from '../components/ui/card'
 import { Button } from '../components/ui/button'
+import { ConfirmDialog } from '../components/ui/confirm-dialog'
 import { FieldError, Input, Label } from '../components/ui/input'
 import { Select } from '../components/ui/select'
 import SigPad, { SigPadHandle } from '../components/ui/sigpad'
@@ -82,6 +83,7 @@ export function VendorSign() {
   const [tried, setTried] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitErr, setSubmitErr] = useState('')
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   // Tax ID gate: wrong-recipient guard. Legacy rows without a stored hash
   // skip the gate with a notice.
@@ -140,8 +142,8 @@ export function VendorSign() {
     return (
       <>
       <StateCard
-        title="ลงนามและออกใบเสร็จเรียบร้อยแล้ว"
-        body="ขอบคุณ ระบบได้บันทึกการรับเงิน มอบอำนาจ และออกใบเสร็จรับเงินสำหรับธุรกรรมนี้แล้ว — ท่านสามารถดาวน์โหลดใบเสร็จได้ทันที"
+        title="ยืนยันการลงนามเรียบร้อยแล้ว"
+        body="ระบบได้บันทึกการลงนามอิเล็กทรอนิกส์ของท่านเพื่อยืนยันการรับเงินและมอบอำนาจให้ลูกค้าออกใบเสร็จในนามของท่านสำหรับธุรกรรมนี้ และได้ออกใบเสร็จรับเงินเรียบร้อยแล้ว"
         extra={
           <div className="mt-5 space-y-3">
             {number && (
@@ -159,6 +161,16 @@ export function VendorSign() {
                 เลขอ้างอิงการลงนาม: <span className="font-mono font-semibold text-ink-900">{authRef}</span>
               </p>
             )}
+            {vendorData?.signedAt && (
+              <p className="text-body text-ink-500">
+                ลงนามเมื่อ: <span className="font-semibold text-ink-900">{fmtDateTimeTHLong(vendorData.signedAt)}</span>
+              </p>
+            )}
+            {vendorData?.sigMethod && (
+              <p className="text-body text-ink-500">
+                วิธีการลงนาม: <span className="font-semibold text-ink-900">{signMethodLabel(vendorData.sigMethod)}</span>
+              </p>
+            )}
             <div className="flex flex-wrap justify-center gap-2">
               {vendorData && (
                 <Button onClick={downloadReceipt} loading={downloading}>
@@ -171,6 +183,12 @@ export function VendorSign() {
                 </Link>
               )}
             </div>
+            <p className="mx-auto max-w-sm text-label leading-relaxed text-ink-400">
+              ลายมือชื่ออิเล็กทรอนิกส์ตาม พ.ร.บ.ว่าด้วยธุรกรรมทางอิเล็กทรอนิกส์ พ.ศ. 2544 · ข้อตกลง v1
+            </p>
+            <p className="mx-auto max-w-sm text-label leading-relaxed text-ink-400">
+              ลิงก์นี้ใช้ได้ครั้งเดียวและถูกปิดแล้ว หากท่านไม่ได้เป็นผู้ลงนาม โปรดติดต่อลูกค้าผู้จ่ายทันที
+            </p>
           </div>
         }
       />
@@ -265,10 +283,19 @@ export function VendorSign() {
       </Shell>
     )
 
-  const submit = async () => {
+  // Validate, then ask for an explicit confirmation before the irreversible
+  // signing call. An e-signature is a legal act, so it should never fire on a
+  // stray tap.
+  const submit = () => {
     setTried(true)
     setSubmitErr('')
     if (!valid) return
+    if (signMode === 'draw' && !padRef.current) return
+    setConfirmOpen(true)
+  }
+
+  const doSubmit = async () => {
+    setConfirmOpen(false)
     if (signMode === 'draw' && !padRef.current) return
     setSubmitting(true)
     try {
@@ -327,6 +354,8 @@ export function VendorSign() {
         sig: { kind: 'ready', png: auth.signaturePng },
         signedAt: auth.signedAt,
         sigMethod: auth.verificationMethod,
+        verificationCode: res.verificationCode ?? undefined,
+        verifyUrl: res.verificationCode ? `${window.location.origin}/verify/${res.verificationCode}` : undefined,
       })
       // Allow this browser to open the receipt copy right after signing (the
       // single-use invite token is consumed, so a URL flag is the only handle).
@@ -492,10 +521,22 @@ export function VendorSign() {
               <div className="space-y-2">
                 <Label>ชื่อ–นามสกุลที่ใช้ลงนาม</Label>
                 <Input value={typedName} onChange={(e) => setTypedName(e.target.value)} placeholder="เช่น สมชาย ใจดี" autoComplete="name" />
-                <div className="rounded-control border-2 border-dashed border-ink-300 bg-white px-4 py-6">
-                  <p className="text-center text-3xl leading-snug text-signature" style={{ fontFamily: SIGNATURE_FONT }}>
-                    {typedName.trim() || 'ตัวอย่าง ลายเซ็น'}
-                  </p>
+                {/* Same surface as the draw pad (200px), previewing the printed
+                    signature: name on the signature rule + the caption. */}
+                <div className="rounded-control border-2 border-dashed border-ink-300 bg-white p-1">
+                  <div className="flex h-[200px] flex-col items-center justify-center">
+                    <div className="flex h-14 w-full items-end justify-center px-4">
+                      {typedName.trim() ? (
+                        <span className="text-title leading-none text-signature" style={{ fontFamily: SIGNATURE_FONT }}>
+                          {typedName.trim()}
+                        </span>
+                      ) : (
+                        <span className="text-label text-ink-300">ลายเซ็นของท่านจะแสดงที่นี่</span>
+                      )}
+                    </div>
+                    <p className="w-full border-t border-ink-300 px-4 pt-2 text-center text-body font-semibold">ผู้มีอำนาจลงนาม</p>
+                    <p className="w-full text-center text-label text-ink-400">{name.trim() || 'ชื่อ–นามสกุล'}</p>
+                  </div>
                 </div>
                 <p className="text-body text-ink-500">
                   พิมพ์ชื่อ–นามสกุลเพื่อลงนาม (เหมาะเมื่อไม่สะดวกวาด) — การพิมพ์ชื่อพร้อมการยืนยันด้านล่างถือเป็นการลงนามอิเล็กทรอนิกส์
@@ -535,6 +576,24 @@ export function VendorSign() {
           </CardBody>
         </Card>
       </div>
+      <ConfirmDialog
+        open={confirmOpen}
+        tone="primary"
+        size="sm"
+        title="ยืนยันการลงนามและส่งข้อมูล"
+        message={
+          <>
+            ท่านกำลังลงนามยืนยันการรับเงินจำนวน <b className="tabular-nums">{fmtTHB(t.netAmount)} บาท</b> และมอบอำนาจออกใบเสร็จในนามของท่าน
+            <br />
+            ข้อมูลที่ส่งจะถูกบันทึกเป็นหลักฐานและไม่สามารถแก้ไขได้
+          </>
+        }
+        confirmLabel="ยืนยันและส่งข้อมูล"
+        cancelLabel="กลับไปตรวจสอบ"
+        busy={submitting}
+        onConfirm={() => void doSubmit()}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </Shell>
   )
 }

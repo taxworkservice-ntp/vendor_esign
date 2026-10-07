@@ -88,6 +88,8 @@ export const fontSize = {
   micro: ['10px', { lineHeight: '14px' }],
   label: ['12px', { lineHeight: '18px' }],
   body: ['14px', { lineHeight: '22px' }],
+  /** Receipt item rows — body one point smaller (1pt = 1.333px). */
+  bodySm: ['12.7px', { lineHeight: '19px' }],
   title: ['17px', { lineHeight: '24px' }],
   subtitle: ['20px', { lineHeight: '29px' }],
   display: ['22px', { lineHeight: '31px' }],

@@ -272,7 +272,9 @@ function build(
   const sig = signatureState({ status: 'issued' }, auth?.signaturePng ?? null)
   return {
     row,
-    missingSig: sig.kind === 'missing',
+    // A failed authorization fetch or a null image must not produce a
+    // signature-less raster; the archived server PDF embeds the signature.
+    missingSig: !auth || sig.kind === 'missing',
     data: {
       number: row.number,
       transferDate: txn?.transferDate ?? row.transferDate,
@@ -296,6 +298,8 @@ function build(
       sig,
       signedAt: auth?.signedAt,
       sigMethod: auth?.verificationMethod,
+      verificationCode: row.verificationCode,
+      verifyUrl: row.verificationCode ? `${window.location.origin}/verify/${row.verificationCode}` : undefined,
     },
   }
 }

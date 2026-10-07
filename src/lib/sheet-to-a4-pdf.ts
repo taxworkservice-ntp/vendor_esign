@@ -1,5 +1,6 @@
 import { toSvg } from 'html-to-image'
 import { readyForCapture } from './capture'
+import { drawContain, loadImage, type OverlayImage } from './raster-image'
 import { BG_IMAGE, PAGE_H, PAGE_W } from './wht-form'
 
 // The WHT form scan is a 3.3 MB PNG. Fetch it once and keep a *decoded*
@@ -39,37 +40,6 @@ export function loadBgImage(): Promise<HTMLImageElement> {
   return bgPromise
 }
 
-/** A signature/stamp drawn by us on the canvas (never inlined into the SVG). */
-export interface OverlayImage {
-  src: string
-  x: number
-  y: number
-  w: number
-  h: number
-  opacity?: number
-}
-
-const imageCache = new Map<string, Promise<HTMLImageElement>>()
-function loadImage(src: string): Promise<HTMLImageElement> {
-  let p = imageCache.get(src)
-  if (!p) {
-    p = (async () => {
-      const img = new Image()
-      img.decoding = 'async'
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve()
-        img.onerror = () => reject(new Error('image-load-failed'))
-        img.src = src
-      })
-      await img.decode?.().catch(() => undefined)
-      return img
-    })()
-    p.catch(() => imageCache.delete(src))
-    imageCache.set(src, p)
-  }
-  return p
-}
-
 /** Load an SVG data URL as a decoded HTMLImageElement. */
 function svgToImage(svg: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -83,22 +53,6 @@ function svgToImage(svg: string): Promise<HTMLImageElement> {
     img.onerror = () => reject(new Error('svg-load-failed'))
     img.src = svg
   })
-}
-
-/** Draw an image with object-fit: contain inside a box (default 50% 50% anchor). */
-function drawContain(ctx: CanvasRenderingContext2D, img: HTMLImageElement, box: OverlayImage, ratio: number) {
-  if (!img.naturalWidth || !img.naturalHeight) return
-  const bw = box.w * ratio
-  const bh = box.h * ratio
-  const scale = Math.min(bw / img.naturalWidth, bh / img.naturalHeight)
-  const dw = img.naturalWidth * scale
-  const dh = img.naturalHeight * scale
-  const dx = box.x * ratio + (bw - dw) / 2
-  const dy = box.y * ratio + (bh - dh) / 2
-  const prev = ctx.globalAlpha
-  if (box.opacity != null) ctx.globalAlpha = box.opacity
-  ctx.drawImage(img, dx, dy, dw, dh)
-  ctx.globalAlpha = prev
 }
 
 /**

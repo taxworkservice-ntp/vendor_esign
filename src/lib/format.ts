@@ -28,6 +28,16 @@ export const fmtDateTimeTH = (iso: string) => {
   }
 }
 
+/** Full date + time (e.g. 7 ต.ค. 2569 14:32) — for the signing record on
+ *  legal documents, where the four-digit Buddhist year matters. */
+export const fmtDateTimeTHLong = (iso: string) => {
+  try {
+    return new Date(iso).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })
+  } catch {
+    return iso
+  }
+}
+
 export function maskId(masked: string) {
   return masked // already masked in mock; real API masks server-side
 }

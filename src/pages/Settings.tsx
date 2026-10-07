@@ -64,11 +64,10 @@ export function Settings() {
       <Section step="1" title="ข้อมูลบริษัท" desc="แสดงบนใบเสร็จ · รหัสลูกค้าใช้เป็นคำนำหน้าเลขที่ใบเสร็จ">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <Label hint="A–Z 0–9 · 2–12">รหัสลูกค้า (Client ID)</Label>
+            <Label hint="ล็อกโดยระบบ">รหัสลูกค้า (Client ID)</Label>
             <Input
               value={form.clientCode}
-              onChange={(e) => set({ clientCode: e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 12) })}
-              disabled={readOnly}
+              disabled
               placeholder="ABC"
               className="font-mono"
             />
@@ -81,8 +80,8 @@ export function Settings() {
             </p>
           </div>
           <div className="sm:col-span-2">
-            <Label>ชื่อบริษัท (ผู้ซื้อ)</Label>
-            <Input value={form.displayName} onChange={(e) => set({ displayName: e.target.value })} disabled={readOnly} />
+            <Label hint="ล็อกโดยระบบ">ชื่อบริษัท (ผู้ซื้อ)</Label>
+            <Input value={form.displayName} disabled />
           </div>
           <div className="sm:col-span-2">
             <Label>ที่อยู่</Label>

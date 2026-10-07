@@ -65,8 +65,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const showAdmin = isPlatformAdmin
 
   useEffect(() => {
-    document.title = `Taxwork · ${brand.clientCode}-R-${brand.beYear}`
-  }, [brand.clientCode, brand.beYear])
+    document.title = `Taxwork · ${brand.displayName}`
+  }, [brand.displayName])
 
   // Mobile drawer follows navigation.
   useEffect(() => {
@@ -153,8 +153,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {!collapsed && (
         <span className="min-w-0 leading-tight">
           <span className="block truncate text-body font-semibold">Taxwork</span>
-          <span className="block text-label tabular-nums text-ink-400">
-            {brand.clientCode}-R-{brand.beYear}
+          <span className="block truncate text-label text-ink-400" title={brand.displayName}>
+            {brand.displayName}
           </span>
         </span>
       )}
@@ -286,8 +286,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
             <div className="flex-1" />
 
-            <span className="hidden shrink-0 text-label tabular-nums text-ink-400 sm:block">
-              {brand.clientCode}-R-{brand.beYear}
+            <span className="hidden max-w-[40ch] shrink-0 truncate text-label text-ink-400 sm:block" title={brand.displayName}>
+              {brand.displayName}
             </span>
             {adminEmail && (
               <button
