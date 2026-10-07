@@ -147,9 +147,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const brandBlock = (
     <Link to="/" className={cn('flex min-w-0 items-center gap-2.5', collapsed && 'justify-center')}>
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-control bg-primary text-white">
-        <ReceiptText size={17} aria-hidden />
-      </span>
+      <img src="/logo.png" alt="" aria-hidden className="h-9 w-9 shrink-0 rounded-full object-contain" />
       {!collapsed && (
         <span className="min-w-0 leading-tight">
           <span className="block truncate text-body font-semibold">Taxwork</span>
@@ -263,9 +261,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Menu size={20} aria-hidden />
             </button>
             <Link to="/" className="flex min-w-0 items-center gap-2 lg:hidden">
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-control bg-primary text-white">
-                <ReceiptText size={16} aria-hidden />
-              </span>
+              <img src="/logo.png" alt="" aria-hidden className="h-8 w-8 shrink-0 rounded-full object-contain" />
               <span className="truncate text-body font-semibold">Taxwork</span>
             </Link>
 

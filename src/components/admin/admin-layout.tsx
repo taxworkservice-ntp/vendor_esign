@@ -74,9 +74,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
   const brandBlock = (
     <div className="flex min-w-0 items-center gap-2.5">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-control bg-ink-900 text-white">
-        <ShieldCheck size={17} aria-hidden />
-      </span>
+      <img src="/logo.png" alt="" aria-hidden className="h-9 w-9 shrink-0 rounded-full object-contain" />
       <span className="min-w-0 leading-tight">
         <span className="block truncate text-body font-semibold">Taxwork</span>
         <span className="block text-label text-ink-400">ผู้ให้บริการ</span>

@@ -1,6 +1,5 @@
 import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ReceiptText } from 'lucide-react'
 import { Layout } from './components/layout'
 import { AdminLayout } from './components/admin/admin-layout'
 import { GlobalMonthProvider } from './hooks/useGlobalMonth'
@@ -52,9 +51,7 @@ const AuthShell = ({ children }: { children: React.ReactNode }) => (
   <div className="min-h-screen bg-paper">
     <div className="mx-auto flex min-h-screen max-w-md flex-col px-4 py-8 sm:py-12">
       <Link to="/" className="mb-8 flex items-center justify-center gap-2.5">
-        <span className="grid h-9 w-9 place-items-center rounded-control bg-ink-900 text-white">
-          <ReceiptText size={17} />
-        </span>
+        <img src="/logo.png" alt="" aria-hidden className="h-9 w-9 rounded-full object-contain" />
         <span className="text-title font-semibold tracking-tight">Taxwork</span>
       </Link>
       <div className="flex-1">{children}</div>

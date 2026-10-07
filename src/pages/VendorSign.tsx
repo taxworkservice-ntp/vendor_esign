@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { CheckCircle2, Download, Eraser, Lock, ReceiptText, ShieldAlert } from 'lucide-react'
+import { CheckCircle2, Download, Eraser, Lock, ShieldAlert } from 'lucide-react'
 import { GATE_MAX_TRIES, gateRemaining, isGateUnlocked, tryGateUnlock, useVendorActions, useVendorTxn, type VendorAuth } from '../hooks/useVendor'
 import { saveBlob } from '../lib/api-client'
 import { receiptSheetToA4PdfBytes } from '../lib/receipt-to-a4-pdf'
@@ -25,9 +25,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-paper">
       <div className="mx-auto w-full max-w-xl px-4 py-6">
         <div className="mb-4 flex items-center gap-2.5">
-          <span className="grid h-9 w-9 place-items-center rounded-control bg-primary text-white">
-            <ReceiptText size={18} />
-          </span>
+          <img src="/logo.png" alt="" aria-hidden className="h-9 w-9 shrink-0 rounded-full object-contain" />
           <div className="leading-tight">
             <p className="text-body font-semibold">ใบเสร็จรับเงิน — ยืนยันรับเงิน</p>
             <p className="text-label text-ink-500">ระบบออกใบเสร็จรับเงิน · ไม่ต้องสมัครสมาชิก</p>
