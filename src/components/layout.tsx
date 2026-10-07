@@ -150,7 +150,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <img src="/logo.png" alt="" aria-hidden className="h-9 w-9 shrink-0 rounded-full object-contain" />
       {!collapsed && (
         <span className="min-w-0 leading-tight">
-          <span className="block truncate text-body font-semibold">Taxwork</span>
+          <span className="block truncate text-body font-semibold">TW VendorSign</span>
           <span className="block truncate text-label text-ink-400" title={brand.displayName}>
             {brand.displayName}
           </span>
@@ -262,7 +262,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </button>
             <Link to="/" className="flex min-w-0 items-center gap-2 lg:hidden">
               <img src="/logo.png" alt="" aria-hidden className="h-8 w-8 shrink-0 rounded-full object-contain" />
-              <span className="truncate text-body font-semibold">Taxwork</span>
+              <span className="truncate text-body font-semibold">TW VendorSign</span>
             </Link>
 
             <button

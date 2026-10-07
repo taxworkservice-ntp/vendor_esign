@@ -76,7 +76,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     <div className="flex min-w-0 items-center gap-2.5">
       <img src="/logo.png" alt="" aria-hidden className="h-9 w-9 shrink-0 rounded-full object-contain" />
       <span className="min-w-0 leading-tight">
-        <span className="block truncate text-body font-semibold">Taxwork</span>
+        <span className="block truncate text-body font-semibold">TW VendorSign</span>
         <span className="block text-label text-ink-400">ผู้ให้บริการ</span>
       </span>
     </div>
