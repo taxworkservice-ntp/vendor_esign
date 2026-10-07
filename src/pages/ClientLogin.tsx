@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useClientAuth, MOCK_MODE } from '../lib/client-auth'
-import { useAuth } from '../lib/auth'
+import { markAdminHint, useAuth } from '../lib/auth'
 import { ADMIN_ROLES, findMockUser, hasRole, MOCK_HINT } from '../lib/mock-users'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
@@ -63,6 +63,10 @@ export function ClientLogin() {
       const kind = (j as { kind?: string })?.kind
       const mustChangePw = !!(j as { mustChangePw?: boolean })?.mustChangePw
       if (kind === 'admin') {
+        // useAuth.refresh() skips its probe on non-admin routes unless this
+        // browser is marked — without it the fresh session is wiped and
+        // /admin bounces straight back here with no error.
+        markAdminHint()
         await adminAuth.refresh()
         toAdmin(mustChangePw)
       } else {

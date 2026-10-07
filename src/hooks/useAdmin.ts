@@ -9,12 +9,12 @@ import {
   type AdminUser,
 } from '../lib/admin-mock'
 import type { AnnouncementLevel, MaintenanceMode, PlatformNotice } from './usePlatformNotice'
+import { ADMIN_API, adminPath } from '../lib/admin-api'
 
-const API = ((import.meta.env.VITE_ADMIN_API_BASE ?? '') || (import.meta.env.VITE_API_BASE ?? '')) as string
 const QK = ['admin', 'tenants'] as const
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(`${API}${path}`, { credentials: 'include', ...init })
+  const r = await fetch(adminPath(path), { credentials: 'include', ...init })
   const j = (await r.json().catch(() => null)) as T & { error?: string }
   if (!r.ok) throw new Error((j as { error?: string })?.error ?? 'request-failed')
   return j as T
@@ -77,7 +77,7 @@ export function useAdminOverview() {
   return useQuery({
     queryKey: [...QK, 'overview'],
     queryFn: async (): Promise<AdminOverview> => {
-      if (API) return api<AdminOverview>('/api/admin/overview')
+      if (ADMIN_API) return api<AdminOverview>('/api/admin/overview')
       const tenants = loadTenants()
       const users = Object.values(loadTenantUsers()).flat()
       return {
@@ -103,7 +103,7 @@ export function useAdminTenants(q = '', status = 'all') {
   return useQuery({
     queryKey: [...QK, q, status],
     queryFn: async (): Promise<AdminTenant[]> => {
-      const list = API
+      const list = ADMIN_API
         ? (await api<{ tenants: AdminTenant[] }>('/api/admin/tenants')).tenants
         : loadTenants()
       return list.filter(
@@ -120,7 +120,7 @@ export function useAdminTenant(id?: string) {
     queryKey: [...QK, 'detail', id],
     enabled: !!id,
     queryFn: async (): Promise<AdminTenant | undefined> => {
-      if (API) return api<AdminTenant>(`/api/admin/tenants/${id}`)
+      if (ADMIN_API) return api<AdminTenant>(`/api/admin/tenants/${id}`)
       return loadTenants().find((t) => t.id === id)
     },
   })
@@ -138,7 +138,7 @@ export function useCreateTenant() {
       beYear: number
       startNumber: number
     }): Promise<{ id: string }> => {
-      if (API) {
+      if (ADMIN_API) {
         return api<{ ok: boolean; id: string }>('/api/admin/tenants', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -165,7 +165,7 @@ export function useUpdateTenant(id?: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (patch: Partial<Pick<AdminTenant, 'displayName' | 'address' | 'contactName' | 'status'>>) => {
-      if (API && id) {
+      if (ADMIN_API && id) {
         return api(`/api/admin/tenants/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -183,7 +183,7 @@ export function useDeleteTenant() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
-      if (API) return api(`/api/admin/tenants/${id}`, { method: 'DELETE' })
+      if (ADMIN_API) return api(`/api/admin/tenants/${id}`, { method: 'DELETE' })
       saveTenants(loadTenants().filter((t) => t.id !== id))
       return { ok: true }
     },
@@ -197,7 +197,7 @@ export function useTenantUsers(tenantId?: string) {
     queryKey: [...QK, tenantId, 'users'],
     enabled: !!tenantId,
     queryFn: async (): Promise<AdminUser[]> => {
-      if (API && tenantId) return (await api<{ users: AdminUser[] }>(`/api/admin/tenants/${tenantId}/users`)).users
+      if (ADMIN_API && tenantId) return (await api<{ users: AdminUser[] }>(`/api/admin/tenants/${tenantId}/users`)).users
       return loadTenantUsers()[tenantId ?? ''] ?? []
     },
   })
@@ -207,7 +207,7 @@ export function useCreateUser(tenantId?: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (input: { email: string; role: 'owner' | 'manager' | 'officer' }): Promise<{ tempPassword: string }> => {
-      if (API && tenantId) {
+      if (ADMIN_API && tenantId) {
         return api<{ ok: boolean; tempPassword: string }>(`/api/admin/tenants/${tenantId}/users`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -234,7 +234,7 @@ export function useAllAdminUsers(q = '') {
   return useQuery({
     queryKey: [...QK, 'users', q],
     queryFn: async (): Promise<AdminDirectoryUser[]> => {
-      const list = API
+      const list = ADMIN_API
         ? (await api<{ users: AdminDirectoryUser[] }>('/api/admin/users')).users
         : Object.values(loadTenantUsers()).flat().map((u) => ({
             id: u.id, email: u.email, status: u.status as 'active' | 'disabled', mustChangePw: u.mustChangePw,
@@ -253,12 +253,12 @@ export function useUserActions(tenantId?: string) {
   const qc = useQueryClient()
   const refresh = () => qc.invalidateQueries({ queryKey: QK })
   const post = async (userId: string, action: string) => {
-    if (API) return api(`/api/admin/users/${userId}/${action}`, { method: 'POST' })
+    if (ADMIN_API) return api(`/api/admin/users/${userId}/${action}`, { method: 'POST' })
     return { ok: true }
   }
   return {
     async reset(userId: string): Promise<string> {
-      if (API) {
+      if (ADMIN_API) {
         const j = await api<{ ok: boolean; tempPassword: string }>(`/api/admin/users/${userId}/reset`, { method: 'POST' })
         refresh()
         return j.tempPassword
@@ -268,7 +268,7 @@ export function useUserActions(tenantId?: string) {
     },
     async disable(userId: string) {
       await post(userId, 'disable')
-      if (!API) {
+      if (!ADMIN_API) {
         const all = loadTenantUsers()
         saveTenantUsers({ ...all, [tenantId ?? '']: (all[tenantId ?? ''] ?? []).map((u) => (u.id === userId ? { ...u, status: 'disabled' as const } : u)) })
       }
@@ -287,7 +287,7 @@ export function useUserActions(tenantId?: string) {
       refresh()
     },
     async update(userId: string, patch: { role?: string; tenantId?: string }) {
-      if (API) {
+      if (ADMIN_API) {
         await api(`/api/admin/users/${userId}`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
         })
@@ -311,7 +311,7 @@ export function useAuditLog(filters: {
   return useQuery({
     queryKey: [...QK, 'audit', q, tenant, event, limit, offset, sort, order],
     queryFn: async (): Promise<{ events: AuditEvent[]; total: number }> => {
-      if (!API) return { events: [], total: 0 }
+      if (!ADMIN_API) return { events: [], total: 0 }
       const p = new URLSearchParams({ q, tenant, event, limit: String(limit), offset: String(offset), sort, order })
       return api<{ events: AuditEvent[]; total: number }>(`/api/admin/audit?${p.toString()}`)
     },
@@ -323,7 +323,7 @@ export function usePlatformSettingsAdmin() {
   return useQuery({
     queryKey: [...QK, 'settings'],
     queryFn: async (): Promise<PlatformSettingsAdmin> => {
-      if (!API) return DEFAULT_SETTINGS
+      if (!ADMIN_API) return DEFAULT_SETTINGS
       return api<PlatformSettingsAdmin>('/api/admin/settings')
     },
   })
@@ -333,7 +333,7 @@ export function useSavePlatformSettings() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (patch: Partial<PlatformSettingsAdmin>): Promise<PlatformSettingsAdmin> => {
-      if (!API) return { ...DEFAULT_SETTINGS, ...patch }
+      if (!ADMIN_API) return { ...DEFAULT_SETTINGS, ...patch }
       return api<PlatformSettingsAdmin>('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
       })
@@ -350,7 +350,7 @@ export function useAdminSessions() {
   return useQuery({
     queryKey: [...QK, 'sessions'],
     queryFn: async (): Promise<AdminSession[]> => {
-      if (!API) return []
+      if (!ADMIN_API) return []
       return (await api<{ sessions: AdminSession[] }>('/api/admin/sessions')).sessions
     },
   })
@@ -360,7 +360,7 @@ export function useRevokeSession() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
-      if (!API) return { ok: true }
+      if (!ADMIN_API) return { ok: true }
       return api(`/api/admin/sessions/${id}/revoke`, { method: 'POST' })
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [...QK, 'sessions'] }),

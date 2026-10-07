@@ -5,8 +5,7 @@ import { PageHeader } from '../../components/ui/page-header'
 import { Button } from '../../components/ui/button'
 import { FieldError, Label } from '../../components/ui/input'
 import { PasswordInput } from '../../components/ui/password-input'
-
-const API = ((import.meta.env.VITE_ADMIN_API_BASE ?? '') || (import.meta.env.VITE_API_BASE ?? '')) as string
+import { ADMIN_API, adminPath } from '../../lib/admin-api'
 
 export function ChangePassword() {
   const nav = useNavigate()
@@ -23,11 +22,11 @@ export function ChangePassword() {
     }
     setBusy(true)
     try {
-      if (!API) {
+      if (!ADMIN_API) {
         nav('/admin')
         return
       }
-      const r = await fetch(`${API}/api/change-password`, {
+      const r = await fetch(adminPath('/api/change-password'), {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

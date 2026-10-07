@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { CLIENT_ROLES, findMockUser, hasRole } from './mock-users'
+import { adminPath } from './admin-api'
 
 // Client portal auth (admin-provisioned passwords). Talks to the client/vendor
 // operation at VITE_API_BASE; falls back to mock credentials when no API base is
@@ -40,7 +41,6 @@ interface ClientAuthCtx extends ClientAuthState {
 
 const Ctx = createContext<ClientAuthCtx | null>(null)
 const API = (import.meta.env.VITE_API_BASE ?? '') as string
-const ADMIN = ((import.meta.env.VITE_ADMIN_API_BASE ?? '') || API) as string
 const LS_KEY = 'taxwork-client-auth-v2'
 
 export const MOCK_MODE = !API
@@ -163,7 +163,7 @@ export function ClientAuthProvider({ children }: { children: React.ReactNode }) 
   const setImpersonationMode = useCallback(
     async (mode: ImpersonationMode) => {
       if (MOCK_MODE || !state.impersonationTenant) return
-      await fetch(`${ADMIN}/api/admin/impersonate`, {
+      await fetch(adminPath('/api/admin/impersonate'), {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

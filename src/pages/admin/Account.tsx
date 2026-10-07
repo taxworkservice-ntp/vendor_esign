@@ -11,8 +11,7 @@ import { EmptyState } from '../../components/ui/empty-state'
 import { useToast } from '../../components/ui/toast'
 import { ConfirmDialog } from '../../components/ui/confirm-dialog'
 import { fmtDateTimeTH } from '../../lib/format'
-
-const API = ((import.meta.env.VITE_ADMIN_API_BASE ?? '') || (import.meta.env.VITE_API_BASE ?? '')) as string
+import { ADMIN_API, adminPath } from '../../lib/admin-api'
 
 export function Account() {
   const { email } = useAuth()
@@ -33,8 +32,8 @@ export function Account() {
     }
     setBusy(true)
     try {
-      if (API) {
-        const r = await fetch(`${API}/api/change-password`, {
+      if (ADMIN_API) {
+        const r = await fetch(adminPath('/api/change-password'), {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },

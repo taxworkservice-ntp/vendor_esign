@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { ADMIN_ROLES, findMockUser, hasRole } from './mock-users'
+import { adminPath } from './admin-api'
 
 export interface Membership {
   tenantId: string
@@ -47,6 +48,14 @@ function setAdminHint(on: boolean): void {
   }
 }
 
+/** Mark this browser as having an admin session. ClientLogin calls this after
+ *  a unified login returns kind='admin' (it bypasses useAuth.login, the only
+ *  other place the hint is set) so refresh() actually probes the session
+ *  instead of early-returning to logged-out. */
+export function markAdminHint(): void {
+  setAdminHint(true)
+}
+
 export const MOCK_MODE = !API
 
 function loggedOut(): AuthState {
@@ -81,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return
     }
     try {
-      const r = await fetch(`${API}/api/me`, { credentials: 'include' })
+      const r = await fetch(adminPath('/api/me'), { credentials: 'include' })
       if (!r.ok) {
         setState(loggedOut())
         return
@@ -121,7 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setState(next)
         return { mustChangePw: false }
       }
-      const r = await fetch(`${API}/api/login`, {
+      const r = await fetch(adminPath('/api/login'), {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -143,7 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setState(loggedOut())
       return
     }
-    await fetch(`${API}/api/logout`, { method: 'POST', credentials: 'include' }).catch(() => null)
+    await fetch(adminPath('/api/logout'), { method: 'POST', credentials: 'include' }).catch(() => null)
     await refresh()
   }, [refresh])
 
