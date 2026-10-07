@@ -34,9 +34,14 @@ export async function receiptSheetToA4PdfBytes(el: HTMLElement): Promise<Uint8Ar
       filter: (node) => !node.classList?.contains('no-print') && node.dataset?.role !== 'overlay',
     })
     if (overlay) {
-      const img = await loadImage(overlay.src)
-      const ctx = canvas.getContext('2d')
-      if (ctx) drawContain(ctx, img, overlay, 2)
+      try {
+        const img = await loadImage(overlay.src)
+        const ctx = canvas.getContext('2d')
+        if (ctx) drawContain(ctx, img, overlay, 2)
+      } catch {
+        // A broken signature overlay must not abort the sheet capture; the
+        // caller falls back to the server-archived PDF instead.
+      }
     }
     const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' })
     pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 595.28, 841.89)

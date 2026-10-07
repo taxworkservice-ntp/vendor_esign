@@ -11,6 +11,7 @@ import { receiptSheetToA4PdfBytes } from '../lib/receipt-to-a4-pdf'
 import { ReceiptSheet, type ReceiptSheetData } from '../components/receipt/receipt-sheet'
 import { apiDownload, apiGet, hasServer, saveBlob } from '../lib/api-client'
 import { documentFileName, stamp } from '../lib/download-name'
+import { chunk, EXPORT_CHUNK_SIZE } from '../lib/export-chunk'
 import { loadTxns } from '../lib/mock'
 import type { PaymentTransaction, LineItem } from '../lib/types'
 import type { ReceiptRegisterRow } from '../lib/receipts-register'
@@ -71,7 +72,9 @@ export function ReceiptsDownload() {
   const [prepared, setPrepared] = useState<Prepared[] | null>(null)
   const [phase, setPhase] = useState<Phase>('loading')
   const [progress, setProgress] = useState(0)
+  const [prepareProgress, setPrepareProgress] = useState(0)
   const [fallbacks, setFallbacks] = useState(0)
+  const [failed, setFailed] = useState<string[]>([])
   const [err, setErr] = useState('')
   const refs = useRef<(HTMLDivElement | null)[]>([])
   const started = useRef(false)
@@ -91,20 +94,28 @@ export function ReceiptsDownload() {
     }
     let cancelled = false
     setPhase('loading')
+    setPrepareProgress(0)
     ;(async () => {
-      const queue = [...rows]
       const out: Prepared[] = []
-      const worker = async () => {
-        while (queue.length) {
-          const row = queue.shift()!
-          const [auth, txn] = await Promise.all([
-            fetchReceiptAuthorization(row.id).catch(() => null),
-            fetchTxn(row.id),
-          ])
-          out.push(build(row, auth, txn, client))
+      // Fetch in chunks so a 50-receipt export never fires 100+ serverless
+      // calls at once (Vercel Hobby concurrency limit). 4 workers per chunk.
+      const chunks = chunk(rows)
+      for (let c = 0; c < chunks.length; c++) {
+        if (cancelled) return
+        const queue = [...chunks[c]]
+        const worker = async () => {
+          while (queue.length) {
+            const row = queue.shift()!
+            const [auth, txn] = await Promise.all([
+              fetchReceiptAuthorization(row.id).catch(() => null),
+              fetchTxn(row.id).catch(() => undefined),
+            ])
+            out.push(build(row, auth, txn, client))
+          }
         }
+        await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker))
+        setPrepareProgress(out.length)
       }
-      await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker))
       if (cancelled) return
       out.sort((a, b) => (a.row.issueDate < b.row.issueDate ? 1 : a.row.issueDate > b.row.issueDate ? -1 : 0))
       setPrepared(out)
@@ -130,10 +141,12 @@ export function ReceiptsDownload() {
     setPhase('exporting')
     setProgress(0)
     setErr('')
+    setFailed([])
     try {
       const files: Record<string, Uint8Array> = {}
       const used = new Set<string>()
       let fell = 0
+      const failedList: string[] = []
       for (let i = 0; i < prepared.length; i++) {
         const p = prepared[i]
         const el = refs.current[i]
@@ -141,18 +154,38 @@ export function ReceiptsDownload() {
           documentFileName({ number: p.row.number, vendorName: p.row.vendorName, amount: p.row.grossAmount }),
           used,
         )
-        if (p.missingSig && hasServer) {
-          const { blob } = await apiDownload(`/api/client/transactions/${p.row.id}/receipt.pdf`)
-          files[name] = new Uint8Array(await blob.arrayBuffer())
-          fell++
-        } else if (el) {
-          files[name] = await receiptSheetToA4PdfBytes(el)
-        } else if (hasServer) {
-          const { blob } = await apiDownload(`/api/client/transactions/${p.row.id}/receipt.pdf`)
-          files[name] = new Uint8Array(await blob.arrayBuffer())
-          fell++
+        try {
+          if (p.missingSig && hasServer) {
+            const { blob } = await apiDownload(`/api/client/transactions/${p.row.id}/receipt.pdf`)
+            files[name] = new Uint8Array(await blob.arrayBuffer())
+            fell++
+          } else if (el) {
+            files[name] = await receiptSheetToA4PdfBytes(el)
+          } else if (hasServer) {
+            const { blob } = await apiDownload(`/api/client/transactions/${p.row.id}/receipt.pdf`)
+            files[name] = new Uint8Array(await blob.arrayBuffer())
+            fell++
+          }
+        } catch {
+          // One bad receipt must not poison the whole export. Try the
+          // server-archived PDF (which embeds the signature) as a fallback.
+          if (hasServer) {
+            try {
+              const { blob } = await apiDownload(`/api/client/transactions/${p.row.id}/receipt.pdf`)
+              files[name] = new Uint8Array(await blob.arrayBuffer())
+              fell++
+            } catch {
+              failedList.push(p.row.number)
+            }
+          } else {
+            failedList.push(p.row.number)
+          }
         }
         setProgress(i + 1)
+        // Yield to the browser between chunks so it can paint and GC.
+        if ((i + 1) % EXPORT_CHUNK_SIZE === 0) {
+          await new Promise((r) => setTimeout(r, 0))
+        }
       }
       const { zipSync } = await import('fflate')
       const zipped = zipSync(files, { level: 0 })
@@ -161,6 +194,7 @@ export function ReceiptsDownload() {
         `receipts-${month || 'all'}-${prepared.length}-docs-${stamp()}.zip`,
       )
       setFallbacks(fell)
+      setFailed(failedList)
       setPhase('done')
     } catch {
       setPhase('error')
@@ -176,7 +210,12 @@ export function ReceiptsDownload() {
             <>
               <Loader2 size={28} className="mx-auto animate-spin text-ink-400" aria-hidden />
               <h1 className="text-title font-semibold">กำลังเตรียมใบเสร็จ…</h1>
-              <p className="text-body text-ink-500">กำลังรวบรวมข้อมูลและลายเซ็นของใบเสร็จทั้งหมด</p>
+              <p className="text-body text-ink-500">
+                กำลังรวบรวมข้อมูลและลายเซ็นของใบเสร็จทั้งหมด
+                {prepareProgress > 0 && rows.length > 0 && (
+                  <span className="block tabular-nums">{prepareProgress} / {rows.length}</span>
+                )}
+              </p>
             </>
           )}
 
@@ -212,9 +251,14 @@ export function ReceiptsDownload() {
               <CheckCircle2 size={30} className="mx-auto text-success" aria-hidden />
               <h1 className="text-title font-semibold">ดาวน์โหลดแล้ว</h1>
               <p className="text-body text-ink-500">
-                {prepared?.length ?? 0} ใบเสร็จ
+                {(prepared?.length ?? 0) - failed.length} ใบเสร็จ
                 {fallbacks > 0 ? ` · ${fallbacks} ใช้สำเนาเก็บถาวร` : ''}
               </p>
+              {failed.length > 0 && (
+                <p className="text-body text-danger">
+                  {failed.length} ฉบับล้มเหลว: {failed.join(', ')}
+                </p>
+              )}
               <Button variant="secondary" onClick={() => window.close()}>
                 ปิดหน้าต่างนี้
               </Button>

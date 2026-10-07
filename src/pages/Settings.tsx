@@ -88,13 +88,8 @@ export function Settings() {
             <Input value={form.address} onChange={(e) => set({ address: e.target.value })} disabled={readOnly} />
           </div>
           <div>
-            <Label hint="13 หลัก">เลขประจำตัวผู้เสียภาษี</Label>
-            <Input
-              value={form.taxId}
-              onChange={(e) => set({ taxId: e.target.value.replace(/\D/g, '').slice(0, 13) })}
-              disabled={readOnly}
-              className="font-mono"
-            />
+            <Label hint="ล็อกโดยระบบ">เลขประจำตัวผู้เสียภาษี</Label>
+            <Input value={form.taxId} disabled className="font-mono" />
           </div>
           <div>
             <Label>ผู้ติดต่อ</Label>

@@ -4,6 +4,7 @@ import { Download, Move } from 'lucide-react'
 import { fetchWhtByIds, fetchWhtByScope } from '../lib/wht-source'
 import { signDownload } from '../lib/r2-assets'
 import { documentFileName, stamp } from '../lib/download-name'
+import { chunk, EXPORT_CHUNK_SIZE } from '../lib/export-chunk'
 import { composeSheetToA4Pdf, loadBgImage } from '../lib/sheet-to-a4-pdf'
 import type { OverlayImage } from '../lib/raster-image'
 import { saveBlob } from '../lib/api-client'
@@ -230,6 +231,7 @@ export function WhtPrint() {
   // gate compares this to the loaded settings to avoid exporting defaults.
   const [profileSource, setProfileSource] = useState<TenantSettings | null>(null)
   const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState(0)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   const [signatureUrl, setSignatureUrl] = useState<string | null>(null)
@@ -353,6 +355,7 @@ export function WhtPrint() {
   const exportPdf = async () => {
     setErr('')
     setBusy(true)
+    setProgress(0)
     try {
       const used = new Set<string>()
       const uniqueName = (r: WhtRecordWithVendor): string => {
@@ -393,8 +396,14 @@ export function WhtPrint() {
       if (signatureUrl) overlays.push({ src: signatureUrl, ...signaturePlacement })
       const sheets = Array.from(document.querySelectorAll<HTMLElement>('.print-sheet'))
       if (!sheets.length) throw new Error('no-sheets')
-      for (let i = 0; i < sheets.length && i < records.length; i++) {
+      const total = Math.min(sheets.length, records.length)
+      for (let i = 0; i < total; i++) {
         files[uniqueName(records[i])] = await composeSheetToA4Pdf(sheets[i], bg, overlays)
+        setProgress(i + 1)
+        // Yield to the browser between chunks so it can paint and GC.
+        if ((i + 1) % EXPORT_CHUNK_SIZE === 0) {
+          await new Promise((r) => setTimeout(r, 0))
+        }
       }
 
       if (records.length === 1) {
@@ -451,6 +460,11 @@ export function WhtPrint() {
           <Button variant="secondary" onClick={exportPdf} loading={busy}>
             <Download size={15} /> {busy ? 'กำลังสร้าง…' : 'ดาวน์โหลด PDF'}
           </Button>
+          {busy && records.length > 0 && (
+            <p className="text-body tabular-nums text-ink-500">
+              {progress} / {records.length}
+            </p>
+          )}
         </div>
       </div>
       {editing && (
