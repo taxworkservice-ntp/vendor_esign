@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Copy, Eye, KeyRound, PauseCircle, Pencil, PlayCircle, Power, PowerOff, ShieldOff, Trash2 } from 'lucide-react'
+import { Eye, KeyRound, PauseCircle, Pencil, PlayCircle, Power, PowerOff, ShieldOff, Trash2 } from 'lucide-react'
 import {
   useAdminTenant,
   useCreateUser,
@@ -17,7 +17,7 @@ import { FieldError, Input, Label } from '../../components/ui/input'
 import { Select } from '../../components/ui/select'
 import { ConfirmDialog } from '../../components/ui/confirm-dialog'
 import { useToast } from '../../components/ui/toast'
-import { buildFirstLoginMessage } from '../../lib/admin-invite-message'
+import { TempPasswordDialog } from '../../components/ui/temp-password-dialog'
 
 type AdminConfirm =
   | { kind: 'suspend' }
@@ -38,9 +38,7 @@ export function ClientDetail() {
   const [tab, setTab] = useState<'info' | 'users' | 'config'>('info')
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<'owner' | 'manager' | 'officer'>('officer')
-  const [tempPw, setTempPw] = useState('')
-  const [createdEmail, setCreatedEmail] = useState('')
-  const [copied, setCopied] = useState(false)
+  const [invite, setInvite] = useState<{ email: string; password: string } | null>(null)
   const [err, setErr] = useState('')
   const [impErr, setImpErr] = useState('')
   const [confirm, setConfirm] = useState<AdminConfirm | null>(null)
@@ -62,14 +60,10 @@ export function ClientDetail() {
 
   const makeUser = async () => {
     setErr('')
-    setTempPw('')
-    setCreatedEmail('')
-    setCopied(false)
     try {
       const created = email.trim()
       const j = await createUser.mutateAsync({ email: created, role })
-      setTempPw(j.tempPassword)
-      setCreatedEmail(created)
+      setInvite({ email: created, password: j.tempPassword })
       setEmail('')
       void refetch()
     } catch (e) {
@@ -77,21 +71,13 @@ export function ClientDetail() {
     }
   }
 
-  const copyInvite = async () => {
-    if (!tempPw || !createdEmail) return
+  const resetUser = async (user: { id: string; email: string }) => {
     try {
-      await navigator.clipboard.writeText(
-        buildFirstLoginMessage({
-          loginUrl: `${window.location.origin}/login`,
-          email: createdEmail,
-          tempPassword: tempPw,
-        }),
-      )
-      setCopied(true)
-      toast.show('คัดลอกข้อความแจ้งผู้ใช้แล้ว')
-      setTimeout(() => setCopied(false), 2000)
+      const password = await actions.reset(user.id)
+      setInvite({ email: user.email, password })
+      toast.show(`ตั้งรหัสผ่านใหม่ให้ ${user.email} แล้ว`)
     } catch {
-      toast.show('คัดลอกไม่สำเร็จ — กรุณาคัดลอกด้วยตนเอง', 'error')
+      toast.show('ตั้งรหัสใหม่ไม่สำเร็จ', 'error')
     }
   }
 
@@ -183,24 +169,6 @@ export function ClientDetail() {
                 </Button>
               </div>
               <FieldError msg={err} />
-              {tempPw && createdEmail && (
-                <div className="rounded-control bg-warning-soft p-3 text-body">
-                  <p className="font-semibold text-warning">รหัสผ่านชั่วคราว (แสดงเพียงครั้งเดียว — โปรดส่งให้ผู้ใช้ผ่านช่องทางอื่น แล้วระบบจะบังคับให้เปลี่ยน):</p>
-                  <p className="mt-1 font-mono text-lg font-semibold tracking-wide">{tempPw}</p>
-                  <p className="mt-1 text-label text-warning">หมดอายุใน 7 วัน · จัดเก็บเฉพาะค่าแฮช scrypt</p>
-                  <p className="mt-3 font-semibold text-warning">ข้อความแจ้งผู้ใช้ (คัดลอกไปวางได้เลย):</p>
-                  <pre className="mt-1 max-h-72 overflow-y-auto whitespace-pre-wrap rounded-control bg-white/70 p-3 text-body leading-relaxed">
-                    {buildFirstLoginMessage({
-                      loginUrl: `${window.location.origin}/login`,
-                      email: createdEmail,
-                      tempPassword: tempPw,
-                    })}
-                  </pre>
-                  <Button variant="secondary" onClick={() => void copyInvite()} className="mt-2">
-                    <Copy size={15} /> {copied ? 'คัดลอกข้อความแล้ว' : 'คัดลอกข้อความแจ้งผู้ใช้'}
-                  </Button>
-                </div>
-              )}
             </CardBody>
           </Card>
 
@@ -229,7 +197,7 @@ export function ClientDetail() {
                           <Button
                             variant="secondary"
                             className="h-9 px-3 text-body"
-                            onClick={() => void actions.reset(u.id).then((pw) => setTempPw(pw))}
+                            onClick={() => void resetUser(u)}
                           >
                             <KeyRound size={14} /> ตั้งรหัสใหม่
                           </Button>
@@ -285,6 +253,13 @@ export function ClientDetail() {
         busy={del.isPending}
         onConfirm={() => void runConfirm()}
         onCancel={() => setConfirm(null)}
+      />
+
+      <TempPasswordDialog
+        open={invite !== null}
+        email={invite?.email ?? ''}
+        tempPassword={invite?.password ?? ''}
+        onClose={() => setInvite(null)}
       />
     </div>
   )

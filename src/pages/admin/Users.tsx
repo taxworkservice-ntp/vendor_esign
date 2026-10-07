@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Copy, KeyRound, Pencil, Power, PowerOff, Search, ShieldOff, UserCog } from 'lucide-react'
+import { KeyRound, Pencil, Power, PowerOff, Search, ShieldOff, UserCog } from 'lucide-react'
 import { useAllAdminUsers, useUserActions, type AdminDirectoryUser } from '../../hooks/useAdmin'
 import { useColumnSort } from '../../hooks/useColumnSort'
 import { sortRows, type SortAccessor } from '../../lib/sort'
@@ -14,7 +14,7 @@ import { ConfirmDialog } from '../../components/ui/confirm-dialog'
 import { useToast } from '../../components/ui/toast'
 import { Row, SortableTh, Td, Th, tableCls } from '../../components/ui/data-table'
 import { cn } from '../../lib/cn'
-import { buildFirstLoginMessage } from '../../lib/admin-invite-message'
+import { TempPasswordDialog } from '../../components/ui/temp-password-dialog'
 
 const ROLE_TH: Record<string, string> = { owner: 'เจ้าของ', manager: 'ผู้จัดการ', officer: 'เจ้าหน้าที่' }
 
@@ -33,40 +33,18 @@ export function Users() {
   const actions = useUserActions()
   const toast = useToast()
   const { key: sortKey, dir: sortDir, onSort } = useColumnSort()
-  const [tempPw, setTempPw] = useState('')
-  const [resetEmail, setResetEmail] = useState('')
-  const [copied, setCopied] = useState(false)
+  const [invite, setInvite] = useState<{ email: string; password: string } | null>(null)
   const [confirm, setConfirm] = useState<Confirm>(null)
 
   const users = useMemo(() => sortRows(data ?? [], sortKey, sortDir, USER_SORT), [data, sortKey, sortDir])
 
   const reset = async (u: AdminDirectoryUser) => {
     try {
-      const pw = await actions.reset(u.id)
-      setTempPw(pw)
-      setResetEmail(u.email)
-      setCopied(false)
+      const password = await actions.reset(u.id)
+      setInvite({ email: u.email, password })
       toast.show(`ตั้งรหัสผ่านใหม่ให้ ${u.email} แล้ว`)
     } catch {
       toast.show('ตั้งรหัสใหม่ไม่สำเร็จ', 'error')
-    }
-  }
-
-  const copyInvite = async () => {
-    if (!tempPw || !resetEmail) return
-    try {
-      await navigator.clipboard.writeText(
-        buildFirstLoginMessage({
-          loginUrl: `${window.location.origin}/login`,
-          email: resetEmail,
-          tempPassword: tempPw,
-        }),
-      )
-      setCopied(true)
-      toast.show('คัดลอกข้อความแจ้งผู้ใช้แล้ว')
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      toast.show('คัดลอกไม่สำเร็จ — กรุณาคัดลอกด้วยตนเอง', 'error')
     }
   }
 
@@ -95,29 +73,6 @@ export function Users() {
           </div>
         </CardBody>
       </Card>
-
-      {tempPw && resetEmail && (
-        <div className="rounded-control bg-warning-soft p-3 text-body">
-          <p className="font-semibold text-warning">รหัสผ่านชั่วคราว (แสดงครั้งเดียว — ส่งให้ผู้ใช้ผ่านช่องทางอื่น):</p>
-          <p className="mt-1 font-mono text-lg font-semibold tracking-wide">{tempPw}</p>
-          <p className="mt-3 font-semibold text-warning">ข้อความแจ้งผู้ใช้ (คัดลอกไปวางได้เลย):</p>
-          <pre className="mt-1 max-h-72 overflow-y-auto whitespace-pre-wrap rounded-control bg-white/70 p-3 text-body leading-relaxed">
-            {buildFirstLoginMessage({
-              loginUrl: `${window.location.origin}/login`,
-              email: resetEmail,
-              tempPassword: tempPw,
-            })}
-          </pre>
-          <div className="mt-2 flex items-center gap-3">
-            <Button variant="secondary" onClick={() => void copyInvite()}>
-              <Copy size={15} /> {copied ? 'คัดลอกข้อความแล้ว' : 'คัดลอกข้อความ'}
-            </Button>
-            <button type="button" onClick={() => setTempPw('')} className="text-label font-medium text-warning underline">
-              ซ่อน
-            </button>
-          </div>
-        </div>
-      )}
 
       <Card className="overflow-hidden">
         {isError ? (
@@ -225,6 +180,13 @@ export function Users() {
         confirmLabel="ยืนยัน"
         onConfirm={() => void runConfirm()}
         onCancel={() => setConfirm(null)}
+      />
+
+      <TempPasswordDialog
+        open={invite !== null}
+        email={invite?.email ?? ''}
+        tempPassword={invite?.password ?? ''}
+        onClose={() => setInvite(null)}
       />
     </div>
   )
