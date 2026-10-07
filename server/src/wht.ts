@@ -55,6 +55,9 @@ function toRecord(r: Record<string, unknown>): WhtRecordWithVendor {
     status: r.status === 'done' ? 'done' : r.status === 'void' ? 'void' : r.status === 'superseded' ? 'superseded' : 'active',
     createdAt: new Date(String(r.created_at ?? Date.now())).toISOString(),
     sourceTransactionId: (r.source_transaction_id as string | null) ?? undefined,
+    // The receipt this certificate was auto-generated from (manual certificates
+    // have none). Shown and searched so the register reconciles to the payment.
+    receiptNumber: r.receipt_number === null || r.receipt_number === undefined ? undefined : String(r.receipt_number),
     // Joined in, so the list does not need a second full /wht/vendors fetch
     // and a per-row linear scan just to render a name. The tax ID and address
     // come along because a register export has to carry the payee details the
@@ -66,7 +69,8 @@ function toRecord(r: Record<string, unknown>): WhtRecordWithVendor {
 }
 
 const RECORD_SELECT = `
-  select r.*, v.name as vendor_name, v.tax_id as vendor_tax_id, v.address as vendor_address
+  select r.*, v.name as vendor_name, v.tax_id as vendor_tax_id, v.address as vendor_address,
+    (select vr.number from vendor_receipts vr where vr.transaction_id = r.source_transaction_id) as receipt_number
   from wht_records r
   join wht_vendors v on v.id = r.vendor_id`
 

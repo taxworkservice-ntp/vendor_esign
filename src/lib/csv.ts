@@ -116,6 +116,7 @@ export function downloadCsv(filename: string, csv: string): void {
 
 export const WHT_COLUMNS: CsvColumn<WhtRecordWithVendor>[] = [
   { header: 'เลขที่หนังสือรับรอง', value: (r) => r.certificateNo },
+  { header: 'เลขที่ใบเสร็จ', value: (r) => r.receiptNumber ?? '' },
   { header: 'แบบยื่น', value: (r) => whtFormLabel(r.formType) },
   { header: 'วันที่ออก', value: (r) => r.issueDate, text: false },
   { header: 'ผู้ถูกหักภาษี', value: (r) => r.vendorName ?? '' },

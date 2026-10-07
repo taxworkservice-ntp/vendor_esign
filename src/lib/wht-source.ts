@@ -1,9 +1,11 @@
 import { apiGet, apiSend, hasServer } from './api-client'
 import { loadWht, loadWhtByIds, saveWht, type WhtBundle } from './wht-mock'
+import { loadTxns } from './mock'
 import { filterWhtByMonth, type WhtRecord, type WhtRecordWithVendor, type WhtVendor } from './wht'
 import { matchesSearch } from './search-match'
 import { emptyWhtSummary, sortWht, summarizeWht, type WhtSummary } from './wht-summary'
 import { parseWhtListQuery, type WhtListQuery } from './wht-list-query'
+import { WHT_SEARCH_FIELDS, type WhtSearchField } from './wht-search'
 
 // Runs on the server when VITE_API_BASE is set, else the local mock store.
 //
@@ -18,7 +20,18 @@ export interface WhtListResult {
 }
 
 export function whtSearchFields(r: WhtRecordWithVendor): (string | number | undefined)[] {
-  return [r.certificateNo, r.vendorName, r.formType, r.description, r.note, r.id]
+  // Keyed off the shared list so the mock and the server SQL builder stay in
+  // lockstep; a new field is added in one place (src/lib/wht-search.ts).
+  const byField: Record<WhtSearchField, string | number | undefined> = {
+    certificateNo: r.certificateNo,
+    receiptNumber: r.receiptNumber,
+    vendorName: r.vendorName,
+    vendorTaxId: r.vendorTaxId,
+    formType: r.formType,
+    description: r.description,
+    note: r.note,
+  }
+  return WHT_SEARCH_FIELDS.map((f) => byField[f])
 }
 
 /** The mock-side reference filter; the server's SQL builder is the other executor. */
@@ -36,9 +49,16 @@ export function filterWht(records: WhtRecordWithVendor[], q: WhtListQuery): WhtR
 
 function withVendorNames(bundle: WhtBundle): WhtRecordWithVendor[] {
   const vendorById = new Map<string, WhtVendor>(bundle.vendors.map((v) => [v.id, v]))
+  const receiptByTxn = new Map(loadTxns().map((t) => [t.id, t.receiptNumber]))
   return bundle.records.map((r) => {
     const v = vendorById.get(r.vendorId)
-    return { ...r, vendorName: v?.name, vendorTaxId: v?.taxId, vendorAddress: v?.address }
+    return {
+      ...r,
+      vendorName: v?.name,
+      vendorTaxId: v?.taxId,
+      vendorAddress: v?.address,
+      receiptNumber: r.sourceTransactionId ? receiptByTxn.get(r.sourceTransactionId) : undefined,
+    }
   })
 }
 

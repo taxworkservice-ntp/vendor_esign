@@ -270,7 +270,7 @@ export function WhtList() {
                 id="wht-search"
                 ref={searchRef}
                 className={cn('pl-10', search && 'pr-10')}
-                placeholder="ค้นหาเลขที่หนังสือรับรอง / ชื่อผู้ถูกหักภาษี / รายละเอียด…"
+                placeholder="ค้นหาเลขที่หนังสือรับรอง / เลขที่ใบเสร็จ / ชื่อหรือเลขผู้เสียภาษี / รายละเอียด…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => {
@@ -382,7 +382,7 @@ export function WhtList() {
                 </div>
               )}
               <div className="max-h-[70vh] overflow-auto">
-                <table className="w-full min-w-[880px] border-collapse text-body">
+                <table className="w-full min-w-[1040px] border-collapse text-body">
                   <thead>
                      <tr>
                        <th scope="col" className={cn(thBase, 'w-9 pl-3 pr-0')}>
@@ -396,6 +396,9 @@ export function WhtList() {
                        </th>
                        {th('date', 'วันที่ออก')}
                        {th('cert', 'เลขที่หนังสือรับรอง')}
+                       <th scope="col" className={cn(thBase)}>
+                         เลขที่ใบเสร็จ
+                       </th>
                        {th('vendor', 'ผู้ถูกหักภาษี')}
                        {th('form', 'แบบยื่น')}
                        {th('amount', 'ยอดเงิน (ฐานภาษี)', 'right')}
@@ -408,7 +411,7 @@ export function WhtList() {
                   </thead>
                   <tbody>
                     {isLoading ? (
-                      <TableSkeleton rows={8} cols={8} />
+                      <TableSkeleton rows={8} cols={10} />
                     ) : (
                       records.map((r) => {
                         const filed = r.status === 'done'
@@ -425,6 +428,7 @@ export function WhtList() {
                             </td>
                             <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">{fmtWhtDate(r.issueDate)}</td>
                             <td className="whitespace-nowrap px-3 py-2.5 font-mono">{r.certificateNo ?? '—'}</td>
+                            <td className="whitespace-nowrap px-3 py-2.5 font-mono text-ink-500">{r.receiptNumber ?? '—'}</td>
                             <td className="max-w-[240px] truncate px-3 py-2.5 font-semibold">
                               {r.vendorName ?? '—'}
                             </td>

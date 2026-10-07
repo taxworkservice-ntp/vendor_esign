@@ -233,6 +233,32 @@ describe('filterWht', () => {
     expect(filterWht(rows, q('q=pnd53')).map((r) => r.id)).toEqual(['b'])
   })
 
+  it('searches by receipt number and vendor tax ID', () => {
+    const rows2 = [
+      rec({ id: 'a', certificateNo: '2609001', receiptNumber: 'ABC-R-2569-0007', vendorTaxId: '1234567890123' }),
+      rec({ id: 'b', certificateNo: '2609102', receiptNumber: 'ABC-R-2569-0008', vendorTaxId: '9876543210987' }),
+    ]
+    expect(filterWht(rows2, q('q=' + encodeURIComponent('ABC-R-2569-0007'))).map((r) => r.id)).toEqual(['a'])
+    expect(filterWht(rows2, q('q=9876543210987')).map((r) => r.id)).toEqual(['b'])
+  })
+
+  it('matches on every shared search field', () => {
+    // One fully-populated record: each field in WHT_SEARCH_FIELDS must be findable.
+    const full = rec({
+      id: 'x',
+      certificateNo: 'CERT-1',
+      receiptNumber: 'RCT-1',
+      vendorName: 'VENDOR-1',
+      vendorTaxId: 'TAX1',
+      formType: 'pnd53',
+      description: 'DESC1',
+      note: 'NOTE1',
+    })
+    for (const needle of ['CERT-1', 'RCT-1', 'VENDOR-1', 'TAX1', 'pnd53', 'DESC1', 'NOTE1']) {
+      expect(filterWht([full], q('q=' + encodeURIComponent(needle))).map((r) => r.id)).toEqual(['x'])
+    }
+  })
+
   it('combines filters', () => {
     expect(filterWht(rows, q('month=2026-09&status=active')).map((r) => r.id)).toEqual(['b'])
   })

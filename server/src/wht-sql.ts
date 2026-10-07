@@ -2,6 +2,7 @@ import { monthRange } from '../../src/lib/global-month'
 import { andJoin, bindIn, likeNeedle, LIKE_ESCAPE, makeBuilder, type Builder, type SqlFragment } from './sql-builder'
 import { WHT_FORM_LABELS, WHT_FORM_TYPES, type WhtListQuery } from '../../src/lib/wht-list-query'
 import { whtSortField, type WhtSortField } from '../../src/lib/wht-summary'
+import { WHT_SEARCH_FIELDS, type WhtSearchField } from '../../src/lib/wht-search'
 
 // Compiles a WhtListQuery into SQL. Same two safety rules as txn-sql.ts:
 // every value is a bound parameter, and the sort column comes from a fixed
@@ -33,8 +34,20 @@ export function whtLimitClause(q: WhtListQuery): string {
   return `limit ${Math.trunc(q.limit)} offset ${Math.trunc(q.offset)}`
 }
 
-/** Searchable columns — what a bookkeeper would type to find a certificate. */
-const SEARCH_COLUMNS = ['r.certificate_no', 'v.name', 'r.description', 'r.note', 'r.id::text']
+/** Searchable columns — what a bookkeeper would type to find a certificate.
+ *  Keyed by the shared WHT_SEARCH_FIELDS list so this and the client mock
+ *  filter can never disagree. The receipt number is a correlated subquery, not a
+ *  join: the totals and by-form queries select from `wht_records r join
+ *  wht_vendors v` without a receipts join, so a join here would break them. */
+export const SEARCH_COLUMN_SQL: Record<WhtSearchField, string> = {
+  certificateNo: 'r.certificate_no',
+  receiptNumber: '(select vr.number from vendor_receipts vr where vr.transaction_id = r.source_transaction_id)',
+  vendorName: 'v.name',
+  vendorTaxId: 'v.tax_id',
+  formType: 'r.form_type',
+  description: 'r.description',
+  note: 'r.note',
+}
 
 export function whtWhereClause(q: WhtListQuery, userId: string): SqlFragment {
   const b = makeBuilder()
@@ -55,7 +68,7 @@ export function whtWhereClause(q: WhtListQuery, userId: string): SqlFragment {
 
   if (q.q) {
     const needle = likeNeedle(q.q)
-    const any = SEARCH_COLUMNS.map((c) => `${c} ilike ${b.bind(needle)} ${LIKE_ESCAPE}`).join('\n         or ')
+    const any = WHT_SEARCH_FIELDS.map((f) => `${SEARCH_COLUMN_SQL[f]} ilike ${b.bind(needle)} ${LIKE_ESCAPE}`).join('\n         or ')
     parts.push(`(${any})`)
   }
 

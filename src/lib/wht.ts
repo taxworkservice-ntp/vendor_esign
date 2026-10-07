@@ -43,6 +43,8 @@ export type WhtRecordWithVendor = WhtRecord & {
   vendorName?: string
   vendorTaxId?: string
   vendorAddress?: string
+  /** Receipt number of the source transaction, when the certificate came from one. */
+  receiptNumber?: string
 }
 
 export function whtFormLabel(t: string): string {
