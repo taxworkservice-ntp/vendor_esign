@@ -14,6 +14,7 @@ import { ConfirmDialog } from '../../components/ui/confirm-dialog'
 import { useToast } from '../../components/ui/toast'
 import { Row, SortableTh, Td, Th, tableCls } from '../../components/ui/data-table'
 import { cn } from '../../lib/cn'
+import { MessageDialog } from '../../components/ui/message-dialog'
 import { buildFirstLoginMessage } from '../../lib/admin-invite-message'
 
 const ROLE_TH: Record<string, string> = { owner: 'เจ้าของ', manager: 'ผู้จัดการ', officer: 'เจ้าหน้าที่' }
@@ -36,6 +37,7 @@ export function Users() {
   const [tempPw, setTempPw] = useState('')
   const [resetEmail, setResetEmail] = useState('')
   const [copied, setCopied] = useState(false)
+  const [showInvite, setShowInvite] = useState(false)
   const [confirm, setConfirm] = useState<Confirm>(null)
 
   const users = useMemo(() => sortRows(data ?? [], sortKey, sortDir, USER_SORT), [data, sortKey, sortDir])
@@ -101,14 +103,28 @@ export function Users() {
           <p className="font-semibold text-warning">รหัสผ่านชั่วคราว (แสดงครั้งเดียว — ส่งให้ผู้ใช้ผ่านช่องทางอื่น):</p>
           <p className="mt-1 font-mono text-lg font-semibold tracking-wide">{tempPw}</p>
           <div className="mt-2 flex items-center gap-3">
-            <Button variant="secondary" onClick={() => void copyInvite()}>
-              <Copy size={15} /> {copied ? 'คัดลอกข้อความแล้ว' : 'คัดลอกข้อความแจ้งผู้ใช้'}
+            <Button variant="secondary" onClick={() => { setCopied(false); setShowInvite(true) }}>
+              <Copy size={15} /> ดูข้อความแจ้งผู้ใช้
             </Button>
             <button type="button" onClick={() => setTempPw('')} className="text-label font-medium text-warning underline">
               ซ่อน
             </button>
           </div>
         </div>
+      )}
+      {tempPw && resetEmail && (
+        <MessageDialog
+          open={showInvite}
+          title="ข้อความแจ้งผู้ใช้"
+          message={buildFirstLoginMessage({
+            loginUrl: `${window.location.origin}/login`,
+            email: resetEmail,
+            tempPassword: tempPw,
+          })}
+          copied={copied}
+          onCopy={() => void copyInvite()}
+          onClose={() => setShowInvite(false)}
+        />
       )}
 
       <Card className="overflow-hidden">
