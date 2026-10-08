@@ -53,7 +53,7 @@ function StateCard({ title, body, extra }: { title: string; body: string; extra?
 
 export function VendorSign() {
   const { token } = useParams()
-  const { data: t, isLoading } = useVendorTxn(token)
+  const { data: t, isLoading, refetch } = useVendorTxn(token)
   const acts = useVendorActions()
   const padRef = useRef<SigPadHandle>(null)
 
@@ -224,17 +224,20 @@ export function VendorSign() {
     setGateErr('')
     const res = await tryGateUnlock(token, t, gateId)
     setRemaining(res.remaining)
-    setGateBusy(false)
     if (res.ok) {
       setUnlocked(true)
       setGatePassed(!!t.taxIdHash)
       setTid(gateId) // reuse verified ID for the signing snapshot
-      // Prefill from client records — vendor confirms instead of retyping.
-      setPrefix(t.vendor.prefix ?? '')
-      setName(t.vendor.name)
-      setAddress(t.vendor.address)
-      setPhone(t.vendor.phone ?? '')
-      setEmail(t.vendor.email ?? '')
+      // The server withholds document content until the gate is passed, so pull
+      // it now and prefill from the revealed record (vendor confirms, not retypes).
+      const fresh = (await refetch()).data
+      if (fresh) {
+        setPrefix(fresh.vendor.prefix ?? '')
+        setName(fresh.vendor.name)
+        setAddress(fresh.vendor.address)
+        setPhone(fresh.vendor.phone ?? '')
+        setEmail(fresh.vendor.email ?? '')
+      }
       setGateId('')
       window.scrollTo(0, 0)
     } else {
@@ -244,6 +247,7 @@ export function VendorSign() {
           : `เลขไม่ตรงกับที่ลูกค้าผู้จ่ายระบุ (เหลือ ${res.remaining} ครั้ง) — โปรดอย่าดำเนินการต่อหากไม่ใช่ท่าน`,
       )
     }
+    setGateBusy(false)
   }
 
   if (needsGate)

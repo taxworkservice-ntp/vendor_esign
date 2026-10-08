@@ -72,7 +72,7 @@ async function writeAudit(tenantId: string, entityType: string, entityId: string
 
 adminApp.post('/api/login', async (c) => {
   const ip = c.req.header('x-forwarded-for') ?? 'local'
-  if (rateLimited(`admin-login:${ip}`, 5)) return c.json({ error: 'too-many-requests' }, 429)
+  if (await rateLimited(`admin-login:${ip}`, 5)) return c.json({ error: 'too-many-requests' }, 429)
   const body = (await c.req.json().catch(() => null)) as { email?: string; password?: string } | null
   const email = (body?.email ?? '').trim().toLowerCase()
   if (!email || !body?.password) return c.json({ error: 'invalid-body' }, 400)

@@ -17,10 +17,13 @@ export function one<T>(rows: unknown): T | undefined {
   return (rows as T[] | undefined)?.[0]
 }
 
-// Minimal in-memory rate limit per operation instance (per-IP, 60s window).
-// Pro note: behind multiple replicas move to Postgres or the proxy.
+// Rate limiting and the vendor gate counter are stored in Postgres so the limit
+// is shared across serverless instances and survives redeploys (migration 027).
+// If the table is absent (migration not applied yet) or the DB blips, we fall
+// back to a per-instance in-memory window — never throw, never block the flow.
+
 const hits = new Map<string, { n: number; reset: number }>()
-export function rateLimited(key: string, max = 30): boolean {
+function memoryLimited(key: string, max: number): boolean {
   const now = Date.now()
   const h = hits.get(key)
   if (!h || now > h.reset) {
@@ -29,6 +32,66 @@ export function rateLimited(key: string, max = 30): boolean {
   }
   h.n += 1
   return h.n > max
+}
+
+export async function rateLimited(key: string, max = 30): Promise<boolean> {
+  try {
+    const db = sql()
+    const rows = await db`
+      insert into rate_hits (key, n, reset) values (${key}, 1, now() + interval '60 seconds')
+      on conflict (key) do update set
+        n = case when rate_hits.reset < now() then 1 else rate_hits.n + 1 end,
+        reset = case when rate_hits.reset < now() then now() + interval '60 seconds' else rate_hits.reset end
+      returning n`
+    return Number(one<{ n: number }>(rows)?.n ?? 0) > max
+  } catch {
+    return memoryLimited(key, max)
+  }
+}
+
+// Vendor gate: N wrong ID attempts per token per 10 minutes.
+const GATE_WINDOW_MS = 10 * 60 * 1000
+const gateMemory = new Map<string, { n: number; until: number }>()
+
+export async function gateBlocked(tokenHash: string, max = 5): Promise<boolean> {
+  try {
+    const rows = await sql()`select n, until from gate_attempts where token_hash = ${tokenHash}`
+    const r = one<{ n: number; until: string }>(rows)
+    if (!r || new Date(r.until).getTime() < Date.now()) return false
+    return Number(r.n) >= max
+  } catch {
+    const f = gateMemory.get(tokenHash)
+    if (!f) return false
+    if (Date.now() > f.until) return false
+    return f.n >= max
+  }
+}
+
+/** Record a failed attempt; returns how many tries remain (never below 0). */
+export async function gateFail(tokenHash: string, max = 5): Promise<number> {
+  try {
+    const rows = await sql()`
+      insert into gate_attempts (token_hash, n, until) values (${tokenHash}, 1, now() + interval '10 minutes')
+      on conflict (token_hash) do update set
+        n = case when gate_attempts.until < now() then 1 else gate_attempts.n + 1 end,
+        until = case when gate_attempts.until < now() then now() + interval '10 minutes' else gate_attempts.until end
+      returning n`
+    return Math.max(0, max - Number(one<{ n: number }>(rows)?.n ?? 1))
+  } catch {
+    const f = gateMemory.get(tokenHash) ?? { n: 0, until: Date.now() + GATE_WINDOW_MS }
+    f.n += 1
+    gateMemory.set(tokenHash, f)
+    return Math.max(0, max - f.n)
+  }
+}
+
+export async function gateClear(tokenHash: string): Promise<void> {
+  gateMemory.delete(tokenHash)
+  try {
+    await sql()`delete from gate_attempts where token_hash = ${tokenHash}`
+  } catch {
+    /* table absent — memory already cleared */
+  }
 }
 
 export async function audit(

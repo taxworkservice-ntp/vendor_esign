@@ -67,7 +67,7 @@ export const authRoutes = new Hono()
 
 authRoutes.post('/login', async (c) => {
   const ip = c.req.header('x-forwarded-for') ?? 'local'
-  if (rateLimited(`client-login:${ip}`, 10)) return c.json({ error: 'too-many-requests' }, 429)
+  if (await rateLimited(`client-login:${ip}`, 10)) return c.json({ error: 'too-many-requests' }, 429)
   const body = (await c.req.json().catch(() => null)) as { email?: string; password?: string } | null
   const email = (body?.email ?? '').trim().toLowerCase()
   if (!email || !body?.password) return c.json({ error: 'invalid-body' }, 400)

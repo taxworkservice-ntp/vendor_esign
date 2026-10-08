@@ -16,7 +16,7 @@ import { txnRoutes } from './transactions'
 import { whtRoutes } from './wht'
 import { receiptRoutes } from './receipts-register'
 import { finalizeReceipt } from './receipts'
-import { PILOT_TENANT, audit, one, rateLimited } from './shared'
+import { PILOT_TENANT, audit, one, rateLimited, gateBlocked, gateFail, gateClear } from './shared'
 
 // ── Public client/vendor operation ─────────────────────────────────────
 // Vendor links, signing, finalize, QR verify. No login, no admin routes.
@@ -25,25 +25,8 @@ import { PILOT_TENANT, audit, one, rateLimited } from './shared'
 
 const TENANT = PILOT_TENANT
 
-// Gate attempts: 5 wrong IDs per token per 10 min (single process;
-// move to Postgres behind multiple replicas — same caveat as rate limits).
+// Vendor gate: wrong-ID tries per token (counter shared via shared.ts/gate_attempts).
 const GATE_MAX = 5
-const gateFails = new Map<string, { n: number; until: number }>()
-function gateBlocked(tokenHash: string): boolean {
-  const f = gateFails.get(tokenHash)
-  if (!f) return false
-  if (Date.now() > f.until) {
-    gateFails.delete(tokenHash)
-    return false
-  }
-  return f.n >= GATE_MAX
-}
-function gateFail(tokenHash: string): number {
-  const f = gateFails.get(tokenHash) ?? { n: 0, until: Date.now() + 10 * 60 * 1000 }
-  f.n += 1
-  gateFails.set(tokenHash, f)
-  return Math.max(0, GATE_MAX - f.n)
-}
 
 export const app = new Hono()
 
@@ -115,7 +98,7 @@ app.get('/api/health', (c) => c.json({ ok: true, operation: 'public', tenant: TE
 // never from a hardcoded constant, so one deploy serves all clients.
 app.get('/api/vendor/:token', async (c) => {
   const ip = c.req.header('x-forwarded-for') ?? 'local'
-  if (rateLimited(`get:${ip}`)) return c.json({ error: 'too-many-requests' }, 429)
+  if (await rateLimited(`get:${ip}`)) return c.json({ error: 'too-many-requests' }, 429)
   const token = c.req.param('token')
   const db = sql()
   const rows = await db`
@@ -141,6 +124,20 @@ app.get('/api/vendor/:token', async (c) => {
     await withTenant(rowTenant, 'client', async () =>
       audit(rowTenant, 'vendor_payables', String(r.id), 'vendor.opened', 'vendor', {}, ip))
   }
+  const gated = (r as Record<string, unknown>).tax_id_hash != null
+  const unlocked = (r as Record<string, unknown>).unlocked_at != null
+  // Before identity is proven, reveal only what the gate screen needs — never
+  // the amounts, line items or vendor details. The full document is delivered
+  // once unlocked (or immediately for a legacy ungated row).
+  if (gated && !unlocked) {
+    return c.json({
+      id: r.id, tenantId: rowTenant,
+      clientCode: (r as Record<string, unknown>).client_code ?? null,
+      ref: r.ref, status: r.status,
+      gated: true, unlocked: false,
+      idLast4: (r as Record<string, unknown>).tax_id_last4 ?? null,
+    })
+  }
   return c.json({
     id: r.id, tenantId: rowTenant, clientCode: (r as Record<string, unknown>).client_code ?? null,
     ref: r.ref, description: r.description, note: r.note, lineItems: r.line_items,
@@ -148,13 +145,11 @@ app.get('/api/vendor/:token', async (c) => {
     grossAmount: r.gross_amount, whtRate: r.wht_rate, whtAmount: r.wht_amount,
     netAmount: r.net_amount, transferDate: r.transfer_date,
     slipReference: r.slip_reference, status: r.status,
-    // Gate + confirm-and-sign prefill (name/address are not secret).
-    gated: (r as Record<string, unknown>).tax_id_hash != null,
-    idLast4: (r as Record<string, unknown>).tax_id_last4 ?? null,
+    gated, idLast4: (r as Record<string, unknown>).tax_id_last4 ?? null,
     vendorPrefix: r.vendor_prefix, vendorName: r.vendor_name, vendorAddress: r.vendor_address,
     vendorPhone: (r as Record<string, unknown>).vendor_phone ?? null,
     vendorEmail: (r as Record<string, unknown>).vendor_email ?? null,
-    unlocked: (r as Record<string, unknown>).unlocked_at != null,
+    unlocked: true,
   })
 })
 
@@ -162,10 +157,10 @@ app.get('/api/vendor/:token', async (c) => {
 // document content is revealed. Legacy rows without tax_id_hash skip it.
 app.post('/api/vendor/:token/unlock', async (c) => {
   const ip = c.req.header('x-forwarded-for') ?? 'local'
-  if (rateLimited(`unlock:${ip}`, 10)) return c.json({ error: 'too-many-requests' }, 429)
+  if (await rateLimited(`unlock:${ip}`, 10)) return c.json({ error: 'too-many-requests' }, 429)
   const token = c.req.param('token')
   const th = sha256hex(token)
-  if (gateBlocked(th)) return c.json({ error: 'gate-locked', remaining: 0 }, 429)
+  if (await gateBlocked(th, GATE_MAX)) return c.json({ error: 'gate-locked', remaining: 0 }, 429)
   const body = await c.req.json().catch(() => null) as { idNumber?: string } | null
   const idNumber = (body?.idNumber ?? '').replace(/\D/g, '')
   if (!/^\d{13}$/.test(idNumber)) return c.json({ error: 'invalid-body' }, 400)
@@ -191,7 +186,7 @@ app.post('/api/vendor/:token/unlock', async (c) => {
   const a = Buffer.from(sha256hex(idNumber), 'hex')
   const b = Buffer.from(String(r.tax_id_hash), 'hex')
   if (a.length !== b.length || !timingSafeEqual(a, b)) {
-    const remaining = gateFail(th)
+    const remaining = await gateFail(th, GATE_MAX)
     await withTenant(rowTenant, 'client', async () =>
       audit(rowTenant, 'vendor_requests', String(r.req_id), 'vendor.gate-failed', 'vendor', { remaining }, ip))
     return c.json(
@@ -199,7 +194,7 @@ app.post('/api/vendor/:token/unlock', async (c) => {
       remaining <= 0 ? 429 : 401,
     )
   }
-  gateFails.delete(th)
+  await gateClear(th)
   await db`update vendor_requests set unlocked_at = now() where id = ${String(r.req_id)}`
   await withTenant(rowTenant, 'client', async () =>
     audit(rowTenant, 'vendor_requests', String(r.req_id), 'vendor.unlocked', 'vendor', {}, ip))
@@ -211,7 +206,7 @@ app.post('/api/vendor/:token/unlock', async (c) => {
 // 'stub-deferred' until the LINE step (see docs/LINE.md insertion points).
 app.post('/api/vendor/:token/sign', async (c) => {
   const ip = c.req.header('x-forwarded-for') ?? 'local'
-  if (rateLimited(`sign:${ip}`, 10)) return c.json({ error: 'too-many-requests' }, 429)
+  if (await rateLimited(`sign:${ip}`, 10)) return c.json({ error: 'too-many-requests' }, 429)
   const token = c.req.param('token')
   const body = await c.req.json().catch(() => null) as {
     vendorPrefix?: string; vendorName?: string; vendorAddress?: string; vendorPhone?: string; vendorEmail?: string;
@@ -334,8 +329,18 @@ app.post('/api/vendor/:token/sign', async (c) => {
 // the vendor sign path — see server/src/receipts.ts). Idempotent: an already
 // issued receipt returns its stored number/PDF rather than renumbering.
 app.post('/api/transactions/:id/finalize', async (c) => {
+  // Session-guarded: only the owning client may force-issue. (The vendor sign
+  // path issues in-process via finalizeReceipt and never hits this route.)
+  const g = await guard(c)
+  if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  const id = c.req.param('id')
+  const owned = await withTenant(g.ws, 'client', async () => {
+    const rows = await sql()`select 1 as ok from vendor_payables where id = ${id} and user_id = ${g.ws}`
+    return !!one<{ ok: number }>(rows)
+  })
+  if (!owned) return c.json({ error: 'not-found' }, 404)
   const ip = c.req.header('x-forwarded-for') ?? 'local'
-  const res = await finalizeReceipt(c.req.param('id'), ip)
+  const res = await finalizeReceipt(id, ip)
   if (!res.ok) return c.json({ error: res.error }, res.error === 'already-issued' ? 409 : 422)
   return c.json({
     ok: true,

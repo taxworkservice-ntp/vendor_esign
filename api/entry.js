@@ -68150,7 +68150,7 @@ function one(rows) {
   return rows?.[0];
 }
 var hits = /* @__PURE__ */ new Map();
-function rateLimited(key2, max = 30) {
+function memoryLimited(key2, max) {
   const now = Date.now();
   const h = hits.get(key2);
   if (!h || now > h.reset) {
@@ -68159,6 +68159,58 @@ function rateLimited(key2, max = 30) {
   }
   h.n += 1;
   return h.n > max;
+}
+async function rateLimited(key2, max = 30) {
+  try {
+    const db = sql();
+    const rows = await db`
+      insert into rate_hits (key, n, reset) values (${key2}, 1, now() + interval '60 seconds')
+      on conflict (key) do update set
+        n = case when rate_hits.reset < now() then 1 else rate_hits.n + 1 end,
+        reset = case when rate_hits.reset < now() then now() + interval '60 seconds' else rate_hits.reset end
+      returning n`;
+    return Number(one(rows)?.n ?? 0) > max;
+  } catch {
+    return memoryLimited(key2, max);
+  }
+}
+var GATE_WINDOW_MS = 10 * 60 * 1e3;
+var gateMemory = /* @__PURE__ */ new Map();
+async function gateBlocked(tokenHash, max = 5) {
+  try {
+    const rows = await sql()`select n, until from gate_attempts where token_hash = ${tokenHash}`;
+    const r = one(rows);
+    if (!r || new Date(r.until).getTime() < Date.now()) return false;
+    return Number(r.n) >= max;
+  } catch {
+    const f = gateMemory.get(tokenHash);
+    if (!f) return false;
+    if (Date.now() > f.until) return false;
+    return f.n >= max;
+  }
+}
+async function gateFail(tokenHash, max = 5) {
+  try {
+    const rows = await sql()`
+      insert into gate_attempts (token_hash, n, until) values (${tokenHash}, 1, now() + interval '10 minutes')
+      on conflict (token_hash) do update set
+        n = case when gate_attempts.until < now() then 1 else gate_attempts.n + 1 end,
+        until = case when gate_attempts.until < now() then now() + interval '10 minutes' else gate_attempts.until end
+      returning n`;
+    return Math.max(0, max - Number(one(rows)?.n ?? 1));
+  } catch {
+    const f = gateMemory.get(tokenHash) ?? { n: 0, until: Date.now() + GATE_WINDOW_MS };
+    f.n += 1;
+    gateMemory.set(tokenHash, f);
+    return Math.max(0, max - f.n);
+  }
+}
+async function gateClear(tokenHash) {
+  gateMemory.delete(tokenHash);
+  try {
+    await sql()`delete from gate_attempts where token_hash = ${tokenHash}`;
+  } catch {
+  }
 }
 async function audit(tenantId, entityType, entityId, eventType, actor, metadata, ip) {
   const db = sql();
@@ -68261,7 +68313,7 @@ async function requireClient(c) {
 var authRoutes = new Hono2();
 authRoutes.post("/login", async (c) => {
   const ip = c.req.header("x-forwarded-for") ?? "local";
-  if (rateLimited(`client-login:${ip}`, 10)) return c.json({ error: "too-many-requests" }, 429);
+  if (await rateLimited(`client-login:${ip}`, 10)) return c.json({ error: "too-many-requests" }, 429);
   const body = await c.req.json().catch(() => null);
   const email = (body?.email ?? "").trim().toLowerCase();
   if (!email || !body?.password) return c.json({ error: "invalid-body" }, 400);
@@ -68559,6 +68611,17 @@ function decryptId(payload) {
   } catch {
     return null;
   }
+}
+function encryptToken(plain) {
+  try {
+    return encryptId(plain);
+  } catch {
+    return plain;
+  }
+}
+function decryptToken(stored) {
+  if (!stored.startsWith(PREFIX)) return stored;
+  return decryptId(stored) ?? stored;
 }
 
 // src/lib/line-items.ts
@@ -69008,7 +69071,10 @@ function sortDir(key2) {
 var STATUS_GROUPS = {
   active: ["draft", "sent", "opened", "signed"],
   done: ["issued"],
-  voided: ["void", "cancelled"]
+  voided: ["void", "cancelled"],
+  "needs-link": ["draft", "expired", "cancelled"],
+  awaiting: ["sent", "opened"],
+  ready: ["signed"]
 };
 function emptyTotals() {
   return {
@@ -69046,9 +69112,9 @@ var DEFAULT_PAGE_SIZE = 50;
 var MAX_PAGE_SIZE = 200;
 var EXPORT_LIMIT = 0;
 var DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
-var SORT_FIELDS = ["date", "created", "gross", "wht", "net", "vendor", "status"];
+var SORT_FIELDS = ["date", "created", "gross", "wht", "net", "vendor", "status", "urgency"];
 var SLIPS = ["all", "with", "without"];
-var GROUPS = ["active", "done", "voided"];
+var GROUPS = ["active", "done", "voided", "needs-link", "awaiting", "ready"];
 function isValidDate(v2) {
   const m2 = DATE_RE.exec(v2);
   if (!m2) return false;
@@ -69146,7 +69212,22 @@ var ORDER_BY = {
   vendor: "v.name",
   status: "p.status"
 };
+var LAST_ACTIVITY_SQL = `coalesce(
+       (select min(vr.opened_at) from vendor_requests vr where vr.transaction_id = p.id),
+       (select min(vr.created_at) from vendor_requests vr where vr.transaction_id = p.id),
+       p.created_at)`;
+var URGENCY_RANK = `case
+    when p.status = 'expired' then 0
+    when p.status in ('sent', 'opened') and ${LAST_ACTIVITY_SQL} < now() - make_interval(days => ${DEFAULT_THRESHOLDS.awaitingDays}) then 1
+    when p.status = 'draft' and p.created_at < now() - make_interval(days => ${DEFAULT_THRESHOLDS.draftDays}) then 2
+    when p.status in ('sent', 'opened', 'signed') and p.slip_reference = '' then 3
+    else 4
+  end`;
 function orderByClause(sort) {
+  if (sortField(sort) === "urgency") {
+    const rankDir = sortDir(sort) === "asc" ? "desc" : "asc";
+    return `order by ${URGENCY_RANK} ${rankDir}, ${LAST_ACTIVITY_SQL} asc, p.id asc`;
+  }
   const col = ORDER_BY[sortField(sort)] ?? ORDER_BY.date;
   const dir = sortDir(sort) === "asc" ? "asc" : "desc";
   return `order by ${col} ${dir}, p.id asc`;
@@ -69166,7 +69247,9 @@ var SEARCH_COLUMNS = [
   "p.note",
   "p.id::text",
   "p.ref",
-  "p.slip_reference"
+  "p.slip_reference",
+  `(select rr.number from vendor_receipts rr where rr.transaction_id = p.id order by rr.issue_date desc limit 1)`,
+  `(select rr.verification_code from vendor_receipts rr where rr.transaction_id = p.id order by rr.issue_date desc limit 1)`
 ];
 function buildWhere(q, b2, userId) {
   const parts = [`p.user_id = ${b2.bind(userId)}`];
@@ -69303,7 +69386,7 @@ var SELECT = `
     v.name as vendor_name, v.address as vendor_address, v.prefix as vendor_prefix, v.vendor_no as vendor_no,
     v.id_number_encrypted as vendor_id_encrypted,
     (select row_to_json(x) from (
-       select number, issue_date, verification_code from vendor_receipts rr where rr.transaction_id = p.id
+       select number, issue_date, verification_code, voided_at from vendor_receipts rr where rr.transaction_id = p.id
        order by rr.issue_date desc limit 1) x) as receipt,
     (select row_to_json(x) from (
        select token, created_at, opened_at, used_at, revoked_at, expires_at
@@ -69342,7 +69425,7 @@ function buildTimeline(r, receiptNumber) {
   push(iso(req?.used_at), EV.signed);
   push(iso(receipt?.issue_date) ?? (receiptNumber ? iso(r.created_at) : void 0), EV.issued, receiptNumber);
   push(iso(req?.revoked_at), EV.revoked);
-  if (r.void_reason) push(iso(r.created_at), EV.voided, String(r.void_reason));
+  if (r.void_reason) push(iso(receipt?.voided_at) ?? iso(r.created_at), EV.voided, String(r.void_reason));
   return out.sort((a2, b2) => a2.at < b2.at ? -1 : a2.at > b2.at ? 1 : 0);
 }
 function toTxn(r) {
@@ -69354,7 +69437,7 @@ function toTxn(r) {
   const receiptIssueDate = receipt ? isoDay(receipt.issue_date) : void 0;
   const req = sub(r.req);
   const live = req ? new Date(String(req.expires_at ?? 0)) > /* @__PURE__ */ new Date() : false;
-  const inviteToken = req && !req.used_at && !req.revoked_at && live ? String(req.token ?? "") || void 0 : void 0;
+  const inviteToken = req && !req.used_at && !req.revoked_at && live ? decryptToken(String(req.token ?? "")) || void 0 : void 0;
   const life = sub(r.life);
   let vendorTaxId;
   const encVendor = r.vendor_id_encrypted;
@@ -69629,11 +69712,11 @@ txnRoutes.post("/transactions/:id/send", async (c) => {
       where transaction_id = ${id} and user_id = ${g.ws}
         and used_at is null and revoked_at is null and expires_at > now()
       order by created_at desc limit 1`;
-    let tok = existing[0]?.token;
+    let tok = existing[0]?.token ? decryptToken(existing[0].token) : void 0;
     if (!tok) {
       tok = randomBytes3(32).toString("base64url");
       await db`insert into vendor_requests (user_id, transaction_id, token_hash, token, expires_at)
-        values (${g.ws}, ${id}, ${sha256hex(tok)}, ${tok}, now() + interval '7 days')`;
+        values (${g.ws}, ${id}, ${sha256hex(tok)}, ${encryptToken(tok)}, now() + interval '7 days')`;
     }
     await db`update vendor_payables set status = 'sent'
       where id = ${id} and user_id = ${g.ws} and status in ('draft', 'expired', 'cancelled')`;
@@ -69657,12 +69740,29 @@ txnRoutes.post("/transactions/:id/void", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
   const b2 = await c.req.json().catch(() => null);
+  const reason = (b2?.reason ?? "").trim();
+  if (!reason) return c.json({ error: "reason-required" }, 400);
   const id = c.req.param("id");
-  await withTenant(g.ws, "owner", async () => {
+  const ip = c.req.header("x-forwarded-for") ?? "local";
+  const res = await withTenant(g.ws, "owner", async () => {
     const db = sql();
-    await db`update vendor_payables set status = 'void', void_reason = ${(b2?.reason ?? "").trim()}
+    const cur = one(
+      await db`select status from vendor_payables where id = ${id} and user_id = ${g.ws}`
+    );
+    if (!cur) return { ok: false, error: "not-found" };
+    if (cur.status === "void") return { ok: true };
+    await db`update vendor_payables set status = 'void', void_reason = ${reason}, updated_at = now()
       where id = ${id} and user_id = ${g.ws}`;
+    await db`update vendor_receipts set status = 'void', void_reason = ${reason}, voided_at = now()
+      where transaction_id = ${id} and user_id = ${g.ws}`;
+    await db`update vendor_requests set revoked_at = now()
+      where transaction_id = ${id} and user_id = ${g.ws} and used_at is null and revoked_at is null`;
+    await db`update wht_records set status = case when status = 'done' then 'superseded' else 'void' end
+      where source_transaction_id = ${id} and user_id = ${g.ws} and status in ('active','done')`;
+    await audit(g.ws, "vendor_receipts", id, "receipt.voided", g.actor, { reason }, ip);
+    return { ok: true };
   });
+  if (!res.ok) return c.json({ error: res.error }, 404);
   return c.json({ ok: true });
 });
 txnRoutes.post("/transactions/:id/slip", async (c) => {
@@ -69759,6 +69859,17 @@ function bounded(raw2, max, fallback) {
   return Math.min(Math.trunc(n), max);
 }
 
+// src/lib/wht-search.ts
+var WHT_SEARCH_FIELDS = [
+  "certificateNo",
+  "receiptNumber",
+  "vendorName",
+  "vendorTaxId",
+  "formType",
+  "description",
+  "note"
+];
+
 // server/src/wht-sql.ts
 var ORDER_BY2 = {
   date: "r.issue_date",
@@ -69778,10 +69889,18 @@ function whtLimitClause(q) {
   if (q.limit === 0) return "";
   return `limit ${Math.trunc(q.limit)} offset ${Math.trunc(q.offset)}`;
 }
-var SEARCH_COLUMNS2 = ["r.certificate_no", "v.name", "r.description", "r.note", "r.id::text"];
+var SEARCH_COLUMN_SQL = {
+  certificateNo: "r.certificate_no",
+  receiptNumber: "(select vr.number from vendor_receipts vr where vr.transaction_id = r.source_transaction_id)",
+  vendorName: "v.name",
+  vendorTaxId: "v.tax_id",
+  formType: "r.form_type",
+  description: "r.description",
+  note: "r.note"
+};
 function whtWhereClause(q, userId) {
   const b2 = makeBuilder();
-  const parts = [`r.user_id = ${b2.bind(userId)}`, "r.wht_amount > 0"];
+  const parts = [`r.user_id = ${b2.bind(userId)}`, "r.wht_amount > 0", "r.status in ('active','done')"];
   if (q.month) {
     const { from, to } = monthRange(q.month);
     parts.push(`r.issue_date >= ${b2.bind(from)}::date`);
@@ -69792,7 +69911,7 @@ function whtWhereClause(q, userId) {
   if (q.status === "done") parts.push(`r.status = ${b2.bind("done")}`);
   if (q.q) {
     const needle = likeNeedle(q.q);
-    const any = SEARCH_COLUMNS2.map((c) => `${c} ilike ${b2.bind(needle)} ${LIKE_ESCAPE}`).join("\n         or ");
+    const any = WHT_SEARCH_FIELDS.map((f) => `${SEARCH_COLUMN_SQL[f]} ilike ${b2.bind(needle)} ${LIKE_ESCAPE}`).join("\n         or ");
     parts.push(`(${any})`);
   }
   return { text: andJoin(parts), params: b2.params };
@@ -69806,7 +69925,7 @@ function whtTotalsClause(q, userId) {
     coalesce(sum(r.amount), 0)::numeric as amount,
     coalesce(sum(r.wht_amount), 0)::numeric as wht_amount,
     count(*) filter (where r.status = 'done')::int as filed_count,
-    count(*) filter (where r.status <> 'done')::int as active_count,
+    count(*) filter (where r.status = 'active')::int as active_count,
     count(distinct r.vendor_id)::int as vendors
   from wht_records r
   join wht_vendors v on v.id = r.vendor_id
@@ -69862,9 +69981,12 @@ function toRecord(r) {
     certificateNo: r.certificate_no ?? void 0,
     description: r.description ?? void 0,
     note: r.note ?? void 0,
-    status: r.status === "done" ? "done" : "active",
+    status: r.status === "done" ? "done" : r.status === "void" ? "void" : r.status === "superseded" ? "superseded" : "active",
     createdAt: new Date(String(r.created_at ?? Date.now())).toISOString(),
     sourceTransactionId: r.source_transaction_id ?? void 0,
+    // The receipt this certificate was auto-generated from (manual certificates
+    // have none). Shown and searched so the register reconciles to the payment.
+    receiptNumber: r.receipt_number === null || r.receipt_number === void 0 ? void 0 : String(r.receipt_number),
     // Joined in, so the list does not need a second full /wht/vendors fetch
     // and a per-row linear scan just to render a name. The tax ID and address
     // come along because a register export has to carry the payee details the
@@ -69875,7 +69997,8 @@ function toRecord(r) {
   };
 }
 var RECORD_SELECT = `
-  select r.*, v.name as vendor_name, v.tax_id as vendor_tax_id, v.address as vendor_address
+  select r.*, v.name as vendor_name, v.tax_id as vendor_tax_id, v.address as vendor_address,
+    (select vr.number from vendor_receipts vr where vr.transaction_id = r.source_transaction_id) as receipt_number
   from wht_records r
   join wht_vendors v on v.id = r.vendor_id`;
 whtRoutes.get("/wht/vendors", async (c) => {
@@ -70015,15 +70138,21 @@ function parseMonthParam(raw2) {
 // server/src/receipts-register.ts
 var receiptRoutes = new Hono2();
 var ORDER_BY3 = {
+  // Last activity: the receipt was added (r.created_at) or the payable edited.
+  // A second-precision timestamp, unlike the day-only issue/transfer dates, so
+  // same-day receipts still order deterministically.
+  updated: "greatest(r.created_at, coalesce(p.updated_at, r.created_at))",
   // The register is scoped by the payment date (the receipt's accounting
   // period), matching the transaction list and the WHT register.
   date: "p.transfer_date",
+  issue: "r.issue_date",
   number: "r.number",
   vendor: "vendor_name",
   gross: "p.gross_amount",
   wht: "p.wht_amount",
   net: "p.net_amount"
 };
+var DEFAULT_SORT = "updated-desc";
 var FROM = `
   from vendor_receipts r
   join vendor_payables p on p.id = r.transaction_id and p.user_id = r.user_id
@@ -70033,7 +70162,8 @@ var SELECT2 = `
   select p.id, r.number, r.issue_date, p.transfer_date, r.verification_code,
     coalesce(a.vendor_prefix, v.prefix) as vendor_prefix,
     coalesce(a.vendor_name, v.name) as vendor_name,
-    p.gross_amount, p.wht_rate, p.wht_amount, p.net_amount`;
+    p.gross_amount, p.wht_rate, p.wht_amount, p.net_amount,
+    greatest(r.created_at, coalesce(p.updated_at, r.created_at)) as updated_at`;
 function toRow(r) {
   return {
     id: String(r.id),
@@ -70046,8 +70176,14 @@ function toRow(r) {
     grossAmount: Number(r.gross_amount ?? 0),
     whtRate: Number(r.wht_rate ?? 0),
     whtAmount: Number(r.wht_amount ?? 0),
-    netAmount: Number(r.net_amount ?? 0)
+    netAmount: Number(r.net_amount ?? 0),
+    updatedAt: isoDateTime(r.updated_at)
   };
+}
+function isoDateTime(v2) {
+  if (v2 == null) return void 0;
+  const d2 = v2 instanceof Date ? v2 : new Date(String(v2));
+  return Number.isNaN(d2.getTime()) ? void 0 : d2.toISOString();
 }
 receiptRoutes.get("/receipts", async (c) => {
   const g = await guard(c);
@@ -70059,7 +70195,7 @@ receiptRoutes.get("/receipts", async (c) => {
   const limit = Number.isFinite(rawLimit) ? Math.max(0, Math.min(1e3, Math.trunc(rawLimit))) : 50;
   const offset = Math.max(0, Math.trunc(Number(c.req.query("offset") ?? 0)) || 0);
   const params = [g.ws];
-  const conds = ["r.user_id = $1", "r.status = 'issued'"];
+  const conds = ["r.user_id = $1", "r.status = 'issued'", "p.status not in ('void', 'cancelled')"];
   if (month) {
     params.push(month.from);
     const a2 = `$${params.length}`;
@@ -70073,8 +70209,8 @@ receiptRoutes.get("/receipts", async (c) => {
     conds.push(`(lower(r.number) like ${p2} or lower(v.name) like ${p2} or lower(coalesce(a.vendor_name, '')) like ${p2})`);
   }
   const where = `where ${conds.join(" and ")}`;
-  const sortRaw = (c.req.query("sort") ?? "date-desc").split("-");
-  const col = ORDER_BY3[sortRaw[0]] ?? ORDER_BY3.date;
+  const sortRaw = (c.req.query("sort") ?? DEFAULT_SORT).split("-");
+  const col = ORDER_BY3[sortRaw[0]] ?? ORDER_BY3.updated;
   const dir = sortRaw[1] === "asc" ? "asc" : "desc";
   const orderBy = `order by ${col} ${dir}, r.id asc`;
   const paging = limit > 0 ? `limit $${params.length + 1} offset $${params.length + 2}` : "";
@@ -70169,6 +70305,17 @@ var import_qrcode_generator = __toESM(require_qrcode(), 1);
 import { createHash as createHash3 } from "node:crypto";
 import { readFileSync as readFs } from "node:fs";
 import { join as join2 } from "node:path";
+
+// src/lib/format.ts
+var fmtDateTimeTHLong = (iso2) => {
+  try {
+    return new Date(iso2).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
+  } catch {
+    return iso2;
+  }
+};
+
+// server/src/pdf.ts
 var INK = (0, import_pdf_lib.rgb)(0.102, 0.137, 0.196);
 var MUTED = (0, import_pdf_lib.rgb)(0.392, 0.451, 0.549);
 var FAINT = (0, import_pdf_lib.rgb)(0.62, 0.671, 0.741);
@@ -70329,20 +70476,20 @@ async function buildReceiptPdf(input) {
   itemsHeader();
   const items = normalizeItems(input);
   items.forEach((it2, i) => {
-    const lines = wrap(it2.description || "\u2014", regular, 10.5, descW);
+    const lines = wrap(it2.description || "\u2014", regular, 9.5, descW);
     const rowH = Math.max(20, lines.length * 14 + 6);
     if (y - rowH < ITEMS_LIMIT) {
       newPage(true);
       itemsHeader();
     }
     if (i % 2 === 1) page.drawRectangle({ x: M - 6, y: y - rowH + 4, width: maxW + 12, height: rowH - 4, color: ZEBRA });
-    text(String(i + 1), M + numW - regular.widthOfTextAtSize(String(i + 1), 10.5), y - 10, 10.5, regular, MUTED);
-    lines.forEach((ln2, li) => text(ln2, descX, y - 10 - li * 14, 10.5, regular, INK));
-    rightText(`${it2.quantity ?? 1}`, qtyRight, y - 10, 10.5, regular, INK);
-    rightText(`${it2.unit || "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23"}`, unitRight, y - 10, 10.5, regular, INK);
-    rightText(`${thb(it2.unitPrice ?? it2.amount)}`, priceRight, y - 10, 10.5, regular, INK);
-    rightText(it2.discount ? `${thb(it2.discount)}` : "\u2014", discRight, y - 10, 10.5, regular, MUTED);
-    rightText(`${thb(it2.amount)}`, amtRight, y - 10, 10.5, bold, INK);
+    text(String(i + 1), M + numW - regular.widthOfTextAtSize(String(i + 1), 9.5), y - 10, 9.5, regular, MUTED);
+    lines.forEach((ln2, li) => text(ln2, descX, y - 10 - li * 14, 9.5, regular, INK));
+    rightText(`${it2.quantity ?? 1}`, qtyRight, y - 10, 9.5, regular, INK);
+    rightText(`${it2.unit || "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23"}`, unitRight, y - 10, 9.5, regular, INK);
+    rightText(`${thb(it2.unitPrice ?? it2.amount)}`, priceRight, y - 10, 9.5, regular, INK);
+    rightText(it2.discount ? `${thb(it2.discount)}` : "\u2014", discRight, y - 10, 9.5, regular, MUTED);
+    rightText(`${thb(it2.amount)}`, amtRight, y - 10, 9.5, bold, INK);
     y -= rowH;
     page.drawLine({ start: { x: M, y: y + 4 }, end: { x: right, y: y + 4 }, thickness: 0.5, color: RULE });
   });
@@ -70371,7 +70518,8 @@ async function buildReceiptPdf(input) {
   if (input.signaturePng) {
     try {
       const img = await doc.embedPng(input.signaturePng);
-      const scale = Math.min(150 / img.width, 54 / img.height);
+      const typed = input.verificationMethod === "typed-consent";
+      const scale = Math.min((typed ? 75 : 150) / img.width, (typed ? 27 : 54) / img.height);
       const w = img.width * scale;
       page.drawImage(img, { x: A4.w / 2 - w / 2, y: sigY + 6, width: w, height: img.height * scale });
     } catch {
@@ -70381,17 +70529,25 @@ async function buildReceiptPdf(input) {
   centerText("\u0E1C\u0E39\u0E49\u0E21\u0E35\u0E2D\u0E33\u0E19\u0E32\u0E08\u0E25\u0E07\u0E19\u0E32\u0E21", sigY - 14, 9.5, bold, INK);
   centerText(vendorDisplayName(input.vendor.prefix, input.vendor.name), sigY - 28, 9, regular, MUTED);
   centerText(
-    `\u0E25\u0E07\u0E19\u0E32\u0E21\u0E40\u0E21\u0E37\u0E48\u0E2D ${String(input.signedAt).slice(0, 10)} \xB7 ${METHOD_TH[input.verificationMethod] ?? "\u0E25\u0E32\u0E22\u0E40\u0E0B\u0E47\u0E19"}`,
-    sigY - 40,
+    `\u0E25\u0E07\u0E19\u0E32\u0E21\u0E40\u0E21\u0E37\u0E48\u0E2D ${fmtDateTimeTHLong(input.signedAt)} \xB7 ${METHOD_TH[input.verificationMethod] ?? "\u0E25\u0E32\u0E22\u0E40\u0E0B\u0E47\u0E19"}`,
+    sigY - 42,
     8.5,
     regular,
     FAINT
   );
+  if (input.verificationMethod === "typed-consent") {
+    centerText(
+      "\u0E25\u0E32\u0E22\u0E21\u0E37\u0E2D\u0E0A\u0E37\u0E48\u0E2D\u0E2D\u0E34\u0E40\u0E25\u0E47\u0E01\u0E17\u0E23\u0E2D\u0E19\u0E34\u0E01\u0E2A\u0E4C\u0E15\u0E32\u0E21 \u0E1E.\u0E23.\u0E1A.\u0E27\u0E48\u0E32\u0E14\u0E49\u0E27\u0E22\u0E18\u0E38\u0E23\u0E01\u0E23\u0E23\u0E21\u0E17\u0E32\u0E07\u0E2D\u0E34\u0E40\u0E25\u0E47\u0E01\u0E17\u0E23\u0E2D\u0E19\u0E34\u0E01\u0E2A\u0E4C \u0E1E.\u0E28. 2544",
+      sigY - 54,
+      8,
+      regular,
+      FAINT
+    );
+  }
+  centerText(`\u0E23\u0E2B\u0E31\u0E2A\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A ${input.verificationCode} \xB7 ${input.verifyUrl}`, 30, 8, regular, FAINT);
   if (input.showVerification) {
     const qrSize = 64;
     drawQr(page, input.verifyUrl, right - qrSize, M - 6, qrSize, INK);
-    text(`\u0E23\u0E2B\u0E31\u0E2A\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A  ${input.verificationCode}`, M, M + 30, 9.5, bold, INK);
-    text(input.verifyUrl, M, M + 14, 8.5, regular, MUTED);
   }
   if (pages.length > 1) {
     pages.forEach((p2, i) => {
@@ -70540,22 +70696,6 @@ async function finalizeReceipt(txnId, ip) {
 // server/src/api.ts
 var TENANT = PILOT_TENANT;
 var GATE_MAX = 5;
-var gateFails = /* @__PURE__ */ new Map();
-function gateBlocked(tokenHash) {
-  const f = gateFails.get(tokenHash);
-  if (!f) return false;
-  if (Date.now() > f.until) {
-    gateFails.delete(tokenHash);
-    return false;
-  }
-  return f.n >= GATE_MAX;
-}
-function gateFail(tokenHash) {
-  const f = gateFails.get(tokenHash) ?? { n: 0, until: Date.now() + 10 * 60 * 1e3 };
-  f.n += 1;
-  gateFails.set(tokenHash, f);
-  return Math.max(0, GATE_MAX - f.n);
-}
 var app = new Hono2();
 app.onError((err, c) => {
   console.error("[api]", err);
@@ -70598,7 +70738,7 @@ app.route("/api/client", receiptRoutes);
 app.get("/api/health", (c) => c.json({ ok: true, operation: "public", tenant: TENANT }));
 app.get("/api/vendor/:token", async (c) => {
   const ip = c.req.header("x-forwarded-for") ?? "local";
-  if (rateLimited(`get:${ip}`)) return c.json({ error: "too-many-requests" }, 429);
+  if (await rateLimited(`get:${ip}`)) return c.json({ error: "too-many-requests" }, 429);
   const token = c.req.param("token");
   const db = sql();
   const rows = await db`
@@ -70623,6 +70763,20 @@ app.get("/api/vendor/:token", async (c) => {
     await db`update vendor_payables set status = 'opened' where id = ${String(r.id)} and status = 'sent'`;
     await withTenant(rowTenant, "client", async () => audit(rowTenant, "vendor_payables", String(r.id), "vendor.opened", "vendor", {}, ip));
   }
+  const gated = r.tax_id_hash != null;
+  const unlocked = r.unlocked_at != null;
+  if (gated && !unlocked) {
+    return c.json({
+      id: r.id,
+      tenantId: rowTenant,
+      clientCode: r.client_code ?? null,
+      ref: r.ref,
+      status: r.status,
+      gated: true,
+      unlocked: false,
+      idLast4: r.tax_id_last4 ?? null
+    });
+  }
   return c.json({
     id: r.id,
     tenantId: rowTenant,
@@ -70639,23 +70793,22 @@ app.get("/api/vendor/:token", async (c) => {
     transferDate: r.transfer_date,
     slipReference: r.slip_reference,
     status: r.status,
-    // Gate + confirm-and-sign prefill (name/address are not secret).
-    gated: r.tax_id_hash != null,
+    gated,
     idLast4: r.tax_id_last4 ?? null,
     vendorPrefix: r.vendor_prefix,
     vendorName: r.vendor_name,
     vendorAddress: r.vendor_address,
     vendorPhone: r.vendor_phone ?? null,
     vendorEmail: r.vendor_email ?? null,
-    unlocked: r.unlocked_at != null
+    unlocked: true
   });
 });
 app.post("/api/vendor/:token/unlock", async (c) => {
   const ip = c.req.header("x-forwarded-for") ?? "local";
-  if (rateLimited(`unlock:${ip}`, 10)) return c.json({ error: "too-many-requests" }, 429);
+  if (await rateLimited(`unlock:${ip}`, 10)) return c.json({ error: "too-many-requests" }, 429);
   const token = c.req.param("token");
   const th = sha256hex(token);
-  if (gateBlocked(th)) return c.json({ error: "gate-locked", remaining: 0 }, 429);
+  if (await gateBlocked(th, GATE_MAX)) return c.json({ error: "gate-locked", remaining: 0 }, 429);
   const body = await c.req.json().catch(() => null);
   const idNumber = (body?.idNumber ?? "").replace(/\D/g, "");
   if (!/^\d{13}$/.test(idNumber)) return c.json({ error: "invalid-body" }, 400);
@@ -70679,21 +70832,21 @@ app.post("/api/vendor/:token/unlock", async (c) => {
   const a2 = Buffer.from(sha256hex(idNumber), "hex");
   const b2 = Buffer.from(String(r.tax_id_hash), "hex");
   if (a2.length !== b2.length || !timingSafeEqual3(a2, b2)) {
-    const remaining = gateFail(th);
+    const remaining = await gateFail(th, GATE_MAX);
     await withTenant(rowTenant, "client", async () => audit(rowTenant, "vendor_requests", String(r.req_id), "vendor.gate-failed", "vendor", { remaining }, ip));
     return c.json(
       remaining <= 0 ? { error: "gate-locked", remaining: 0 } : { error: "wrong-id", remaining },
       remaining <= 0 ? 429 : 401
     );
   }
-  gateFails.delete(th);
+  await gateClear(th);
   await db`update vendor_requests set unlocked_at = now() where id = ${String(r.req_id)}`;
   await withTenant(rowTenant, "client", async () => audit(rowTenant, "vendor_requests", String(r.req_id), "vendor.unlocked", "vendor", {}, ip));
   return c.json({ ok: true, vendorPrefix: r.vendor_prefix, vendorName: r.vendor_name, vendorAddress: r.vendor_address, idLast4: r.tax_id_last4 });
 });
 app.post("/api/vendor/:token/sign", async (c) => {
   const ip = c.req.header("x-forwarded-for") ?? "local";
-  if (rateLimited(`sign:${ip}`, 10)) return c.json({ error: "too-many-requests" }, 429);
+  if (await rateLimited(`sign:${ip}`, 10)) return c.json({ error: "too-many-requests" }, 429);
   const token = c.req.param("token");
   const body = await c.req.json().catch(() => null);
   if (!body?.vendorName || !body?.vendorAddress || !body?.signaturePng || body.consentVersion !== "v1")
@@ -70787,8 +70940,16 @@ app.post("/api/vendor/:token/sign", async (c) => {
   });
 });
 app.post("/api/transactions/:id/finalize", async (c) => {
+  const g = await guard(c);
+  if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  const id = c.req.param("id");
+  const owned = await withTenant(g.ws, "client", async () => {
+    const rows = await sql()`select 1 as ok from vendor_payables where id = ${id} and user_id = ${g.ws}`;
+    return !!one(rows);
+  });
+  if (!owned) return c.json({ error: "not-found" }, 404);
   const ip = c.req.header("x-forwarded-for") ?? "local";
-  const res = await finalizeReceipt(c.req.param("id"), ip);
+  const res = await finalizeReceipt(id, ip);
   if (!res.ok) return c.json({ error: res.error }, res.error === "already-issued" ? 409 : 422);
   return c.json({
     ok: true,
@@ -70967,7 +71128,7 @@ async function writeAudit(tenantId, entityType, entityId, eventType, actor, meta
 }
 adminApp.post("/api/login", async (c) => {
   const ip = c.req.header("x-forwarded-for") ?? "local";
-  if (rateLimited(`admin-login:${ip}`, 5)) return c.json({ error: "too-many-requests" }, 429);
+  if (await rateLimited(`admin-login:${ip}`, 5)) return c.json({ error: "too-many-requests" }, 429);
   const body = await c.req.json().catch(() => null);
   const email = (body?.email ?? "").trim().toLowerCase();
   if (!email || !body?.password) return c.json({ error: "invalid-body" }, 400);

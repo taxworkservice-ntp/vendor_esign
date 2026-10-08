@@ -10,7 +10,7 @@ import { emptyTotals, type TxnTotals } from '../../src/lib/txn-filters'
 import { parseListQuery } from '../../src/lib/txn-list-query'
 import { limitClause, orderByClause, totalsClause, whereClause } from './txn-sql'
 import { readStoredDurable } from './storage'
-import { decryptId } from './crypto'
+import { decryptId, decryptToken, encryptToken } from './crypto'
 import { isoDay } from './dates'
 import { audit, one } from './shared'
 import { contentDisposition, documentFileName } from '../../src/lib/download-name'
@@ -114,7 +114,7 @@ export function toTxn(r: Record<string, unknown>): PaymentTransaction {
   // Only a live, unspent, unexpired link can actually be opened by the vendor.
   const req = sub(r.req)
   const live = req ? new Date(String(req.expires_at ?? 0)) > new Date() : false
-  const inviteToken = req && !req.used_at && !req.revoked_at && live ? String(req.token ?? '') || undefined : undefined
+  const inviteToken = req && !req.used_at && !req.revoked_at && live ? decryptToken(String(req.token ?? '')) || undefined : undefined
   const life = sub(r.life)
   // The client owns this data — the portal shows the full tax ID, not the mask.
   let vendorTaxId: string | undefined
@@ -445,11 +445,11 @@ txnRoutes.post('/transactions/:id/send', async (c) => {
       where transaction_id = ${id} and user_id = ${g.ws}
         and used_at is null and revoked_at is null and expires_at > now()
       order by created_at desc limit 1`) as unknown as { token: string }[]
-    let tok = existing[0]?.token
+    let tok = existing[0]?.token ? decryptToken(existing[0].token) : undefined
     if (!tok) {
       tok = randomBytes(32).toString('base64url')
       await db`insert into vendor_requests (user_id, transaction_id, token_hash, token, expires_at)
-        values (${g.ws}, ${id}, ${sha256hex(tok)}, ${tok}, now() + interval '7 days')`
+        values (${g.ws}, ${id}, ${sha256hex(tok)}, ${encryptToken(tok)}, now() + interval '7 days')`
     }
     // Re-activate anything not yet signed (draft, expired, cancelled) so a
     // re-sent link can be opened again; sent/opened keep their status (resend).

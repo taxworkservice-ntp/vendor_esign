@@ -125,6 +125,72 @@ try {
   mine.rows[0].n >= 1 && notMine.rows[0].n === 0
     ? ok('RLS isolates rows by app.user_id (non-owner role)')
     : fail(`RLS isolation wrong (mine=${mine.rows[0].n}, other=${notMine.rows[0].n})`)
+
+  // ── End-to-end flow (data contract) ──────────────────────────────────
+  // Walk the lifecycle by writing the same rows the server writes, then assert
+  // the read models (receipt register + void propagation + rate limit) agree.
+  // Covers draft → sent → opened → signed → issued → void.
+  const v = await client.query(
+    `insert into vendor_payees (user_id, vendor_no, prefix, name, address, id_number_encrypted)
+     values ('ABC', 1, 'นาย', 'ผู้ขาย โฟลว์', 'ที่อยู่ทดสอบ', '') returning id`)
+  const vendorId = v.rows[0].id
+  const p = await client.query(
+    `insert into vendor_payables (user_id, ref, vendor_id, payment_type, description, line_items,
+       gross_amount, wht_rate, wht_mode, wht_amount, net_amount, transfer_date, slip_reference, status, created_by)
+     values ('ABC','TX-FLOW', $1, 'ค่าบริการ','ทดสอบโฟลว์','[]'::jsonb, 1000, 3, 'deduct', 30, 970, current_date, 'SLIP-FLOW', 'draft', 'flow')
+     returning id`, [vendorId])
+  const txnId = p.rows[0].id
+  const rq = await client.query(
+    `insert into vendor_requests (user_id, transaction_id, token_hash, token, expires_at)
+     values ('ABC', $1, 'hash-flow', 'tok-flow', now() + interval '7 days') returning id`, [txnId])
+  await client.query(`update vendor_payables set status='sent' where id=$1`, [txnId])
+  await client.query(`update vendor_requests set opened_at=now() where id=$1`, [rq.rows[0].id])
+  await client.query(`update vendor_payables set status='opened' where id=$1`, [txnId])
+  await client.query(`update vendor_requests set unlocked_at=now() where id=$1`, [rq.rows[0].id])
+  await client.query(
+    `insert into vendor_authorizations (user_id, transaction_id, vendor_name, vendor_address, vendor_masked_id, signature_image_path, verification_method, consent_text_version)
+     values ('ABC', $1, 'ผู้ขาย โฟลว์', 'ที่อยู่ทดสอบ', 'x-xxxx-xxxxx-12-34', 'signatures/flow.png', 'stub-deferred', 'v1')`, [txnId])
+  await client.query(`update vendor_requests set used_at=now() where id=$1`, [rq.rows[0].id])
+  await client.query(`update vendor_payables set status='signed' where id=$1`, [txnId])
+  const num = await client.query(`select generate_doc_number('ABC','vendor_receipt',2569,1) n`)
+  await client.query(
+    `insert into vendor_receipts (user_id, transaction_id, number, issue_date, verification_code, status)
+     values ('ABC', $1, $2, current_date, 'flowcode', 'issued')`, [txnId, num.rows[0].n])
+  await client.query(`update vendor_payables set status='issued' where id=$1`, [txnId])
+  const wv = await client.query(`select id from wht_vendors where user_id='ABC' limit 1`)
+  await client.query(
+    `insert into wht_records (user_id, vendor_id, form_type, issue_date, amount, wht_rate, wht_amount, description, status, certificate_no, source_transaction_id)
+     values ('ABC', $1, 'pnd3', current_date, 1000, 3, 30, 'ค่าบริการ', 'active', generate_wht_certificate_no('ABC', current_date), $2)`,
+    [wv.rows[0].id, txnId])
+
+  const liveRegister = async () =>
+    (await client.query(
+      `select count(*)::int n from vendor_receipts r
+       join vendor_payables p on p.id = r.transaction_id
+       where r.user_id='ABC' and r.status='issued' and p.status not in ('void','cancelled')
+         and r.transaction_id=$1`, [txnId])).rows[0].n
+  ;(await liveRegister()) === 1
+    ? ok('flow: issued receipt appears in the register')
+    : fail('flow: register did not include the issued receipt')
+
+  // Void propagation (mirrors POST /transactions/:id/void).
+  await client.query(`update vendor_payables set status='void', void_reason='ทดสอบ' where id=$1`, [txnId])
+  await client.query(`update vendor_receipts set status='void', void_reason='ทดสอบ', voided_at=now() where transaction_id=$1`, [txnId])
+  await client.query(`update wht_records set status='void' where source_transaction_id=$1 and status='active'`, [txnId])
+  ;(await liveRegister()) === 0
+    ? ok('flow: voided receipt leaves the register')
+    : fail('flow: voided receipt still counted')
+  const whtAfter = await client.query(`select status from wht_records where source_transaction_id=$1`, [txnId])
+  whtAfter.rows[0]?.status === 'void'
+    ? ok('flow: WHT certificate voided with the receipt')
+    : fail('flow: WHT certificate not voided')
+
+  // Rate-limit table upsert (migration 027).
+  await client.query(`insert into rate_hits (key, n, reset) values ('k', 1, now() + interval '60s')
+    on conflict (key) do update set n = rate_hits.n + 1 returning n`)
+  const r2 = await client.query(`insert into rate_hits (key, n, reset) values ('k', 1, now() + interval '60s')
+    on conflict (key) do update set n = rate_hits.n + 1 returning n`)
+  r2.rows[0].n === 2 ? ok('flow: rate_hits upsert increments') : fail(`flow: rate_hits got ${r2.rows[0].n}`)
 } catch (e) {
   fail(`exception: ${e.message}`)
 } finally {

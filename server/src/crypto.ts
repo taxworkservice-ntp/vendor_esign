@@ -36,3 +36,20 @@ export function decryptId(payload: string): string | null {
     return null
   }
 }
+
+// Invite tokens are high-entropy bearer secrets; storing them encrypted means a
+// database read no longer yields a working link. On failure (key absent in dev)
+// we keep the plaintext rather than break issuance. decryptToken passes legacy
+// plaintext rows through unchanged.
+export function encryptToken(plain: string): string {
+  try {
+    return encryptId(plain)
+  } catch {
+    return plain
+  }
+}
+
+export function decryptToken(stored: string): string {
+  if (!stored.startsWith(PREFIX)) return stored
+  return decryptId(stored) ?? stored
+}
