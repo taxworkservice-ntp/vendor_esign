@@ -6,7 +6,7 @@ import { useReceiptAuthorization } from '../hooks/useReceiptAuthorization'
 import { useSettings } from '../hooks/useSettings'
 import { defaultSettings } from '../lib/settings'
 import { mockReceiptNumber } from '../lib/receipt'
-import { signatureState } from '../lib/signature-state'
+import { signatureState, isSigned } from '../lib/signature-state'
 import { apiDownload, hasServer, saveBlob } from '../lib/api-client'
 import { documentFileName } from '../lib/download-name'
 import { receiptSheetToA4PdfBytes, sha256Hex } from '../lib/receipt-to-a4-pdf'
@@ -47,7 +47,19 @@ export function ReceiptView() {
 
   // The vendor's SIGNED identity, not the client's record of them. The hook is
   // called above the not-found return so every render calls the same hooks.
-  const { data: auth, isLoading: authLoading } = useReceiptAuthorization(t?.id)
+  const { data: auth, isLoading: authLoading, refetch: refetchAuth } = useReceiptAuthorization(t?.id)
+
+  // Self-heal: a signed receipt whose signature has not resolved may be a
+  // transient read (mock IndexedDB write, storage blip). Retry once per txn
+  // instead of showing the terminal "download the issued PDF" copy.
+  const healedRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (authLoading || !t || !isSigned(t) || auth?.signaturePng) return
+    if (healedRef.current.has(t.id)) return
+    healedRef.current.add(t.id)
+    const timer = setTimeout(() => void refetchAuth(), 400)
+    return () => clearTimeout(timer)
+  }, [authLoading, auth?.signaturePng, t, refetchAuth])
 
   if (!t) {
     return (

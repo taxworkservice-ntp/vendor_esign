@@ -65,14 +65,28 @@ export function useReceiptAuthorization(txnId?: string): {
   data: ReceiptAuthorization | undefined
   isLoading: boolean
   isError: boolean
+  refetch: () => Promise<unknown>
 } {
   const { activeTenant } = useClientAuth()
   const id = txnId
 
-  return useQuery({
+  const q = useQuery({
     queryKey: [...QK, activeTenant, id],
     enabled: !!id,
-    staleTime: 60_000,
+    // The signature is small and changes the moment the vendor signs; never
+    // reuse a cached result (which may be a stale "missing") — confirm on mount.
+    refetchOnMount: 'always',
     queryFn: async (): Promise<ReceiptAuthorization> => (id ? fetchReceiptAuthorization(id) : EMPTY),
   })
+
+  return {
+    data: q.data,
+    // React Query's `isLoading` is `isPending && isFetching`, which is FALSE while
+    // a previously-errored query refetches — the receipt then showed the terminal
+    // "signature missing" copy mid-refetch. Treat "no data yet and a request in
+    // flight" as loading instead.
+    isLoading: q.data === undefined && q.isFetching,
+    isError: q.isError,
+    refetch: q.refetch,
+  }
 }

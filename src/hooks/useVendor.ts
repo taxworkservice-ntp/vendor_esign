@@ -308,9 +308,10 @@ export function useVendorActions() {
       }
 
       // Mock mode: local store (kept for `npm run dev` without an API).
-      // Fire-and-forget: the PNG is already in hand, and blocking the status
-      // flip on an IndexedDB write would only add latency to the vendor.
-      void putSignature(id, auth.signaturePng)
+      // AWAIT the IndexedDB write: it is async, and the client's receipt view
+      // reads it straight back. Fire-and-forget let the receipt render the
+      // "signature missing" state until a manual refresh found the committed PNG.
+      await putSignature(id, auth.signaturePng)
       writeAuth({ ...readAuth(), [id]: auth })
       let number: string | undefined
       touch(id, (t, all) => {
@@ -355,6 +356,9 @@ export function useVendorActions() {
         }
       })
       refresh()
+      // The client receipt view (same browser in mock mode) caches the
+      // authorization; drop it so the just-signed signature is picked up.
+      void qc.invalidateQueries({ queryKey: ['receipt-auth'] })
       return { ok: true, number }
     },
   }
