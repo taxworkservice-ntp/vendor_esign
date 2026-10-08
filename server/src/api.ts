@@ -16,6 +16,7 @@ import { txnRoutes } from './transactions'
 import { whtRoutes } from './wht'
 import { receiptRoutes } from './receipts-register'
 import { finalizeReceipt } from './receipts'
+import { inviteClientRoutes, invitePublicRoutes } from './vendor-invites'
 import { PILOT_TENANT, audit, one, rateLimited, gateBlocked, gateFail, gateClear } from './shared'
 
 // ── Public client/vendor operation ─────────────────────────────────────
@@ -90,6 +91,10 @@ app.route('/api/client', whtRoutes)
 
 // Client receipt register (issued receipts by issue-date period).
 app.route('/api/client', receiptRoutes)
+
+// Vendor self-onboarding: client routes + public invite/submit.
+app.route('/api/client', inviteClientRoutes)
+app.route('/api/vendor-invite', invitePublicRoutes)
 
 app.get('/api/health', (c) => c.json({ ok: true, operation: 'public', tenant: TENANT }))
 

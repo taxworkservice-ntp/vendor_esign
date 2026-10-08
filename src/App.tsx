@@ -29,6 +29,8 @@ import { WhtPrint } from './pages/WhtPrint'
 import { ClientLogin } from './pages/ClientLogin'
 import { ClientChangePassword } from './pages/ClientChangePassword'
 import { Help } from './pages/Help'
+import { VendorOnboard } from './pages/VendorOnboard'
+import { VendorInviteReview } from './pages/VendorInviteReview'
 import { ClientsList } from './pages/admin/ClientsList'
 import { ClientNew } from './pages/admin/ClientNew'
 import { ClientDetail } from './pages/admin/ClientDetail'
@@ -86,6 +88,7 @@ export default function App() {
           {/* Vendor + public verify + receipt copy: no account, standalone */}
           <Route path="/v/:token" element={<VendorSign />} />
           <Route path="/v/receipt/:id" element={<VendorReceipt />} />
+          <Route path="/onboard/:token" element={<VendorOnboard />} />
           <Route path="/verify/:code" element={<AuthShell><VerifyPage /></AuthShell>} />
 
           {/* Auth pages: standalone, no portal chrome */}
@@ -134,6 +137,7 @@ export default function App() {
                   <Route path="/transactions/:id" element={<RequireClient><TransactionDetail /></RequireClient>} />
                   <Route path="/vendors" element={<RequireClient><VendorsList /></RequireClient>} />
                   <Route path="/vendors/new" element={<RequireClient><VendorNew /></RequireClient>} />
+                  <Route path="/vendors/invites/:id" element={<RequireClient><VendorInviteReview /></RequireClient>} />
                   <Route path="/vendors/:id" element={<RequireClient><VendorDetail /></RequireClient>} />
                   <Route path="/items" element={<RequireClient><ItemsList /></RequireClient>} />
                   <Route path="/wht" element={<RequireClient><WhtList /></RequireClient>} />

@@ -191,6 +191,28 @@ try {
   const r2 = await client.query(`insert into rate_hits (key, n, reset) values ('k', 1, now() + interval '60s')
     on conflict (key) do update set n = rate_hits.n + 1 returning n`)
   r2.rows[0].n === 2 ? ok('flow: rate_hits upsert increments') : fail(`flow: rate_hits got ${r2.rows[0].n}`)
+
+  // Vendor invite → approve (schema + duplicate detection).
+  await client.query(
+    `insert into vendor_invites (user_id, token_hash, expires_at, status, name, address, tax_id_hash, bank_name, account_holder, submitted_at)
+     values ('ABC','invite-hash', now() + interval '30 days','submitted','ผู้ขาย เชิญ','ที่อยู่ทดสอบ','hash-invite','กสิกร','ผู้ขาย เชิญ', now())`)
+  await client.query(
+    `insert into vendor_payees (user_id, vendor_no, prefix, name, address, id_number_encrypted, id_number_hash, bank_name, account_holder)
+     values ('ABC', (select coalesce(max(vendor_no),0)+1 from vendor_payees where user_id='ABC'), 'นาย','ผู้ขาย เชิญ','ที่อยู่ทดสอบ','', 'hash-invite','กสิกร','ผู้ขาย เชิญ')`)
+  const dup = await client.query(
+    `select (select v.id from vendor_payees v where v.user_id=i.user_id and v.id_number_hash=i.tax_id_hash limit 1) as dup
+     from vendor_invites i where i.token_hash='invite-hash'`)
+  dup.rows[0].dup
+    ? ok('flow: invite duplicate detection finds the existing vendor')
+    : fail('flow: duplicate detection failed')
+  await client.query(
+    `update vendor_invites set status='approved',
+       vendor_id=(select v.id from vendor_payees v where v.user_id='ABC' and v.id_number_hash='hash-invite' limit 1)
+     where token_hash='invite-hash'`)
+  const ap = await client.query(`select status, vendor_id from vendor_invites where token_hash='invite-hash'`)
+  ap.rows[0].status === 'approved' && ap.rows[0].vendor_id
+    ? ok('flow: approved invite links the created vendor')
+    : fail('flow: approve did not link a vendor')
 } catch (e) {
   fail(`exception: ${e.message}`)
 } finally {

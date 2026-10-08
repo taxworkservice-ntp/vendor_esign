@@ -3,6 +3,7 @@ import { sql, withTenant } from '../../src/server/db'
 import { requireClient } from './client-auth'
 import { impersonationFromCookie, type ImpersonationMode } from './impersonation'
 import { decryptId, encryptId } from './crypto'
+import { sha256hex } from './auth'
 import type { SessionUser } from './auth'
 import { isVendorPrefix, prefixRequired } from '../../src/lib/vendor-name'
 import { getVendorMemory } from './vendor-memory'
@@ -168,12 +169,14 @@ dataRoutes.post('/vendors', async (c) => {
   const name = (b?.name ?? '').trim()
   if (name.length < 2) return c.json({ error: 'invalid-body' }, 400)
   if (prefixRequired(name) && !isVendorPrefix(prefix)) return c.json({ error: 'invalid-prefix' }, 400)
+  const taxNorm = (b?.taxId ?? '').replace(/\D/g, '')
+  const taxHash = taxNorm ? sha256hex(taxNorm) : null
   const row = await withTenant(g.ws, 'owner', async () => {
     const db = sql()
-    const ins = (await db`insert into vendor_payees (user_id, vendor_no, prefix, name, address, id_number_encrypted, line_user_id, phone, email, is_vat_registered)
+    const ins = (await db`insert into vendor_payees (user_id, vendor_no, prefix, name, address, id_number_encrypted, id_number_hash, line_user_id, phone, email, is_vat_registered)
       values (${g.ws},
         (select coalesce(max(vendor_no), 0) + 1 from vendor_payees where user_id = ${g.ws}),
-        ${isVendorPrefix(prefix) ? prefix : ''}, ${name}, ${(b?.address ?? '').trim()}, ${safeEncrypt(b?.taxId ?? '')},
+        ${isVendorPrefix(prefix) ? prefix : ''}, ${name}, ${(b?.address ?? '').trim()}, ${safeEncrypt(b?.taxId ?? '')}, ${taxHash},
         ${b?.lineUserId?.trim() ?? null}, ${b?.phone?.trim() ?? null}, ${b?.email?.trim() ?? null}, ${Boolean(b?.isVatRegistered)})
       returning id, user_id, vendor_no, prefix, name, address, id_number_encrypted, line_user_id, phone, email, is_vat_registered, created_at`) as unknown as Record<string, unknown>[]
     return ins[0]

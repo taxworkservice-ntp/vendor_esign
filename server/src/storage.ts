@@ -13,7 +13,7 @@ export function storageRoot(): string {
   return process.env.STORAGE_DIR ?? join(process.cwd(), 'storage')
 }
 
-export type StorageArea = 'slips' | 'signatures' | 'pdfs'
+export type StorageArea = 'slips' | 'signatures' | 'pdfs' | 'vendor-docs'
 
 export function saveBytes(area: StorageArea, name: string, bytes: Uint8Array, tenantId?: string): string {
   const parts = tenantId ? [tenantId, area] : [area]
