@@ -7,6 +7,7 @@ import { putSignature } from '../lib/sig-store'
 import { nextReceiptNumber } from '../lib/receipt-number'
 import { currentBeYear } from '../lib/settings'
 import { hasServer } from '../lib/api-client'
+import { API_BASE } from '../lib/api-base'
 
 export interface VendorCorrection {
   field: 'prefix' | 'name' | 'address'
@@ -35,7 +36,7 @@ export interface VendorAuth extends VendorAuthMeta {
 
 const AUTH_KEY = 'taxwork-pilot-auth-v1'
 const QK = ['transactions'] as const
-const API = (import.meta.env.VITE_API_BASE ?? '') as string
+const API = API_BASE
 
 type StoredAuth = VendorAuthMeta
 

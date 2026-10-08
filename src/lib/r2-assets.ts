@@ -1,4 +1,5 @@
 import { hasServer } from './api-client'
+import { API_BASE } from './api-base'
 
 // Client-side helpers for uploading/downloading tenant assets (signature,
 // stamp) to R2 through presigned URLs. Mirrors the internal app's flow:
@@ -13,7 +14,7 @@ export interface R2Status {
 
 export async function getR2Status(): Promise<R2Status> {
   if (!hasServer) return { configured: false }
-  const r = await fetch(`${import.meta.env.VITE_API_BASE}/api/files/r2-status`, {
+  const r = await fetch(`${API_BASE}/api/files/r2-status`, {
     credentials: 'include',
   })
   const j = (await r.json().catch(() => null)) as R2Status | null
@@ -27,7 +28,7 @@ export interface SignedUpload {
 }
 
 export async function signUpload(fileName: string): Promise<SignedUpload> {
-  const r = await fetch(`${import.meta.env.VITE_API_BASE}/api/files/sign-upload`, {
+  const r = await fetch(`${API_BASE}/api/files/sign-upload`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -50,7 +51,7 @@ export async function uploadToR2(url: string, file: File): Promise<void> {
 }
 
 export async function signDownload(path: string): Promise<string> {
-  const r = await fetch(`${import.meta.env.VITE_API_BASE}/api/files/sign-download`, {
+  const r = await fetch(`${API_BASE}/api/files/sign-download`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },

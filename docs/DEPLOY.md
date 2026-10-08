@@ -4,28 +4,36 @@
 **preview** deployment. The risk to avoid: a preview that points at the
 production database and login, so testing can read and mutate live data.
 
-## Rule
-Scope every environment variable in the Vercel dashboard per environment
-(Production / Preview / Development). The default "all environments" is what
-causes previews to share production.
+## Preview is forced to demo (mock) mode
+Vercel sets `VERCEL_ENV=preview` at build time; `vite.config.ts` exposes it as
+`__VERCEL_ENV__`, and `src/lib/api-base.ts` blanks the API base on preview. A
+preview therefore **never talks to a real backend** — it runs entirely on the
+seed data in `src/lib/mock*.ts`. The login screen shows the demo credentials
+(`client@taxwork.local / demo1234`, `super@taxwork.local / demo1234`).
+
+Consequence: the server-side paths (finalize guard, ID-gate withholding,
+DB-backed limits) are **not** exercised on a mock preview — only the UI. To test
+those, run locally against a database, or wire a separate preview DB branch and
+lift the forcing (see below).
 
 ## Recommended matrix
 
 | Variable | Production | Preview |
 |---|---|---|
-| `VITE_API_BASE`, `VITE_ADMIN_API_BASE` | production origin | **empty → mock mode**, or a preview API |
-| `DATABASE_URL` / `NETLIFY_DATABASE_URL` | main Neon branch | **preview branch**, or unset (mock) |
+| `VITE_API_BASE`, `VITE_ADMIN_API_BASE` | production origin | **ignored — forced to mock** |
+| `DATABASE_URL` / `NETLIFY_DATABASE_URL` | main Neon branch | not used (mock) — or a preview branch if forcing is lifted |
 | `R2_*` (bucket/keys) | production bucket | empty (uploads degrade) or a separate bucket |
 | `ID_ENCRYPTION_KEY` | production key | **a distinct key** |
 | `CRON_SECRET` | production secret | **a distinct value** |
 | Deployment Protection | — | **enabled** (Vercel Authentication or password) |
 
 ### Why
-- **Mock mode.** With `VITE_API_BASE` empty, both portals run on seed users and
-  local mock data (`src/lib/client-auth.tsx`, `src/lib/auth.tsx`). Ideal for
-  reviewing UI-only changes with zero production access.
-- **DB branch.** For previews that need realistic data, point Preview at a Neon
-  branch created from `main`. Migrations run against the branch, not production.
+- **Mock mode.** Preview blanks the API base, so both portals run on seed users
+  and local mock data (`src/lib/client-auth.tsx`, `src/lib/auth.tsx`). Ideal for
+  reviewing UI changes with zero production access.
+- **DB branch (optional).** To exercise the server on a preview, set the Preview
+  `DATABASE_URL` to a Neon branch and remove the preview forcing in
+  `src/lib/api-base.ts` (or gate it behind an explicit opt-out env).
 - **Separate keys.** A shared `ID_ENCRYPTION_KEY` lets a preview decrypt
   production ciphertext (vendor tax IDs, invite tokens); a shared `CRON_SECRET`
   lets a preview trigger jobs.

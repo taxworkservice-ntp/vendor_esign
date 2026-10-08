@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { API_BASE } from '../lib/api-base'
 
 // Public platform notice (announcement + maintenance) shown in the client shell.
 // Reads GET /api/announcement (no auth). In mock mode there is no server, so the
@@ -25,7 +26,7 @@ export const DEFAULT_NOTICE: PlatformNotice = {
   maintenance: { mode: 'off', message: '' },
 }
 
-const API = (import.meta.env.VITE_API_BASE ?? '') as string
+const API = API_BASE
 
 export function usePlatformNotice(): PlatformNotice {
   const q = useQuery({

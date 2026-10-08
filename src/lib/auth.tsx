@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { ADMIN_ROLES, findMockUser, hasRole } from './mock-users'
 import { adminPath } from './admin-api'
+import { ADMIN_API_BASE } from './api-base'
 
 export interface Membership {
   tenantId: string
@@ -25,7 +26,7 @@ interface AuthCtx extends AuthState {
 const Ctx = createContext<AuthCtx | null>(null)
 // Admin operation base: isolated port (default :8788). Falls back to the
 // public API base, then to mock mode when both are empty.
-const API = ((import.meta.env.VITE_ADMIN_API_BASE ?? '') || (import.meta.env.VITE_API_BASE ?? '')) as string
+const API = ADMIN_API_BASE
 const LS_KEY = 'taxwork-auth-v1'
 // Set once an admin logs in on this browser. Client pages only probe the admin
 // session when this hint (or an /admin route) is present, so a normal client

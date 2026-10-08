@@ -1,7 +1,9 @@
 // Thin fetch client for the client-op API. `hasServer` is true when
 // VITE_API_BASE is set; hooks branch on it to run on the server or the mock.
 
-const API = (import.meta.env.VITE_API_BASE ?? '') as string
+import { API_BASE } from './api-base'
+
+const API = API_BASE
 export const hasServer = !!API
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {

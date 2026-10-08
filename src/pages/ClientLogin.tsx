@@ -3,13 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { useClientAuth, MOCK_MODE } from '../lib/client-auth'
 import { markAdminHint, useAuth } from '../lib/auth'
 import { ADMIN_ROLES, findMockUser, hasRole, MOCK_HINT } from '../lib/mock-users'
+import { API_BASE } from '../lib/api-base'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
 import { Button } from '../components/ui/button'
 import { FieldError, Input, Label } from '../components/ui/input'
 import { PasswordInput } from '../components/ui/password-input'
 
-const API = (import.meta.env.VITE_API_BASE ?? '') as string
+const API = API_BASE
 
 // Unified sign-in. One form for everyone: the account type (platform admin vs
 // client user) decides the session cookie and the landing page. The response
@@ -108,8 +109,10 @@ export function ClientLogin() {
           </Button>
           {MOCK_MODE && (
             <div className="rounded-control bg-warning-soft p-3 text-body text-warning">
-              <p className="font-semibold">โหมดทดสอบ (ภายในเครื่องนี้)</p>
-              <p className="mt-0.5 font-mono">{MOCK_HINT}</p>
+              <p className="font-semibold">โหมดสาธิต (Demo) — ใช้ข้อมูลตัวอย่าง ไม่ใช่ข้อมูลจริง</p>
+              <p className="mt-0.5">
+                บัญชีทดลอง: <span className="font-mono">{MOCK_HINT}</span>
+              </p>
             </div>
           )}
         </CardBody>

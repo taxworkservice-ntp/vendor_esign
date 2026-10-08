@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useClientAuth } from '../lib/client-auth'
+import { API_BASE } from '../lib/api-base'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
 import { Button } from '../components/ui/button'
 import { FieldError, Label } from '../components/ui/input'
 import { PasswordInput } from '../components/ui/password-input'
 
-const API = (import.meta.env.VITE_API_BASE ?? '') as string
+const API = API_BASE
 
 export function ClientChangePassword() {
   const nav = useNavigate()

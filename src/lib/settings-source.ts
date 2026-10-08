@@ -1,8 +1,9 @@
 import { loadSettings, saveSettings, type TenantSettings } from './settings'
+import { API_BASE } from './api-base'
 
 // Port/adapter mirroring vendor-memory-source: mock (localStorage per tenant) now,
 // server endpoint when VITE_API_BASE is set.
-const API = (import.meta.env.VITE_API_BASE ?? '') as string
+const API = API_BASE
 
 export interface SettingsSource {
   get(tenantId: string): Promise<TenantSettings>

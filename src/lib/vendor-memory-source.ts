@@ -1,11 +1,12 @@
 import { buildVendorMemory, type VendorMemory } from './vendor-memory'
 import { loadTxns } from './mock'
+import { API_BASE } from './api-base'
 
 // Port/adapter so the UI is agnostic to whether memory is derived from the
 // local mock history or the tenant-scoped server endpoint. Same contract.
 // Kill-switch: set VITE_FEATURE_VENDOR_MEMORY=off to disable recall entirely.
 
-const API = (import.meta.env.VITE_API_BASE ?? '') as string
+const API = API_BASE
 const FLAG = (import.meta.env.VITE_FEATURE_VENDOR_MEMORY ?? 'on') !== 'off'
 
 export interface VendorMemorySource {

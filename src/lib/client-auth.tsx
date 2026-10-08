@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { CLIENT_ROLES, findMockUser, hasRole } from './mock-users'
 import { adminPath } from './admin-api'
+import { API_BASE } from './api-base'
 
 // Client portal auth (admin-provisioned passwords). Talks to the client/vendor
 // operation at VITE_API_BASE; falls back to mock credentials when no API base is
@@ -40,7 +41,7 @@ interface ClientAuthCtx extends ClientAuthState {
 }
 
 const Ctx = createContext<ClientAuthCtx | null>(null)
-const API = (import.meta.env.VITE_API_BASE ?? '') as string
+const API = API_BASE
 const LS_KEY = 'taxwork-client-auth-v2'
 
 export const MOCK_MODE = !API
