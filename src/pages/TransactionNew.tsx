@@ -15,6 +15,7 @@ import { useSettings } from '../hooks/useSettings'
 import { VendorPicker } from '../components/vendor-picker'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
+import { HelpLink } from '../components/ui/help-link'
 import { Button } from '../components/ui/button'
 import { FieldError, Input, Label } from '../components/ui/input'
 import { Select } from '../components/ui/select'
@@ -279,7 +280,11 @@ export function TransactionNew() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
-      <PageHeader title="สร้างรายการใหม่" sub="ชำระผ่านธนาคาร · เลขที่ใบเสร็จจะออกเมื่อผู้ขายลงนามแล้ว" />
+      <PageHeader
+        title="สร้างรายการใหม่"
+        sub="ชำระผ่านธนาคาร · เลขที่ใบเสร็จจะออกเมื่อผู้ขายลงนามแล้ว"
+        actions={<HelpLink to="/help#create-transaction" />}
+      />
 
       <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
         {/* ── Main column ── */}

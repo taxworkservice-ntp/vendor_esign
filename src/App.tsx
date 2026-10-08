@@ -28,6 +28,7 @@ import { WhtList } from './pages/WhtList'
 import { WhtPrint } from './pages/WhtPrint'
 import { ClientLogin } from './pages/ClientLogin'
 import { ClientChangePassword } from './pages/ClientChangePassword'
+import { Help } from './pages/Help'
 import { ClientsList } from './pages/admin/ClientsList'
 import { ClientNew } from './pages/admin/ClientNew'
 import { ClientDetail } from './pages/admin/ClientDetail'
@@ -107,6 +108,7 @@ export default function App() {
                     <Route path="/clients/:id" element={<ClientDetail />} />
                     <Route path="/users" element={<AdminUsers />} />
                     <Route path="/audit" element={<AdminAuditLog />} />
+                    <Route path="/help" element={<Help kind="admin" />} />
                     <Route path="/settings" element={<AdminSettings />} />
                     <Route path="/account" element={<AdminAccount />} />
                     <Route path="*" element={<NotFound />} />
@@ -138,6 +140,7 @@ export default function App() {
                   <Route path="/wht/print" element={<RequireClient><WhtPrint /></RequireClient>} />
                   <Route path="/settings" element={<RequireClient><Settings /></RequireClient>} />
                   <Route path="/metrics" element={<RequireClient><MetricsPage /></RequireClient>} />
+                  <Route path="/help" element={<RequireClient><Help kind="client" /></RequireClient>} />
 
                   <Route path="*" element={<NotFound />} />
                 </Routes>

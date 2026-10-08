@@ -36,6 +36,7 @@ import { buildBulkInviteMessage } from '../lib/invite-message'
 import { cn } from '../lib/cn'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
+import { HelpLink } from '../components/ui/help-link'
 import { EmptyState } from '../components/ui/empty-state'
 import { ErrorState } from '../components/ui/error-state'
 import { Button } from '../components/ui/button'
@@ -604,6 +605,7 @@ export function TransactionList() {
         sub="สร้างรายการ · ส่งลิงก์ทาง LINE · ติดตามสถานะจนออกใบเสร็จ"
         actions={
           <>
+            <HelpLink to="/help#getting-started" />
             <Button
               variant="secondary"
               onClick={exportAll}

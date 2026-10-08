@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import {
   Building2,
+  HelpCircle,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -36,6 +37,7 @@ const NAV: NavItem[] = [
   { to: '/admin/audit', label: 'บันทึกกิจกรรม', icon: ScrollText },
   { to: '/admin/settings', label: 'ตั้งค่าระบบ', icon: SettingsIcon },
   { to: '/admin/account', label: 'บัญชีของฉัน', icon: UserCircle },
+  { to: '/admin/help', label: 'คู่มือการใช้งาน', icon: HelpCircle },
 ]
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {

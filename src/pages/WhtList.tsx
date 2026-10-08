@@ -28,6 +28,7 @@ import { useSettings } from '../hooks/useSettings'
 import { defaultSettings } from '../lib/settings'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
+import { HelpLink } from '../components/ui/help-link'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Select } from '../components/ui/select'
@@ -243,6 +244,7 @@ export function WhtList() {
         sub={`หนังสือรับรองการหักภาษี ณ ที่จ่าย — ${effective.month ? `รอบ ${formatMonthTH(effective.month)}` : 'ทั้งหมด'} · ตามวันที่ออกหนังสือรับรอง`}
         actions={
           <>
+            <HelpLink to="/help#wht" />
             <Button variant="secondary" onClick={exportCsv} disabled={records.length === 0} title="ส่งออกเฉพาะหน้าที่แสดง">
               <Download size={16} aria-hidden /> ส่งออก CSV
             </Button>

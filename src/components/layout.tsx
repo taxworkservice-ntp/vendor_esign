@@ -4,6 +4,7 @@ import {
   BarChart3,
   ChevronsLeft,
   ChevronsRight,
+  HelpCircle,
   Landmark,
   ListOrdered,
   LogIn,
@@ -41,6 +42,7 @@ const NAV: NavItem[] = [
   { to: '/receipts', label: 'ใบเสร็จรับเงิน', icon: ReceiptText },
   { to: '/metrics', label: 'ภาพรวม', icon: BarChart3 },
   { to: '/settings', label: 'ตั้งค่า', icon: SettingsIcon },
+  { to: '/help', label: 'คู่มือการใช้งาน', icon: HelpCircle },
 ]
 
 const LS_COLLAPSED = 'tw:sidebar-collapsed'

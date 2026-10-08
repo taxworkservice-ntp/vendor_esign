@@ -16,6 +16,7 @@ import { defaultSettings } from '../lib/settings'
 import type { ClientVendor } from '../lib/vendors-mock'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
+import { HelpLink } from '../components/ui/help-link'
 import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { ErrorState } from '../components/ui/error-state'
@@ -132,6 +133,7 @@ export function VendorsList() {
         sub="ทะเบียนผู้ขายรายย่อย (ไม่จด VAT) — ใช้สำหรับออกใบเสร็จรับเงิน"
         actions={
           <>
+            <HelpLink to="/help#add-vendor" />
             <Button variant="secondary" onClick={exportCsv} disabled={vendors.length === 0} title="ส่งออกทะเบียนผู้ขายเป็น CSV">
               <Download size={16} aria-hidden /> ส่งออก CSV
             </Button>

@@ -19,6 +19,7 @@ import {
 import { fmtDateTH, fmtDateTimeTHSec, fmtTHB } from '../lib/format'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
+import { HelpLink } from '../components/ui/help-link'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { EmptyState } from '../components/ui/empty-state'
@@ -127,11 +128,14 @@ export function ReceiptsList() {
         title="ใบเสร็จรับเงิน"
         sub={`ทะเบียนใบเสร็จที่ออกแล้ว — ${month ? `รอบ ${formatMonthTH(month)}` : 'ทั้งหมด'} · ตามวันที่รับชำระ`}
         actions={
-          <a href={downloadAllHref} target="_blank" rel="noopener noreferrer" aria-disabled={total === 0}>
-            <Button disabled={total === 0} title={`ดาวน์โหลดใบเสร็จทั้งหมด ${total} ฉบับที่ตรงเงื่อนไข (PDF แยกต่อฉบับ, รวมเป็น ZIP)`}>
-              <Download size={16} aria-hidden /> ดาวน์โหลดทั้งหมด ({total})
-            </Button>
-          </a>
+          <>
+            <HelpLink to="/help#receipt-register" />
+            <a href={downloadAllHref} target="_blank" rel="noopener noreferrer" aria-disabled={total === 0}>
+              <Button disabled={total === 0} title={`ดาวน์โหลดใบเสร็จทั้งหมด ${total} ฉบับที่ตรงเงื่อนไข (PDF แยกต่อฉบับ, รวมเป็น ZIP)`}>
+                <Download size={16} aria-hidden /> ดาวน์โหลดทั้งหมด ({total})
+              </Button>
+            </a>
+          </>
         }
       />
 
