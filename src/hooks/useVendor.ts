@@ -76,6 +76,9 @@ interface ServerVendor {
   id: string
   tenantId: string
   clientCode?: string | null
+  clientName?: string | null
+  consentTemplate?: string
+  consentVersion?: string
   ref?: string
   description?: string
   note?: string
@@ -116,6 +119,10 @@ async function fetchServerVendor(token: string): Promise<PaymentTransaction | un
     id: j.id,
     tenantId: j.tenantId,
     clientCode: j.clientCode ?? undefined,
+    clientName: j.clientName ?? undefined,
+    ref: j.ref,
+    consentTemplate: j.consentTemplate,
+    consentVersion: j.consentVersion,
     vendor: {
       id: '',
       vendorNo: 0,

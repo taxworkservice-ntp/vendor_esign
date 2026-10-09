@@ -9,7 +9,8 @@ import { renderTypedSignature, SIGNATURE_FONT, signMethodLabel } from '../lib/ty
 import { cn } from '../lib/cn'
 import { ReceiptSheet, type ReceiptSheetData } from '../components/receipt/receipt-sheet'
 import { maskTaxId } from '../lib/taxid'
-import { loadSettings } from '../lib/settings'
+import { loadSettings, renderConsent, PDPA_STATEMENT } from '../lib/settings'
+import type { PaymentTransaction } from '../lib/types'
 import { fmtTHB, fmtDateTH, fmtDateTimeTHLong } from '../lib/format'
 import { amountToThaiWords } from '../lib/thai-words'
 import { VENDOR_PREFIXES, isVendorPrefix, prefixRequired } from '../lib/vendor-name'
@@ -20,8 +21,25 @@ import { FieldError, Input, Label } from '../components/ui/input'
 import { Select } from '../components/ui/select'
 import SigPad, { SigPadHandle } from '../components/ui/sigpad'
 
-function Shell({ children }: { children: React.ReactNode }) {
-  return (
+// Render the vendor consent statement: the client's wording (from tenant
+// settings, or the server-rendered template on the vendor payload) with the real
+// amount/date/ref substituted. One source of truth so the text the vendor
+// accepts matches the version the server records.
+function consentInfoFor(t: PaymentTransaction): { text: string; version: string; clientName: string } {
+  const s = loadSettings(t.tenantId)
+  const clientName = t.clientName || s.displayName || t.clientCode || s.clientCode
+  const version = t.consentVersion || s.consentVersion
+  const text = renderConsent(t.consentTemplate || s.consentTextV1, {
+    client: clientName,
+    amount: fmtTHB(t.netAmount),
+    date: fmtDateTH(t.transferDate),
+    ref: t.ref ?? t.id,
+    version,
+  })
+  return { text, version, clientName }
+}
+
+function Shell({ children }: { children: React.ReactNode }) {  return (
     <div className="min-h-screen bg-paper">
       <div className="mx-auto w-full max-w-xl px-4 py-6">
         <div className="mb-4 flex items-center gap-2.5">
@@ -137,11 +155,12 @@ export function VendorSign() {
   if (done || t?.status === 'signed' || t?.status === 'issued') {
     const receiptId = t?.id ?? signedId
     const number = receipt?.number ?? t?.receiptNumber
+    const successClient = vendorData?.client?.displayName || t?.clientName || 'ลูกค้าผู้จ่าย'
     return (
       <>
       <StateCard
         title="ยืนยันการลงนามเรียบร้อยแล้ว"
-        body="ระบบได้บันทึกการลงนามอิเล็กทรอนิกส์ของท่านเพื่อยืนยันการรับเงินและมอบอำนาจให้ลูกค้าออกใบเสร็จในนามของท่านสำหรับธุรกรรมนี้ และได้ออกใบเสร็จรับเงินเรียบร้อยแล้ว"
+        body={`ระบบได้บันทึกการลงนามอิเล็กทรอนิกส์ของท่านเพื่อยืนยันการรับเงินและมอบอำนาจให้ ${successClient} ออกใบเสร็จรับเงินในนามของท่านสำหรับธุรกรรมนี้ และได้ออกใบเสร็จรับเงินเรียบร้อยแล้ว`}
         extra={
           <div className="mt-5 space-y-3">
             {number && (
@@ -206,6 +225,8 @@ export function VendorSign() {
         body={`ลิงก์นี้อาจหมดอายุ (เกิน ${loadSettings().linkExpiryDays} วัน) ถูกเพิกถอน หรือถูกใช้ไปแล้ว โปรดติดต่อลูกค้าผู้จ่ายเพื่อขอลิงก์ใหม่`}
       />
     )
+
+  const consentInfo = consentInfoFor(t)
 
   // Length-only for now — checksum policy comes later. Once the gate is passed
   // on this device the ID is already proven, so it need not be retyped.
@@ -561,11 +582,12 @@ export function VendorSign() {
             </p>
             <label className="flex gap-3 rounded-control bg-ink-50 p-4 text-body leading-relaxed active:bg-ink-100">
               <input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-ink-900" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-              <span>
-                ข้าพเจ้าได้รับเงินจำนวนดังกล่าวแล้ว และมอบอำนาจให้ <b>{t.clientCode ?? loadSettings(t.tenantId).clientCode}</b> ออกใบเสร็จรับเงิน
-               ในนามของข้าพเจ้า <b>เฉพาะธุรกรรมนี้เท่านั้น</b>
-              </span>
+              <span className="whitespace-pre-line">{consentInfo.text}</span>
             </label>
+            <p className="rounded-control bg-ink-50 p-3 text-label leading-relaxed text-ink-500">{PDPA_STATEMENT}</p>
+            <p className="text-label leading-relaxed text-ink-400">
+              เอกสารนี้จัดทำโดย <b>{consentInfo.clientName}</b> ในนามของผู้รับเงินโดยได้รับมอบอำนาจผ่านการลงนามอิเล็กทรอนิกส์ · ข้อตกลงความยินยอม ฉบับที่ {consentInfo.version}
+            </p>
             {tried && !consent && <FieldError msg="กรุณายืนยันความยินยอมก่อนส่ง" />}
             {submitErr && <FieldError msg={submitErr} />}
             <Button className="w-full py-3.5 text-base" onClick={submit} loading={submitting}>

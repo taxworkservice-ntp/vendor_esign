@@ -68508,7 +68508,14 @@ var DEFAULT_WHT_RATES = [
   { value: 0, label: "\u0E44\u0E21\u0E48\u0E2B\u0E31\u0E01\u0E20\u0E32\u0E29\u0E35 \u0E13 \u0E17\u0E35\u0E48\u0E08\u0E48\u0E32\u0E22", paymentType: "\u0E44\u0E21\u0E48\u0E2B\u0E31\u0E01\u0E20\u0E32\u0E29\u0E35 \u0E13 \u0E17\u0E35\u0E48\u0E08\u0E48\u0E32\u0E22" }
 ];
 var DEFAULT_WHT_MIN_THRESHOLD = 1e3;
-var DEFAULT_CONSENT = "\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E44\u0E14\u0E49\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E08\u0E33\u0E19\u0E27\u0E19\u0E14\u0E31\u0E07\u0E01\u0E25\u0E48\u0E32\u0E27\u0E41\u0E25\u0E49\u0E27 \u0E41\u0E25\u0E30\u0E21\u0E2D\u0E1A\u0E2D\u0E33\u0E19\u0E32\u0E08\u0E43\u0E2B\u0E49\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E43\u0E19\u0E19\u0E32\u0E21\u0E02\u0E2D\u0E07\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E18\u0E38\u0E23\u0E01\u0E23\u0E23\u0E21\u0E19\u0E35\u0E49\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19";
+var DEFAULT_CONSENT_VERSION = "2";
+var DEFAULT_CONSENT = `\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E02\u0E2D\u0E23\u0E31\u0E1A\u0E23\u0E2D\u0E07\u0E41\u0E25\u0E30\u0E43\u0E2B\u0E49\u0E04\u0E27\u0E32\u0E21\u0E22\u0E34\u0E19\u0E22\u0E2D\u0E21\u0E14\u0E31\u0E07\u0E15\u0E48\u0E2D\u0E44\u0E1B\u0E19\u0E35\u0E49
+(1) \u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E02\u0E2D\u0E23\u0E31\u0E1A\u0E23\u0E2D\u0E07\u0E27\u0E48\u0E32\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E17\u0E35\u0E48\u0E43\u0E2B\u0E49\u0E44\u0E27\u0E49\u0E43\u0E19\u0E40\u0E2D\u0E01\u0E2A\u0E32\u0E23\u0E19\u0E35\u0E49 (\u0E0A\u0E37\u0E48\u0E2D \u0E17\u0E35\u0E48\u0E2D\u0E22\u0E39\u0E48 \u0E40\u0E25\u0E02\u0E1B\u0E23\u0E30\u0E08\u0E33\u0E15\u0E31\u0E27\u0E1B\u0E23\u0E30\u0E0A\u0E32\u0E0A\u0E19 \u0E41\u0E25\u0E30\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E01\u0E32\u0E23\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19) \u0E40\u0E1B\u0E47\u0E19\u0E04\u0E27\u0E32\u0E21\u0E08\u0E23\u0E34\u0E07\u0E41\u0E25\u0E30\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07\u0E17\u0E38\u0E01\u0E1B\u0E23\u0E30\u0E01\u0E32\u0E23 \u0E41\u0E25\u0E30\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E40\u0E1B\u0E47\u0E19\u0E1C\u0E39\u0E49\u0E21\u0E35\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E15\u0E32\u0E21\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E19\u0E35\u0E49
+(2) \u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E44\u0E14\u0E49\u0E23\u0E31\u0E1A\u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19\u0E04\u0E48\u0E32\u0E08\u0E49\u0E32\u0E07/\u0E04\u0E48\u0E32\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23\u0E15\u0E32\u0E21\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E02\u0E49\u0E32\u0E07\u0E15\u0E49\u0E19\u0E04\u0E23\u0E1A\u0E16\u0E49\u0E27\u0E19\u0E41\u0E25\u0E49\u0E27 \u2014 \u0E22\u0E2D\u0E14\u0E23\u0E31\u0E1A\u0E2A\u0E38\u0E17\u0E18\u0E34 {{amount}} \u0E1A\u0E32\u0E17 \u0E27\u0E31\u0E19\u0E17\u0E35\u0E48 {{date}} \u0E2D\u0E49\u0E32\u0E07\u0E2D\u0E34\u0E07 {{ref}}
+(3) \u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E02\u0E2D\u0E21\u0E2D\u0E1A\u0E2D\u0E33\u0E19\u0E32\u0E08\u0E41\u0E25\u0E30\u0E43\u0E2B\u0E49\u0E04\u0E27\u0E32\u0E21\u0E22\u0E34\u0E19\u0E22\u0E2D\u0E21\u0E41\u0E01\u0E48 {{client}} \u0E43\u0E19\u0E01\u0E32\u0E23\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E43\u0E19\u0E19\u0E32\u0E21\u0E02\u0E2D\u0E07\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32 \u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E18\u0E38\u0E23\u0E01\u0E23\u0E23\u0E21\u0E19\u0E35\u0E49\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19
+(4) \u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E22\u0E34\u0E19\u0E22\u0E2D\u0E21\u0E43\u0E2B\u0E49\u0E25\u0E32\u0E22\u0E21\u0E37\u0E2D\u0E0A\u0E37\u0E48\u0E2D\u0E2D\u0E34\u0E40\u0E25\u0E47\u0E01\u0E17\u0E23\u0E2D\u0E19\u0E34\u0E01\u0E2A\u0E4C\u0E17\u0E35\u0E48\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E25\u0E07\u0E43\u0E19\u0E40\u0E2D\u0E01\u0E2A\u0E32\u0E23\u0E19\u0E35\u0E49\u0E21\u0E35\u0E1C\u0E25\u0E1C\u0E39\u0E01\u0E1E\u0E31\u0E19\u0E17\u0E32\u0E07\u0E01\u0E0E\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E2A\u0E21\u0E37\u0E2D\u0E19\u0E01\u0E32\u0E23\u0E25\u0E07\u0E25\u0E32\u0E22\u0E21\u0E37\u0E2D\u0E0A\u0E37\u0E48\u0E2D\u0E14\u0E49\u0E27\u0E22\u0E21\u0E37\u0E2D \u0E15\u0E32\u0E21\u0E1E\u0E23\u0E30\u0E23\u0E32\u0E0A\u0E1A\u0E31\u0E0D\u0E0D\u0E31\u0E15\u0E34\u0E27\u0E48\u0E32\u0E14\u0E49\u0E27\u0E22\u0E18\u0E38\u0E23\u0E01\u0E23\u0E23\u0E21\u0E17\u0E32\u0E07\u0E2D\u0E34\u0E40\u0E25\u0E47\u0E01\u0E17\u0E23\u0E2D\u0E19\u0E34\u0E01\u0E2A\u0E4C \u0E1E.\u0E28. 2544
+(5) \u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E44\u0E14\u0E49\u0E2D\u0E48\u0E32\u0E19\u0E41\u0E25\u0E30\u0E40\u0E02\u0E49\u0E32\u0E43\u0E08\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E02\u0E49\u0E32\u0E07\u0E15\u0E49\u0E19\u0E41\u0E25\u0E49\u0E27 \u0E08\u0E36\u0E07\u0E25\u0E07\u0E19\u0E32\u0E21\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E22\u0E37\u0E19\u0E22\u0E31\u0E19`;
+var LEGACY_DEFAULT_CONSENT = "\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E44\u0E14\u0E49\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E08\u0E33\u0E19\u0E27\u0E19\u0E14\u0E31\u0E07\u0E01\u0E25\u0E48\u0E32\u0E27\u0E41\u0E25\u0E49\u0E27 \u0E41\u0E25\u0E30\u0E21\u0E2D\u0E1A\u0E2D\u0E33\u0E19\u0E32\u0E08\u0E43\u0E2B\u0E49\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E43\u0E19\u0E19\u0E32\u0E21\u0E02\u0E2D\u0E07\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E18\u0E38\u0E23\u0E01\u0E23\u0E23\u0E21\u0E19\u0E35\u0E49\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19";
 function currentBeYear(today = /* @__PURE__ */ new Date()) {
   return today.getFullYear() + 543;
 }
@@ -68534,6 +68541,8 @@ async function getTenantSettings(tenantId) {
     const cfg = await db`select key, value from config where user_id = ${tenantId}`;
     const row = tRows[0] ?? {};
     const m2 = new Map(cfg.map((r) => [r.key, r.value]));
+    const consentStored = String(m2.get("consent_text_v1")?.th ?? DEFAULT_CONSENT);
+    const consentTextV1 = consentStored === LEGACY_DEFAULT_CONSENT ? DEFAULT_CONSENT : consentStored;
     const ratesRaw = Array.isArray(m2.get("wht_rates")) ? m2.get("wht_rates") : [];
     const whtRates = ratesRaw.length ? ratesRaw.map((r) => ({
       paymentType: String(r.paymentType ?? ""),
@@ -68551,7 +68560,8 @@ async function getTenantSettings(tenantId) {
       whtRates,
       whtMinThreshold: Number(m2.get("wht_min_threshold") ?? DEFAULT_WHT_MIN_THRESHOLD),
       linkExpiryDays: Number(m2.get("link_expiry_days") ?? 7),
-      consentTextV1: String(m2.get("consent_text_v1")?.th ?? DEFAULT_CONSENT),
+      consentTextV1,
+      consentVersion: String(m2.get("consent_version") ?? DEFAULT_CONSENT_VERSION),
       receiptNote: String(m2.get("receipt_note") ?? ""),
       showVerifyQr: Boolean(m2.get("show_verify_qr") ?? false),
       inviteMessageTemplate: String(m2.get("invite_message_template") ?? DEFAULT_INVITE_TEMPLATE),
@@ -68579,6 +68589,7 @@ async function saveTenantSettings(tenantId, s) {
     if (s.whtMinThreshold !== void 0) await put("wht_min_threshold", s.whtMinThreshold);
     await put("link_expiry_days", s.linkExpiryDays);
     await put("consent_text_v1", { th: s.consentTextV1 });
+    await put("consent_version", s.consentVersion);
     await put("receipt_note", s.receiptNote);
     await put("show_verify_qr", s.showVerifyQr);
     await put("invite_message_template", s.inviteMessageTemplate);
@@ -70563,15 +70574,13 @@ async function buildReceiptPdf(input) {
     regular,
     FAINT
   );
-  if (input.verificationMethod === "typed-consent") {
-    centerText(
-      "\u0E25\u0E32\u0E22\u0E21\u0E37\u0E2D\u0E0A\u0E37\u0E48\u0E2D\u0E2D\u0E34\u0E40\u0E25\u0E47\u0E01\u0E17\u0E23\u0E2D\u0E19\u0E34\u0E01\u0E2A\u0E4C\u0E15\u0E32\u0E21 \u0E1E.\u0E23.\u0E1A.\u0E27\u0E48\u0E32\u0E14\u0E49\u0E27\u0E22\u0E18\u0E38\u0E23\u0E01\u0E23\u0E23\u0E21\u0E17\u0E32\u0E07\u0E2D\u0E34\u0E40\u0E25\u0E47\u0E01\u0E17\u0E23\u0E2D\u0E19\u0E34\u0E01\u0E2A\u0E4C \u0E1E.\u0E28. 2544",
-      sigY - 54,
-      8,
-      regular,
-      FAINT
-    );
-  }
+  centerText(
+    "\u0E2D\u0E2D\u0E01\u0E43\u0E19\u0E19\u0E32\u0E21\u0E1C\u0E39\u0E49\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E42\u0E14\u0E22\u0E44\u0E14\u0E49\u0E23\u0E31\u0E1A\u0E21\u0E2D\u0E1A\u0E2D\u0E33\u0E19\u0E32\u0E08 \xB7 \u0E25\u0E32\u0E22\u0E21\u0E37\u0E2D\u0E0A\u0E37\u0E48\u0E2D\u0E2D\u0E34\u0E40\u0E25\u0E47\u0E01\u0E17\u0E23\u0E2D\u0E19\u0E34\u0E01\u0E2A\u0E4C\u0E15\u0E32\u0E21 \u0E1E.\u0E23.\u0E1A.\u0E27\u0E48\u0E32\u0E14\u0E49\u0E27\u0E22\u0E18\u0E38\u0E23\u0E01\u0E23\u0E23\u0E21\u0E17\u0E32\u0E07\u0E2D\u0E34\u0E40\u0E25\u0E47\u0E01\u0E17\u0E23\u0E2D\u0E19\u0E34\u0E01\u0E2A\u0E4C \u0E1E.\u0E28. 2544",
+    sigY - 54,
+    8,
+    regular,
+    FAINT
+  );
   centerText(`\u0E23\u0E2B\u0E31\u0E2A\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A ${input.verificationCode} \xB7 ${input.verifyUrl}`, 30, 8, regular, FAINT);
   if (input.showVerification) {
     const qrSize = 64;
@@ -71063,10 +71072,14 @@ app.get("/api/vendor/:token", async (c) => {
       idLast4: r.tax_id_last4 ?? null
     });
   }
+  const settings = await getTenantSettings(rowTenant);
   return c.json({
     id: r.id,
     tenantId: rowTenant,
     clientCode: r.client_code ?? null,
+    clientName: settings.displayName,
+    consentTemplate: settings.consentTextV1,
+    consentVersion: settings.consentVersion,
     ref: r.ref,
     description: r.description,
     note: r.note,
@@ -71180,6 +71193,7 @@ app.post("/api/vendor/:token/sign", async (c) => {
   const subPhone = String(body.vendorPhone ?? "").trim().slice(0, 50);
   const subEmail = String(body.vendorEmail ?? "").trim().slice(0, 200);
   const authRef = `AUTH-${randomBytes6(4).toString("hex").toUpperCase()}`;
+  const consentVersion = (await getTenantSettings(rowTenant)).consentVersion;
   await db`insert into vendor_authorizations
     (user_id, transaction_id, vendor_prefix, vendor_name, vendor_address, vendor_masked_id,
      vendor_phone, vendor_email, auth_ref, signature_image_path, verification_method, line_user_id, ip, user_agent,
@@ -71188,7 +71202,7 @@ app.post("/api/vendor/:token/sign", async (c) => {
       ${`x-xxxx-xxxxx-${last4.slice(0, 2)}-${last4.slice(2)}`},
       ${subPhone}, ${subEmail}, ${authRef},
       ${sigPath}, ${verificationMethod}, ${body.lineUserId ?? null}, ${ip},
-      ${(c.req.header("user-agent") ?? "").slice(0, 500)}, 'v1',
+      ${(c.req.header("user-agent") ?? "").slice(0, 500)}, ${consentVersion},
       ${JSON.stringify(corrections)})`;
   await db`update vendor_requests set used_at = now() where id = ${String(r.req_id)}`;
   await db`update vendor_payables set status = 'signed' where id = ${txnId}`;
@@ -71198,7 +71212,7 @@ app.post("/api/vendor/:token/sign", async (c) => {
     txnId,
     "vendor.signed",
     "vendor",
-    { verificationMethod, signMethod, consentVersion: "v1", corrections, authRef },
+    { verificationMethod, signMethod, consentVersion, corrections, authRef },
     ip
   ));
   let issued;

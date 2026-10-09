@@ -227,9 +227,9 @@ export const ReceiptSheet = forwardRef<
                 {data.sigMethod ? ` · ${signMethodLabel(data.sigMethod)}` : ''}
               </p>
             )}
-            {data.sigMethod === 'typed-consent' && (
+            {data.sigMethod && (
               <p className="mt-0.5 text-micro leading-tight text-ink-400">
-                ลายมือชื่ออิเล็กทรอนิกส์ตาม พ.ร.บ.ว่าด้วยธุรกรรมทางอิเล็กทรอนิกส์ พ.ศ. 2544
+                ออกในนามผู้รับเงินโดยได้รับมอบอำนาจ · ลายมือชื่ออิเล็กทรอนิกส์ตาม พ.ร.บ.ว่าด้วยธุรกรรมทางอิเล็กทรอนิกส์ พ.ศ. 2544
               </p>
             )}
           </div>

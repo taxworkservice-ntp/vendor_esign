@@ -186,14 +186,26 @@ export function Settings() {
           />
           <p className="mt-1.5 text-label text-ink-500">ใช้กับลิงก์เชิญผู้ขายกรอกข้อมูลเอง (หน้าผู้ขาย) — เติมชื่อลูกค้าและลิงก์ให้อัตโนมัติ</p>
         </div>
-        <div>
-          <Label>ข้อความให้ความยินยอม (ฉบับที่ 1)</Label>
-          <Textarea
-            value={form.consentTextV1}
-            onChange={(e) => set({ consentTextV1: e.target.value })}
-            disabled={readOnly}
-            rows={3}
-          />
+        <div className="grid gap-4 sm:grid-cols-[1fr_7rem]">
+          <div>
+            <Label hint={'ตัวแปร: {{client}} {{amount}} {{date}} {{ref}} {{version}}'}>ข้อความให้ความยินยอม (ผู้ขาย)</Label>
+            <Textarea
+              value={form.consentTextV1}
+              onChange={(e) => set({ consentTextV1: e.target.value })}
+              disabled={readOnly}
+              rows={8}
+            />
+            <p className="mt-1.5 text-label text-ink-500">แสดงบนหน้าลงนามของผู้ขายและบันทึกเป็นหลักฐาน — เติมค่าจริงก่อนแสดง</p>
+          </div>
+          <div>
+            <Label hint="เช่น 2">เวอร์ชัน</Label>
+            <Input
+              value={form.consentVersion}
+              onChange={(e) => set({ consentVersion: e.target.value })}
+              disabled={readOnly}
+              className="font-mono"
+            />
+          </div>
         </div>
       </Section>
 

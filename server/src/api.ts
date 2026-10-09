@@ -143,8 +143,12 @@ app.get('/api/vendor/:token', async (c) => {
       idLast4: (r as Record<string, unknown>).tax_id_last4 ?? null,
     })
   }
+  const settings = await getTenantSettings(rowTenant)
   return c.json({
     id: r.id, tenantId: rowTenant, clientCode: (r as Record<string, unknown>).client_code ?? null,
+    clientName: settings.displayName,
+    consentTemplate: settings.consentTextV1,
+    consentVersion: settings.consentVersion,
     ref: r.ref, description: r.description, note: r.note, lineItems: r.line_items,
     paymentType: r.payment_type,
     grossAmount: r.gross_amount, whtRate: r.wht_rate, whtAmount: r.wht_amount,
@@ -277,6 +281,9 @@ app.post('/api/vendor/:token/sign', async (c) => {
   // right away. Distinct from the receipt number (assigned only at issuance, so
   // the statutory series never has gaps).
   const authRef = `AUTH-${randomBytes(4).toString('hex').toUpperCase()}`
+  // The exact consent version the vendor accepted (from tenant settings), stored
+  // as evidence — not a hardcoded label.
+  const consentVersion = (await getTenantSettings(rowTenant)).consentVersion
   await db`insert into vendor_authorizations
     (user_id, transaction_id, vendor_prefix, vendor_name, vendor_address, vendor_masked_id,
      vendor_phone, vendor_email, auth_ref, signature_image_path, verification_method, line_user_id, ip, user_agent,
@@ -285,13 +292,13 @@ app.post('/api/vendor/:token/sign', async (c) => {
       ${`x-xxxx-xxxxx-${last4.slice(0, 2)}-${last4.slice(2)}`},
       ${subPhone}, ${subEmail}, ${authRef},
       ${sigPath}, ${verificationMethod}, ${body.lineUserId ?? null}, ${ip},
-      ${(c.req.header('user-agent') ?? '').slice(0, 500)}, 'v1',
+      ${(c.req.header('user-agent') ?? '').slice(0, 500)}, ${consentVersion},
       ${JSON.stringify(corrections)})`
   await db`update vendor_requests set used_at = now() where id = ${String(r.req_id)}`
   await db`update vendor_payables set status = 'signed' where id = ${txnId}`
   await withTenant(rowTenant, 'client', async () =>
     audit(rowTenant, 'vendor_payables', txnId, 'vendor.signed', 'vendor',
-      { verificationMethod, signMethod, consentVersion: 'v1', corrections, authRef }, ip))
+      { verificationMethod, signMethod, consentVersion, corrections, authRef }, ip))
 
   // Issue the receipt now so the vendor gets the real series number and the PDF
   // immediately — no client round-trip. If issuance fails, the row stays
