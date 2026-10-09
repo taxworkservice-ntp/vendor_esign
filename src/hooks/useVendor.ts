@@ -5,6 +5,7 @@ import { normalizeLineItem } from '../lib/line-items'
 import { normalizeTaxId, taxIdHash } from '../lib/taxid'
 import { putSignature } from '../lib/sig-store'
 import { nextReceiptNumber } from '../lib/receipt-number'
+import { generateWhtForTxn } from '../lib/wht-mock'
 import { currentBeYear } from '../lib/settings'
 import { hasServer } from '../lib/api-client'
 import { API_BASE } from '../lib/api-base'
@@ -362,6 +363,14 @@ export function useVendorActions() {
           ],
         }
       })
+      // Mirror the server's issue-at-signing: a receipt with withholding also
+      // creates the WHT certificate. The client `issue()` fallback only runs
+      // from `signed`, so without this the mock would never generate it.
+      const issued = loadTxns().find((x) => x.id === id)
+      if (issued && issued.whtAmount > 0) {
+        generateWhtForTxn(issued)
+        void qc.invalidateQueries({ queryKey: ['wht'] })
+      }
       refresh()
       // The client receipt view (same browser in mock mode) caches the
       // authorization; drop it so the just-signed signature is picked up.

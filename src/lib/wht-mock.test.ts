@@ -63,4 +63,13 @@ describe('auto WHT on issued receipt', () => {
   it('skips when there is no withholding', () => {
     expect(generateWhtForTxn(txn({ whtAmount: 0 }))).toBeNull()
   })
+
+  it('creates a certificate for a gross-up payment too', () => {
+    // Gross-up still withholds (the payer absorbs it), so a certificate is due.
+    const rec = generateWhtForTxn(
+      txn({ id: 'TX-G', whtMode: 'grossup', grossAmount: 5154.64, whtAmount: 154.64, netAmount: 5000 }),
+    )
+    expect(rec?.whtAmount).toBe(154.64)
+    expect(loadWht('ABC').records.some((r) => r.sourceTransactionId === 'TX-G')).toBe(true)
+  })
 })
