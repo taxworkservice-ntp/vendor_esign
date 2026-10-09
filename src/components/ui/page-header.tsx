@@ -1,6 +1,6 @@
 import { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronRight } from 'lucide-react'
+import { ArrowLeft, ChevronRight } from 'lucide-react'
 import { cn } from '../../lib/cn'
 
 // Single page-header pattern app-wide: optional breadcrumb + title + muted
@@ -18,16 +18,20 @@ export function Breadcrumb({ items, className }: { items: Crumb[]; className?: s
   if (items.length === 0) return null
   return (
     <nav aria-label="breadcrumb" className={className}>
-      <ol className="flex flex-wrap items-center gap-1 text-label text-ink-500">
+      <ol className="flex flex-wrap items-center gap-1.5 text-body text-ink-600">
         {items.map((c, i) => (
-          <li key={`${c.label}-${i}`} className="flex items-center gap-1">
-            {i > 0 && <ChevronRight size={12} className="text-ink-300" aria-hidden />}
+          <li key={`${c.label}-${i}`} className="flex items-center gap-1.5">
+            {i > 0 && <ChevronRight size={14} className="text-ink-400" aria-hidden />}
             {c.to ? (
-              <Link to={c.to} className="rounded underline-offset-2 transition hover:text-ink-900 hover:underline">
+              <Link
+                to={c.to}
+                className="inline-flex items-center gap-1 rounded font-medium text-ink-700 underline-offset-2 transition hover:text-primary-text hover:underline"
+              >
+                {i === 0 && <ArrowLeft size={15} aria-hidden />}
                 {c.label}
               </Link>
             ) : (
-              <span className="font-medium text-ink-700" aria-current="page">
+              <span className="font-semibold text-ink-900" aria-current="page">
                 {c.label}
               </span>
             )}
@@ -52,7 +56,7 @@ export function PageHeader({
   className?: string
 }) {
   return (
-    <div className={cn('space-y-2', className)}>
+    <div className={cn('space-y-2.5', className)}>
       {breadcrumb && <Breadcrumb items={breadcrumb} />}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
