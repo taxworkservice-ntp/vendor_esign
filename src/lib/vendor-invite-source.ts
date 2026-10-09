@@ -14,6 +14,7 @@ import { isValidTaxIdChecksum, normalizeTaxId, taxIdHash } from './taxid'
 import {
   CONSENT_VERSION,
   INVITE_TTL_DAYS,
+  isInviteExpired,
   type VendorInvite,
   type VendorInviteDraft,
   type VendorInvitePublic,
@@ -45,13 +46,16 @@ export async function listVendorInvites(tenantId: string): Promise<VendorInvite[
   if (hasServer) {
     return (await apiGet<{ invites: VendorInvite[] }>('/api/client/vendor-invites')).invites
   }
+  const now = Date.now()
   const all = loadInvites(tenantId)
   const enriched = await Promise.all(
     all.map(async (inv) => {
-      if (inv.status === 'submitted' && inv.draft && inv.duplicateOf === undefined) {
-        return { ...inv, duplicateOf: await duplicateOf(tenantId, inv.draft.taxId) }
+      // A live link past its TTL is 'expired' (derived, not stored).
+      const live = isInviteExpired(inv, now) ? { ...inv, status: 'expired' as const } : inv
+      if (live.status === 'submitted' && live.draft && live.duplicateOf === undefined) {
+        return { ...live, duplicateOf: await duplicateOf(tenantId, live.draft.taxId) }
       }
-      return inv
+      return live
     }),
   )
   return enriched.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -180,6 +184,22 @@ export async function resendVendorInvite(id: string): Promise<VendorInvite> {
   inv.status = 'invited'
   saveInvite(inv)
   return inv
+}
+
+/** Close an invite the vendor never answered (distinct from expiry). */
+export async function cancelVendorInvite(id: string): Promise<{ ok: boolean }> {
+  if (hasServer) {
+    return apiSend<{ ok: boolean }>(`/api/client/vendor-invites/${id}/cancel`, 'POST')
+  }
+  const inv = findInvite(id)
+  if (!inv) throw new Error('ไม่พบคำเชิญ')
+  if (!['invited', 'opened', 'expired', 'changes_requested'].includes(inv.status)) {
+    throw new Error('ไม่สามารถยกเลิกคำเชิญในสถานะนี้ได้')
+  }
+  inv.status = 'cancelled'
+  inv.reviewedAt = new Date().toISOString()
+  saveInvite(inv)
+  return { ok: true }
 }
 
 async function createVendorFromDraft(tenantId: string, draft: VendorInviteDraft): Promise<ClientVendor> {

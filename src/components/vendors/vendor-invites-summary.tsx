@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronRight, Plus, UserPlus } from 'lucide-react'
 import { useVendorInvites } from '../../hooks/useVendorInvites'
+import { inviteAttention } from '../../lib/vendor-invite'
 import { Card, CardBody } from '../ui/card'
 import { Button } from '../ui/button'
 import { CreateInviteDialog } from './create-invite-dialog'
@@ -16,7 +17,8 @@ export function VendorInvitesSummary() {
   const invites = data ?? []
   const submitted = invites.filter((i) => i.status === 'submitted').length
   const waiting = invites.filter((i) => i.status === 'invited' || i.status === 'opened').length
-  const done = invites.filter((i) => ['approved', 'rejected', 'expired', 'changes_requested'].includes(i.status)).length
+  const done = invites.filter((i) => ['approved', 'rejected', 'expired', 'changes_requested', 'cancelled'].includes(i.status)).length
+  const followup = invites.filter((i) => inviteAttention(i).level === 'followup').length
 
   return (
     <Card>
@@ -35,6 +37,13 @@ export function VendorInvitesSummary() {
               </Link>
             ) : (
               <span className="text-ink-500">รอตรวจสอบ 0</span>
+            )}
+            {followup > 0 ? (
+              <Link to="/vendors/invites?status=followup" className="font-semibold text-warning underline-offset-2 hover:underline">
+                ต้องติดตาม {followup}
+              </Link>
+            ) : (
+              <span className="text-ink-500">ต้องติดตาม 0</span>
             )}
             <span className="text-ink-500">กำลังรอผู้ขาย {waiting}</span>
             <span className="text-ink-500">เสร็จสิ้น {done}</span>

@@ -53,10 +53,15 @@ function toInvite(r: Row): Record<string, unknown> {
   const taxId = r.tax_id_encrypted ? decryptId(String(r.tax_id_encrypted)) : null
   const bankAccount = r.bank_account_encrypted ? decryptId(String(r.bank_account_encrypted)) : null
   const submitted = r.submitted_at != null
+  // A live link past its TTL reads as 'expired' (derived, not stored).
+  const storedStatus = String(r.status)
+  const expired =
+    (storedStatus === 'invited' || storedStatus === 'opened') &&
+    new Date(String(r.expires_at)).getTime() < Date.now()
   return {
     id: r.id,
     tenantId: r.user_id,
-    status: r.status,
+    status: expired ? 'expired' : storedStatus,
     label: r.label ?? undefined,
     createdAt: r.created_at,
     expiresAt: r.expires_at,
@@ -188,6 +193,24 @@ for (const action of ['reject', 'request-changes'] as const) {
     return c.json({ ok: true })
   })
 }
+
+// Close an invite the vendor never answered. Distinct from 'expired' (TTL).
+inviteClientRoutes.post('/vendor-invites/:id/cancel', async (c) => {
+  const g = await guard(c)
+  if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  const ok = await withTenant(g.ws, 'owner', async () => {
+    const db = sql()
+    const rows = (await db`update vendor_invites set status = 'cancelled',
+      reviewed_at = now(), reviewed_by = ${g.actor}, updated_at = now()
+      where id = ${c.req.param('id')} and user_id = ${g.ws}
+        and status in ('invited','opened','expired','changes_requested')
+      returning id`) as unknown as Row[]
+    if (rows[0]) await audit(g.ws, 'vendor_invites', c.req.param('id'), 'vendor_invite.cancelled', g.actor, {}, 'server')
+    return !!rows[0]
+  })
+  if (!ok) return c.json({ error: 'not-found' }, 404)
+  return c.json({ ok: true })
+})
 
 // Owner-only document proxy (no public presigned URL); access is audit-logged.
 inviteClientRoutes.get('/vendor-invites/:id/document/:kind', async (c) => {

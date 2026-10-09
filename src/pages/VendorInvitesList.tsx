@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Check, Copy, Plus, RotateCcw, Search } from 'lucide-react'
-import { useResendVendorInvite, useVendorInvites } from '../hooks/useVendorInvites'
+import { Ban, Check, Copy, Plus, RotateCcw, Search, TriangleAlert } from 'lucide-react'
+import { useCancelVendorInvite, useResendVendorInvite, useVendorInvites } from '../hooks/useVendorInvites'
+import { useSettings } from '../hooks/useSettings'
 import { inviteUrl } from '../lib/vendor-invite-source'
-import { INVITE_STATUS_LABEL, type VendorInvite, type VendorInviteStatus } from '../lib/vendor-invite'
+import { INVITE_STATUS_LABEL, inviteAttention, type VendorInvite, type VendorInviteStatus } from '../lib/vendor-invite'
+import { renderVendorInviteMessage } from '../lib/settings'
 import { fmtDateTH } from '../lib/format'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
@@ -22,7 +24,7 @@ import { cn } from '../lib/cn'
 // Invite registry: search + status filter + pagination, like the other
 // registers. The Vendors page keeps a compact summary that links here.
 
-type Group = 'all' | 'submitted' | 'waiting' | 'done'
+type Group = 'all' | 'submitted' | 'followup' | 'waiting' | 'done'
 
 const GROUP_OF: Record<VendorInviteStatus, Group> = {
   submitted: 'submitted',
@@ -32,16 +34,22 @@ const GROUP_OF: Record<VendorInviteStatus, Group> = {
   rejected: 'done',
   expired: 'done',
   changes_requested: 'done',
+  cancelled: 'done',
 }
 
 const CHIPS: { key: Group; label: string }[] = [
   { key: 'all', label: 'ทั้งหมด' },
   { key: 'submitted', label: 'รอตรวจสอบ' },
+  { key: 'followup', label: 'ต้องติดตาม' },
   { key: 'waiting', label: 'กำลังรอผู้ขาย' },
   { key: 'done', label: 'เสร็จสิ้น' },
 ]
 
 const PAGE_SIZE = 20
+
+const isFollowup = (inv: VendorInvite) => inviteAttention(inv).level === 'followup'
+// Invites the client may close (never answered / needs rework / lapsed).
+const CAN_CANCEL: VendorInviteStatus[] = ['invited', 'opened', 'expired', 'changes_requested']
 
 function inviteName(inv: VendorInvite): string {
   return inv.draft ? `${inv.draft.prefix} ${inv.draft.name}`.trim() : inv.label || 'ลิงก์เชิญผู้ขาย'
@@ -55,6 +63,7 @@ const STATUS_TONE: Record<VendorInviteStatus, string> = {
   changes_requested: 'bg-warning-soft text-warning',
   rejected: 'bg-ink-100 text-ink-500',
   expired: 'bg-ink-100 text-ink-400',
+  cancelled: 'bg-ink-100 text-ink-400',
 }
 
 function InviteStatusBadge({ status }: { status: VendorInviteStatus }) {
@@ -77,20 +86,25 @@ export function VendorInvitesList() {
   const [copied, setCopied] = useState(false)
   const { data, isLoading, isError, refetch } = useVendorInvites()
   const resend = useResendVendorInvite()
+  const cancel = useCancelVendorInvite()
+  const { data: settings } = useSettings()
   const toast = useToast()
   const nav = useNavigate()
 
   const invites = useMemo(() => data ?? [], [data])
   const counts = useMemo(() => {
-    const c: Record<Group, number> = { all: invites.length, submitted: 0, waiting: 0, done: 0 }
-    for (const i of invites) c[GROUP_OF[i.status]]++
+    const c: Record<Group, number> = { all: invites.length, submitted: 0, followup: 0, waiting: 0, done: 0 }
+    for (const i of invites) {
+      c[GROUP_OF[i.status]]++
+      if (isFollowup(i)) c.followup++
+    }
     return c
   }, [invites])
 
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase()
     return invites
-      .filter((i) => (group === 'all' ? true : GROUP_OF[i.status] === group))
+      .filter((i) => (group === 'all' ? true : group === 'followup' ? isFollowup(i) : GROUP_OF[i.status] === group))
       .filter((i) => (needle ? inviteName(i).toLowerCase().includes(needle) : true))
   }, [invites, group, search])
 
@@ -115,6 +129,19 @@ export function VendorInvitesList() {
     }
   }
 
+  const copyMessage = async (token: string) => {
+    const msg = renderVendorInviteMessage(settings?.vendorInviteMessageTemplate ?? '', {
+      client: settings?.displayName ?? '',
+      link: inviteUrl(token),
+    })
+    try {
+      await navigator.clipboard.writeText(msg)
+      toast.show('คัดลอกข้อความแล้ว')
+    } catch {
+      toast.show('คัดลอกไม่สำเร็จ', 'error')
+    }
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -132,9 +159,12 @@ export function VendorInvitesList() {
         <div className="rounded-control bg-warning-soft p-3 text-body text-warning">
           <p className="font-semibold">ลิงก์เชิญใหม่ (ส่งให้ผู้ขาย)</p>
           <p className="mt-1 break-all font-mono text-label">{inviteUrl(fresh.token)}</p>
-          <div className="mt-2">
+          <div className="mt-2 flex flex-wrap gap-2">
             <Button variant="secondary" className="h-9 px-3 text-body" onClick={() => void copyLink(fresh.token as string)}>
               {copied ? <Check size={14} /> : <Copy size={14} />} คัดลอกลิงก์
+            </Button>
+            <Button variant="ghost" className="h-9 px-3 text-body" onClick={() => void copyMessage(fresh.token as string)}>
+              <Copy size={14} /> คัดลอกข้อความ
             </Button>
           </div>
         </div>
@@ -194,6 +224,11 @@ export function VendorInvitesList() {
                         <Td>
                           <p className="truncate font-semibold">{inviteName(inv)}</p>
                           {inv.label && inv.draft && <p className="text-label text-ink-500">{inv.label}</p>}
+                          {isFollowup(inv) && (
+                            <p className="mt-0.5 flex items-center gap-1 text-label text-warning">
+                              <TriangleAlert size={12} aria-hidden /> {inviteAttention(inv).reason} · {inviteAttention(inv).ageDays} วัน
+                            </p>
+                          )}
                         </Td>
                         <Td><InviteStatusBadge status={inv.status} /></Td>
                         <Td className="whitespace-nowrap text-ink-600">{fmtDateTH(inv.createdAt)}</Td>
@@ -225,6 +260,21 @@ export function VendorInvitesList() {
                                 ดูผู้ขาย
                               </Link>
                             )}
+                            {CAN_CANCEL.includes(inv.status) && (
+                              <Button
+                                variant="ghost"
+                                className="h-9 px-3 text-body"
+                                loading={cancel.isPending}
+                                onClick={() =>
+                                  cancel.mutate(inv.id, {
+                                    onSuccess: () => toast.show('ยกเลิกคำเชิญแล้ว'),
+                                    onError: (e) => toast.show(e instanceof Error ? e.message : 'ยกเลิกไม่สำเร็จ', 'error'),
+                                  })
+                                }
+                              >
+                                <Ban size={14} /> ยกเลิก
+                              </Button>
+                            )}
                           </div>
                         </Td>
                       </ClickableRow>
@@ -254,6 +304,11 @@ export function VendorInvitesList() {
           </>
         )}
       </Card>
+
+      <p className="text-label text-ink-500">
+        ผู้ขายไม่ตอบ? ส่งลิงก์อีกครั้งด้านบน หรือ{' '}
+        <Link to="/vendors/new" className="font-medium text-primary-text hover:underline">สร้างผู้ขายเอง</Link>
+      </p>
 
       <CreateInviteDialog open={createOpen} onClose={() => setCreateOpen(false)} />
     </div>

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useClientAuth } from '../lib/client-auth'
 import {
+  cancelVendorInvite,
   createVendorInvite,
   listVendorInvites,
   resendVendorInvite,
@@ -42,6 +43,14 @@ export function useResendVendorInvite() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => resendVendorInvite(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: QK }),
+  })
+}
+
+export function useCancelVendorInvite() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => cancelVendorInvite(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: QK }),
   })
 }
