@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Ban, Check, Copy, Plus, RotateCcw, Search, TriangleAlert } from 'lucide-react'
+import { Ban, Check, Copy, FileSearch, Plus, RotateCcw, Search, TriangleAlert, User } from 'lucide-react'
 import { useCancelVendorInvite, useResendVendorInvite, useVendorInvites } from '../hooks/useVendorInvites'
 import { useSettings } from '../hooks/useSettings'
 import { inviteUrl } from '../lib/vendor-invite-source'
@@ -18,6 +19,7 @@ import { FilterChip } from '../components/ui/filter-chip'
 import { Pagination } from '../components/ui/pagination'
 import { ClickableRow, Td, Th, tableCls } from '../components/ui/data-table'
 import { CreateInviteDialog } from '../components/vendors/create-invite-dialog'
+import { ConfirmDialog } from '../components/ui/confirm-dialog'
 import { useToast } from '../components/ui/toast'
 import { cn } from '../lib/cn'
 
@@ -74,6 +76,38 @@ function InviteStatusBadge({ status }: { status: VendorInviteStatus }) {
   )
 }
 
+// Icon-only row action — the same treatment the supplier register uses, so the
+// column stays narrow and labels never wrap.
+function IconAction({
+  label,
+  onClick,
+  danger,
+  disabled,
+  children,
+}: {
+  label: string
+  onClick: () => void
+  danger?: boolean
+  disabled?: boolean
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      disabled={disabled}
+      className={cn(
+        'grid h-8 w-8 place-items-center rounded-control text-ink-500 transition hover:bg-ink-100 hover:text-ink-900 disabled:cursor-not-allowed disabled:opacity-40',
+        danger && 'hover:bg-danger-soft hover:text-danger',
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
 export function VendorInvitesList() {
   const [params, setParams] = useSearchParams()
   const initial = (params.get('status') as Group | null) ?? 'all'
@@ -84,6 +118,7 @@ export function VendorInvitesList() {
   const [createOpen, setCreateOpen] = useState(false)
   const [fresh, setFresh] = useState<VendorInvite | null>(null)
   const [copied, setCopied] = useState(false)
+  const [cancelTarget, setCancelTarget] = useState<VendorInvite | null>(null)
   const { data, isLoading, isError, refetch } = useVendorInvites()
   const resend = useResendVendorInvite()
   const cancel = useCancelVendorInvite()
@@ -208,7 +243,7 @@ export function VendorInvitesList() {
                     <Th>สถานะ</Th>
                     <Th>สร้างเมื่อ</Th>
                     <Th>หมดอายุ</Th>
-                    <Th align="right" className="w-40"><span className="sr-only">จัดการ</span></Th>
+                    <Th align="right" className="w-28 whitespace-nowrap"><span className="sr-only">จัดการ</span></Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -234,17 +269,16 @@ export function VendorInvitesList() {
                         <Td className="whitespace-nowrap text-ink-600">{fmtDateTH(inv.createdAt)}</Td>
                         <Td className="whitespace-nowrap text-ink-500">{fmtDateTH(inv.expiresAt)}</Td>
                         <Td className="px-2" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1">
+                          <div className="flex items-center justify-end gap-0.5">
                             {inv.status === 'submitted' && (
-                              <Link to={`/vendors/invites/${inv.id}`}>
-                                <Button variant="secondary" className="h-9 px-3 text-body">ตรวจสอบ</Button>
-                              </Link>
+                              <IconAction label={`ตรวจสอบ ${inviteName(inv)}`} onClick={() => nav(`/vendors/invites/${inv.id}`)}>
+                                <FileSearch size={16} aria-hidden />
+                              </IconAction>
                             )}
                             {['invited', 'opened', 'expired', 'changes_requested'].includes(inv.status) && (
-                              <Button
-                                variant="ghost"
-                                className="h-9 px-3 text-body"
-                                loading={resend.isPending}
+                              <IconAction
+                                label="สร้างลิงก์ใหม่"
+                                disabled={resend.isPending}
                                 onClick={() =>
                                   resend.mutate(inv.id, {
                                     onSuccess: (r) => { setFresh(r); setCopied(false) },
@@ -252,28 +286,18 @@ export function VendorInvitesList() {
                                   })
                                 }
                               >
-                                <RotateCcw size={14} /> ลิงก์ใหม่
-                              </Button>
+                                <RotateCcw size={16} aria-hidden />
+                              </IconAction>
                             )}
                             {inv.status === 'approved' && inv.vendorId && (
-                              <Link to={`/vendors/${inv.vendorId}`} className="text-body font-medium text-primary-text hover:underline">
-                                ดูผู้ขาย
-                              </Link>
+                              <IconAction label="ดูผู้ขาย" onClick={() => nav(`/vendors/${inv.vendorId}`)}>
+                                <User size={16} aria-hidden />
+                              </IconAction>
                             )}
                             {CAN_CANCEL.includes(inv.status) && (
-                              <Button
-                                variant="ghost"
-                                className="h-9 px-3 text-body"
-                                loading={cancel.isPending}
-                                onClick={() =>
-                                  cancel.mutate(inv.id, {
-                                    onSuccess: () => toast.show('ยกเลิกคำเชิญแล้ว'),
-                                    onError: (e) => toast.show(e instanceof Error ? e.message : 'ยกเลิกไม่สำเร็จ', 'error'),
-                                  })
-                                }
-                              >
-                                <Ban size={14} /> ยกเลิก
-                              </Button>
+                              <IconAction label="ยกเลิกคำเชิญ" danger onClick={() => setCancelTarget(inv)}>
+                                <Ban size={16} aria-hidden />
+                              </IconAction>
                             )}
                           </div>
                         </Td>
@@ -309,6 +333,24 @@ export function VendorInvitesList() {
         ผู้ขายไม่ตอบ? ส่งลิงก์อีกครั้งด้านบน หรือ{' '}
         <Link to="/vendors/new" className="font-medium text-primary-text hover:underline">สร้างผู้ขายเอง</Link>
       </p>
+
+      <ConfirmDialog
+        open={!!cancelTarget}
+        tone="danger"
+        title="ยกเลิกคำเชิญนี้?"
+        message={<>ลิงก์เชิญของ <b>{cancelTarget ? inviteName(cancelTarget) : ''}</b> จะถูกปิดและใช้งานไม่ได้อีก</>}
+        confirmLabel="ยกเลิกคำเชิญ"
+        cancelLabel="ปิด"
+        busy={cancel.isPending}
+        onConfirm={() => {
+          if (!cancelTarget) return
+          cancel.mutate(cancelTarget.id, {
+            onSuccess: () => { toast.show('ยกเลิกคำเชิญแล้ว'); setCancelTarget(null) },
+            onError: (e) => toast.show(e instanceof Error ? e.message : 'ยกเลิกไม่สำเร็จ', 'error'),
+          })
+        }}
+        onCancel={() => setCancelTarget(null)}
+      />
 
       <CreateInviteDialog open={createOpen} onClose={() => setCreateOpen(false)} />
     </div>
