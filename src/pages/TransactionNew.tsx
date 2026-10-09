@@ -283,6 +283,7 @@ export function TransactionNew() {
       <PageHeader
         title="สร้างรายการใหม่"
         sub="ชำระผ่านธนาคาร · เลขที่ใบเสร็จจะออกเมื่อผู้ขายลงนามแล้ว"
+        breadcrumb={[{ to: '/', label: 'รายการธุรกรรม' }, { label: 'สร้างรายการใหม่' }]}
         actions={<HelpLink to="/help#create-transaction" />}
       />
 

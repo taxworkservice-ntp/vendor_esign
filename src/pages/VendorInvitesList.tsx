@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Check, Copy, Plus, RotateCcw, Search } from 'lucide-react'
 import { useResendVendorInvite, useVendorInvites } from '../hooks/useVendorInvites'
 import { inviteUrl } from '../lib/vendor-invite-source'
@@ -14,7 +14,7 @@ import { ErrorState } from '../components/ui/error-state'
 import { TableSkeleton } from '../components/ui/table-skeleton'
 import { FilterChip } from '../components/ui/filter-chip'
 import { Pagination } from '../components/ui/pagination'
-import { Td, Th, tableCls } from '../components/ui/data-table'
+import { ClickableRow, Td, Th, tableCls } from '../components/ui/data-table'
 import { CreateInviteDialog } from '../components/vendors/create-invite-dialog'
 import { useToast } from '../components/ui/toast'
 import { cn } from '../lib/cn'
@@ -47,6 +47,24 @@ function inviteName(inv: VendorInvite): string {
   return inv.draft ? `${inv.draft.prefix} ${inv.draft.name}`.trim() : inv.label || 'ลิงก์เชิญผู้ขาย'
 }
 
+const STATUS_TONE: Record<VendorInviteStatus, string> = {
+  invited: 'bg-ink-100 text-ink-600',
+  opened: 'bg-ink-100 text-ink-600',
+  submitted: 'bg-warning-soft text-warning',
+  approved: 'bg-success-soft text-success',
+  changes_requested: 'bg-warning-soft text-warning',
+  rejected: 'bg-ink-100 text-ink-500',
+  expired: 'bg-ink-100 text-ink-400',
+}
+
+function InviteStatusBadge({ status }: { status: VendorInviteStatus }) {
+  return (
+    <span className={cn('inline-flex rounded-full px-2 py-0.5 text-label font-medium', STATUS_TONE[status])}>
+      {INVITE_STATUS_LABEL[status]}
+    </span>
+  )
+}
+
 export function VendorInvitesList() {
   const [params, setParams] = useSearchParams()
   const initial = (params.get('status') as Group | null) ?? 'all'
@@ -60,13 +78,21 @@ export function VendorInvitesList() {
   const { data, isLoading, isError, refetch } = useVendorInvites()
   const resend = useResendVendorInvite()
   const toast = useToast()
+  const nav = useNavigate()
+
+  const invites = useMemo(() => data ?? [], [data])
+  const counts = useMemo(() => {
+    const c: Record<Group, number> = { all: invites.length, submitted: 0, waiting: 0, done: 0 }
+    for (const i of invites) c[GROUP_OF[i.status]]++
+    return c
+  }, [invites])
 
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase()
-    return (data ?? [])
+    return invites
       .filter((i) => (group === 'all' ? true : GROUP_OF[i.status] === group))
       .filter((i) => (needle ? inviteName(i).toLowerCase().includes(needle) : true))
-  }, [data, group, search])
+  }, [invites, group, search])
 
   const pageRows = filtered.slice(page * pageSize, page * pageSize + pageSize)
 
@@ -94,6 +120,7 @@ export function VendorInvitesList() {
       <PageHeader
         title="คำเชิญผู้ขาย"
         sub="ลิงก์ให้ผู้ขายกรอกข้อมูลและแนบเอกสารเอง — ตรวจสอบและอนุมัติก่อนใช้ในรายการ"
+        breadcrumb={[{ to: '/vendors', label: 'ผู้ขาย' }, { label: 'คำเชิญผู้ขาย' }]}
         actions={
           <Button onClick={() => setCreateOpen(true)}>
             <Plus size={16} /> สร้างลิงก์เชิญ
@@ -130,6 +157,7 @@ export function VendorInvitesList() {
             {CHIPS.map((c) => (
               <FilterChip key={c.key} active={group === c.key} onClick={() => pick(c.key)}>
                 {c.label}
+                {counts[c.key] > 0 && <span className="tabular-nums opacity-70">{counts[c.key]}</span>}
               </FilterChip>
             ))}
             <span className="ml-auto text-label text-ink-500">{isLoading ? 'กำลังโหลด…' : `${filtered.length.toLocaleString('th-TH')} รายการ`}</span>
@@ -158,19 +186,19 @@ export function VendorInvitesList() {
                     <TableSkeleton rows={6} cols={5} />
                   ) : (
                     pageRows.map((inv) => (
-                      <tr key={inv.id} className="border-b border-card-border last:border-0">
+                      <ClickableRow
+                        key={inv.id}
+                        label={`เปิดคำเชิญ ${inviteName(inv)}`}
+                        onOpen={() => nav(`/vendors/invites/${inv.id}`)}
+                      >
                         <Td>
                           <p className="truncate font-semibold">{inviteName(inv)}</p>
                           {inv.label && inv.draft && <p className="text-label text-ink-500">{inv.label}</p>}
                         </Td>
-                        <Td>
-                          <span className={cn('text-body', inv.status === 'submitted' ? 'font-semibold text-warning' : 'text-ink-600')}>
-                            {INVITE_STATUS_LABEL[inv.status]}
-                          </span>
-                        </Td>
+                        <Td><InviteStatusBadge status={inv.status} /></Td>
                         <Td className="whitespace-nowrap text-ink-600">{fmtDateTH(inv.createdAt)}</Td>
                         <Td className="whitespace-nowrap text-ink-500">{fmtDateTH(inv.expiresAt)}</Td>
-                        <Td className="px-2">
+                        <Td className="px-2" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
                             {inv.status === 'submitted' && (
                               <Link to={`/vendors/invites/${inv.id}`}>
@@ -199,7 +227,7 @@ export function VendorInvitesList() {
                             )}
                           </div>
                         </Td>
-                      </tr>
+                      </ClickableRow>
                     ))
                   )}
                 </tbody>

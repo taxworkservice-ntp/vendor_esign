@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { useVendorInvites, useReviewVendorInvite } from '../hooks/useVendorInvites'
 import { INVITE_STATUS_LABEL } from '../lib/vendor-invite'
 import { maskTaxId } from '../lib/taxid'
 import { Card, CardBody } from '../components/ui/card'
-import { PageHeader } from '../components/ui/page-header'
+import { Breadcrumb, PageHeader } from '../components/ui/page-header'
 import { Button } from '../components/ui/button'
 import { Textarea } from '../components/ui/input'
 import { ErrorState } from '../components/ui/error-state'
@@ -40,7 +40,7 @@ export function VendorInviteReview() {
   if (!inv) {
     return (
       <div className="space-y-3">
-        <Link to="/vendors" className="text-body font-semibold text-ink-500">← กลับทะเบียนผู้ขาย</Link>
+        <Breadcrumb items={[{ to: '/vendors', label: 'ผู้ขาย' }, { to: '/vendors/invites', label: 'คำเชิญผู้ขาย' }, { label: 'ไม่พบ' }]} />
         <p>ไม่พบคำเชิญ</p>
       </div>
     )
@@ -68,10 +68,15 @@ export function VendorInviteReview() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
-      <div className="flex items-center justify-between gap-2">
-        <Link to="/vendors" className="text-body font-semibold text-ink-500">← กลับทะเบียนผู้ขาย</Link>
-      </div>
-      <PageHeader title="ตรวจสอบข้อมูลผู้ขาย" sub={INVITE_STATUS_LABEL[inv.status]} />
+      <PageHeader
+        title="ตรวจสอบข้อมูลผู้ขาย"
+        sub={INVITE_STATUS_LABEL[inv.status]}
+        breadcrumb={[
+          { to: '/vendors', label: 'ผู้ขาย' },
+          { to: '/vendors/invites', label: 'คำเชิญผู้ขาย' },
+          { label: 'ตรวจสอบ' },
+        ]}
+      />
 
       {!d ? (
         <Card><CardBody><p className="text-body text-ink-500">ผู้ขายยังไม่ได้ส่งข้อมูล</p></CardBody></Card>

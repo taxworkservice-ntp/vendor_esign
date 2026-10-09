@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { Download, Move } from 'lucide-react'
 import { fetchWhtByIds, fetchWhtByScope } from '../lib/wht-source'
 import { signDownload } from '../lib/r2-assets'
@@ -32,6 +32,7 @@ import {
   type WhtRecordWithVendor,
 } from '../lib/wht'
 import { Button } from '../components/ui/button'
+import { Breadcrumb } from '../components/ui/page-header'
 import { useToast } from '../components/ui/toast'
 import { PositionableImage, SignaturePlacementPanel } from '../components/wht/signature-placement'
 
@@ -450,7 +451,7 @@ export function WhtPrint() {
     // keeps this page pixel-identical to before.
     <div className="mx-auto min-h-screen max-w-screen-2xl bg-slate-100">
       <div className="no-print sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2.5">
-        <Link to="/wht" className="text-sm font-semibold text-ink-600">← กลับรายการ WHT</Link>
+        <Breadcrumb items={[{ to: '/wht', label: 'ภาษีหัก ณ ที่จ่าย' }, { label: 'พิมพ์หนังสือรับรอง' }]} />
         <div className="flex gap-2">
           {(signatureUrl || stampUrl) && (
             <Button variant={editing ? 'primary' : 'secondary'} onClick={() => setEditing((v) => !v)}>

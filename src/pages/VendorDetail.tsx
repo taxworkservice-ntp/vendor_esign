@@ -189,6 +189,7 @@ export function VendorDetail() {
       <PageHeader
         title={vendorDisplayName(v.prefix, v.name)}
         sub={`รหัสผู้ขาย ${vendorCode(v.vendorNo)} · ${displayTaxId(v)} · ผู้ขายรายย่อย (ไม่จด VAT)`}
+        breadcrumb={[{ to: '/vendors', label: 'ผู้ขาย' }, { label: vendorDisplayName(v.prefix, v.name) }]}
         actions={
           editing
             ? <Button onClick={save} loading={update.isPending}>{update.isPending ? 'กำลังบันทึก…' : 'บันทึก'}</Button>

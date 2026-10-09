@@ -52,7 +52,11 @@ export function VendorNew() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
-      <PageHeader title="เพิ่มผู้ขาย" sub="ผู้ขายรายย่อย (ไม่จด VAT) — เก็บชื่อ/ที่อยู่/เลขบัตรประชาชน เพื่อออกใบเสร็จรับเงิน" />
+      <PageHeader
+        title="เพิ่มผู้ขาย"
+        sub="ผู้ขายรายย่อย (ไม่จด VAT) — เก็บชื่อ/ที่อยู่/เลขบัตรประชาชน เพื่อออกใบเสร็จรับเงิน"
+        breadcrumb={[{ to: '/vendors', label: 'ผู้ขาย' }, { label: 'เพิ่มผู้ขาย' }]}
+      />
       <Card>
         <CardBody className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-[9rem_1fr]">
