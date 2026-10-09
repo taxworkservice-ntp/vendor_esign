@@ -64,10 +64,11 @@ app.use('*', async (c, next) => {
   return next()
 })
 
-// Public platform notice (announcement + maintenance) for the client shell.
+// Public platform notice (announcement + maintenance + curated client flags).
 app.get('/api/announcement', async (c) => {
-  const { announcement, maintenance } = await getPlatformSettingsCached()
-  return c.json({ announcement, maintenance })
+  const { announcement, maintenance, flags } = await getPlatformSettingsCached()
+  // Expose only the flags the client needs — never the raw internal map.
+  return c.json({ announcement, maintenance, flags: { whtGrossUp: flags.whtGrossUp === true } })
 })
 
 // Leaving impersonation is unauthenticated: it only clears the tw_imp cookie.

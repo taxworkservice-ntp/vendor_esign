@@ -5,6 +5,7 @@ import { guard } from './data'
 import { sha256hex } from './auth'
 import { applyWhtThreshold, calcWht } from '../../src/lib/wht-calc'
 import { getTenantSettings } from './settings'
+import { getPlatformSettingsCached } from './platform'
 import { itemsSummary, itemsTotal, normalizeLineItem } from '../../src/lib/line-items'
 import { emptyTotals, type TxnTotals } from '../../src/lib/txn-filters'
 import { parseListQuery } from '../../src/lib/txn-list-query'
@@ -401,7 +402,10 @@ txnRoutes.post('/transactions', async (c) => {
     .map((it) => normalizeLineItem(it as never))
     .filter((it) => it.description && it.amount > 0)
   if (!b?.vendorId || items.length === 0) return c.json({ error: 'invalid-body' }, 400)
-  const whtMode = b.whtMode === 'grossup' ? 'grossup' : 'deduct'
+  // Gross-up is disabled platform-wide by default (operator flag): force the
+  // standard "หักจากยอดชำระ" so it cannot be set via the API either.
+  const { flags } = await getPlatformSettingsCached()
+  const whtMode = flags.whtGrossUp === true && b.whtMode === 'grossup' ? 'grossup' : 'deduct'
   const base = itemsTotal(items)
   // มาตรา 50/1 — server is authoritative: re-derive the effective rate/type
   // from the tenant threshold rather than trusting the submitted values.

@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Info, Plus, ShieldAlert, ShieldCheck, Sparkles, Trash2, UploadCloud, X } from 'lucide-react'
 import { PILOT_CONFIG, calcWht, isDuplicateSlipRef } from '../lib/config'
 import { applyWhtThreshold, belowWhtThreshold } from '../lib/wht-calc'
+import { grossForNet, scaleAmountsToTarget } from '../lib/wht-grossup'
 import { defaultSettings, whtRateFor } from '../lib/settings'
 import { itemsTotal, lineTotal, normalizeLineItem } from '../lib/line-items'
 import { vendorTaxIdMatches } from '../lib/vendor-match'
@@ -12,6 +13,7 @@ import { useAllSlipRefs, useCreateTransaction } from '../hooks/useTransactions'
 import { useAllVendors, useRecalledVendorId, useVendorMemory } from '../hooks/useVendors'
 import { useAllItems } from '../hooks/useItems'
 import { useSettings } from '../hooks/useSettings'
+import { usePlatformNotice } from '../hooks/usePlatformNotice'
 import { VendorPicker } from '../components/vendor-picker'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
@@ -74,6 +76,9 @@ export function TransactionNew() {
   const catalogItems = useAllItems()
   const { data: settings } = useSettings()
   const cfg = settings ?? defaultSettings()
+  // Gross-up is operator-controlled and off by default → deduct only.
+  const notice = usePlatformNotice()
+  const grossUpAllowed = notice.flags.whtGrossUp
 
   // No vendor preselected — the user must choose one explicitly.
   const [vendorId, setVendorId] = useState('')
@@ -82,6 +87,8 @@ export function TransactionNew() {
   const [note, setNote] = useState('')
   const [whtRate, setWhtRate] = useState(0)
   const [whtMode, setWhtMode] = useState<WhtMode>('deduct')
+  // "Vendor wants to net X" helper input (deduct-only path).
+  const [netTarget, setNetTarget] = useState('')
   // Continuous-contract escape: withhold even when gross < whtMinThreshold.
   const [forceWht, setForceWht] = useState(false)
   const [transferDate, setTransferDate] = useState(() => todayISO())
@@ -133,7 +140,7 @@ export function TransactionNew() {
     )
     setPaymentType(last.paymentType || cfg.paymentTypes[0])
     setWhtRate(last.whtRate ?? whtRateFor(last.paymentType, cfg))
-    setWhtMode(last.whtMode ?? 'deduct')
+    setWhtMode(grossUpAllowed ? (last.whtMode ?? 'deduct') : 'deduct')
     setNote(last.note ?? '')
     appliedRef.current = vendorId
     setAppliedVendor(vendorId)
@@ -179,6 +186,33 @@ export function TransactionNew() {
   const effectiveRate = effective.rate
   const effectivePaymentType = effective.paymentType
   const { gross, wht, net } = useMemo(() => calcWht(grossNum, effectiveRate, whtMode), [grossNum, effectiveRate, whtMode])
+
+  // Deduct-only unless the operator enables gross-up.
+  useEffect(() => {
+    if (!grossUpAllowed && whtMode !== 'deduct') setWhtMode('deduct')
+  }, [grossUpAllowed, whtMode])
+
+  // "Vendor wants to net X" helper: gross to enter so the vendor nets the target.
+  const r2 = (n: number) => Math.round(n * 100) / 100
+  const netNum = Number(netTarget) || 0
+  const grossTarget = netNum > 0 && effectiveRate > 0 ? grossForNet(netNum, effectiveRate) : 0
+  const whtFromGross = r2(grossTarget * (effectiveRate / 100))
+  const resultingNet = r2(grossTarget - whtFromGross)
+  const applyGross = () => {
+    if (!(grossTarget > 0)) return
+    markTouched()
+    const amounts = rows.map((r) =>
+      lineTotal({ quantity: Number(r.quantity) || 1, unitPrice: Number(r.unitPrice) || 0, discount: Number(r.discount) || 0 }),
+    )
+    const scaled = scaleAmountsToTarget(amounts, grossTarget)
+    setRows((rs) =>
+      rs.map((r, i) => {
+        const qty = Number(r.quantity) || 1
+        const disc = Number(r.discount) || 0
+        return { ...r, quantity: String(qty), unitPrice: String(r2((scaled[i] + disc) / qty)) }
+      }),
+    )
+  }
   const dup = isDuplicateSlipRef(slipRef, existingRefs)
   const whtMismatch = grossNum > 0 && !cfg.whtRates.some((r) => r.value === whtRate)
   // Show the force control only when the rule is actually zeroing a positive rate.
@@ -496,34 +530,33 @@ export function TransactionNew() {
                 ))}
               </Select>
             </div>
-            <div>
-              <Label hint="ผู้ขายรับเต็มจำนวน = ผู้จ่ายรับภาระภาษีหัก ณ ที่จ่ายแทน">วิธีคิดภาษีหัก ณ ที่จ่าย</Label>
-              <div className="grid grid-cols-2 gap-1.5 rounded-control bg-ink-100 p-1">
-                {([['deduct', 'หักจากยอดชำระ'], ['grossup', 'ผู้ขายรับเต็มจำนวน']] as const).map(([v, th]) => (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => { markTouched(); setWhtMode(v) }}
-                    className={cn(
-                      'rounded-control px-3 py-2 text-body transition',
-                      // The selected segment lifts off the track, so it takes the
-                      // accent-tinted treatment used elsewhere for selection rather
-                      // than the near-black fill these used to have.
-                      whtMode === v
-                        ? 'bg-primary-soft font-semibold text-primary-text'
-                        : 'font-medium text-ink-500 hover:text-ink-900',
-                    )}
-                  >
-                    {th}
-                  </button>
-                ))}
+            {grossUpAllowed && (
+              <div>
+                <Label hint="ผู้ขายรับเต็มจำนวน = ผู้จ่ายรับภาระภาษีหัก ณ ที่จ่ายแทน">วิธีคิดภาษีหัก ณ ที่จ่าย</Label>
+                <div className="grid grid-cols-2 gap-1.5 rounded-control bg-ink-100 p-1">
+                  {([['deduct', 'หักจากยอดชำระ'], ['grossup', 'ผู้ขายรับเต็มจำนวน']] as const).map(([v, th]) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => { markTouched(); setWhtMode(v) }}
+                      className={cn(
+                        'rounded-control px-3 py-2 text-body transition',
+                        whtMode === v
+                          ? 'bg-primary-soft font-semibold text-primary-text'
+                          : 'font-medium text-ink-500 hover:text-ink-900',
+                      )}
+                    >
+                      {th}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-label text-ink-500">
+                  {whtMode === 'deduct'
+                    ? `หักภาษี ณ ที่จ่าย ${effectiveRate}% จากยอดชำระ → ผู้ขายได้รับ ${fmtTHB(net)}`
+                    : `ผู้ขายได้รับเต็มจำนวน ${fmtTHB(net)} · บวกภาษีหัก ณ ที่จ่าย ${effectiveRate}% → ผู้จ่ายจ่ายรวม ${fmtTHB(gross)}`}
+                </p>
               </div>
-              <p className="mt-1.5 text-label text-ink-500">
-                {whtMode === 'deduct'
-                  ? `หักภาษี ณ ที่จ่าย ${effectiveRate}% จากยอดชำระ → ผู้ขายได้รับ ${fmtTHB(net)}`
-                  : `ผู้ขายได้รับเต็มจำนวน ${fmtTHB(net)} · บวกภาษีหัก ณ ที่จ่าย ${effectiveRate}% → ผู้จ่ายจ่ายรวม ${fmtTHB(gross)}`}
-              </p>
-            </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -545,6 +578,47 @@ export function TransactionNew() {
                 <Input type="date" value={transferDate} onChange={(e) => setTransferDate(e.target.value)} />
               </div>
             </div>
+
+            {effectiveRate > 0 && grossNum > 0 && (
+              <details className="rounded-control border border-card-border">
+                <summary className="cursor-pointer px-3.5 py-2.5 text-body font-medium text-primary-text">
+                  ผู้ขายต้องการรับเต็มจำนวน? ช่วยคำนวณราคาก่อนหักภาษี
+                </summary>
+                <div className="space-y-3 border-t border-card-border px-3.5 py-3">
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div>
+                      <Label hint="ก่อนหักภาษี ณ ที่จ่าย">ผู้ขายต้องการรับสุทธิ (บาท)</Label>
+                      <Input
+                        value={netTarget}
+                        onChange={(e) => setNetTarget(e.target.value.replace(/[^\d.]/g, ''))}
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        className="w-40 text-right tabular-nums"
+                      />
+                    </div>
+                    {grossTarget > 0 && (
+                      <p className="pb-2 text-body">
+                        → ตั้งราคาก่อนหัก (ฐานภาษี) <b className="tabular-nums">{fmtTHB(grossTarget)}</b> บาท
+                      </p>
+                    )}
+                  </div>
+                  {grossTarget > 0 && (
+                    <>
+                      <p className="text-label text-ink-500">
+                        หัก WHT {effectiveRate}% = {fmtTHB(whtFromGross)} → ผู้ขายได้รับจริง {fmtTHB(resultingNet)} บาท
+                        {Math.abs(resultingNet - netNum) >= 0.005 ? ' (ปรับจากการปัดเศษ)' : ''}
+                      </p>
+                      <Button variant="secondary" onClick={applyGross}>
+                        กระจายยอดนี้ตามรายการ
+                      </Button>
+                    </>
+                  )}
+                  <p className="text-label text-ink-400">
+                    ระบบจะปรับราคาต่อหน่วยของทุกรายการตามสัดส่วนให้รวมได้ฐานภาษีนี้ — แก้ไขรายการเองได้ภายหลัง
+                  </p>
+                </div>
+              </details>
+            )}
 
             <div className="rounded-card bg-ink-50 p-4 text-body">
               {whtMode === 'deduct' ? (

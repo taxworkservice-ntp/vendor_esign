@@ -126,6 +126,18 @@ export function Settings() {
       <Card>
         <CardBody className="space-y-4">
           <h2 className="text-body font-semibold">สวิตช์คุณสมบัติ (feature flags)</h2>
+          <label className="flex items-center justify-between gap-3 rounded-control border border-card-border px-3 py-2">
+            <span className="text-body">เปิดใช้วิธีคิดแบบผู้ขายรับเต็มจำนวน (gross-up)</span>
+            <input
+              type="checkbox"
+              checked={form.flags.whtGrossUp === true}
+              onChange={(e) => setForm({ ...form, flags: { ...form.flags, whtGrossUp: e.target.checked } })}
+              className="h-4 w-4 cursor-pointer accent-ink-900"
+            />
+          </label>
+          <p className="text-label text-ink-500">
+            ปิด (ค่าเริ่มต้น) = บังคับใช้ “หักจากยอดชำระ” เท่านั้น — หากผู้ขายต้องการรับเต็มจำนวน ให้ใช้ตัวช่วยคำนวณราคาก่อนหักภาษีในหน้ารายการ
+          </p>
           {flags.length === 0 ? (
             <p className="text-body text-ink-400">ยังไม่มีสวิตช์</p>
           ) : (

@@ -69712,7 +69712,8 @@ txnRoutes.post("/transactions", async (c) => {
   const b2 = await c.req.json().catch(() => null);
   const items = (Array.isArray(b2?.lineItems) ? b2.lineItems : []).map((it2) => normalizeLineItem(it2)).filter((it2) => it2.description && it2.amount > 0);
   if (!b2?.vendorId || items.length === 0) return c.json({ error: "invalid-body" }, 400);
-  const whtMode = b2.whtMode === "grossup" ? "grossup" : "deduct";
+  const { flags } = await getPlatformSettingsCached();
+  const whtMode = flags.whtGrossUp === true && b2.whtMode === "grossup" ? "grossup" : "deduct";
   const base = itemsTotal(items);
   const settings = await getTenantSettings(g.ws);
   const eff = applyWhtThreshold(
@@ -71015,8 +71016,8 @@ app.use("*", async (c, next) => {
   return next();
 });
 app.get("/api/announcement", async (c) => {
-  const { announcement, maintenance } = await getPlatformSettingsCached();
-  return c.json({ announcement, maintenance });
+  const { announcement, maintenance, flags } = await getPlatformSettingsCached();
+  return c.json({ announcement, maintenance, flags: { whtGrossUp: flags.whtGrossUp === true } });
 });
 app.post("/api/impersonate/stop", (c) => {
   return new Response(JSON.stringify({ ok: true }), {

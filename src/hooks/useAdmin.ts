@@ -88,7 +88,7 @@ export function useAdminOverview() {
         },
         users: { total: users.length, active: users.filter((u) => u.status === 'active').length },
         counts: { transactions: 0, receipts: 0, wht: 0, signings: 0 },
-        platform: { announcement: { active: false, level: 'info', message: '' }, maintenance: { mode: 'off', message: '' } },
+        platform: { announcement: { active: false, level: 'info', message: '' }, maintenance: { mode: 'off', message: '' }, flags: { whtGrossUp: false } },
         recentTenants: tenants.slice(0, 5).map((t) => ({
           id: t.id, name: t.displayName, clientCode: t.clientCode, status: t.status, createdAt: new Date().toISOString(),
         })),

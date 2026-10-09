@@ -19,11 +19,14 @@ export interface Maintenance {
 export interface PlatformNotice {
   announcement: Announcement
   maintenance: Maintenance
+  /** Curated client-facing feature flags. */
+  flags: { whtGrossUp: boolean }
 }
 
 export const DEFAULT_NOTICE: PlatformNotice = {
   announcement: { active: false, level: 'info', message: '' },
   maintenance: { mode: 'off', message: '' },
+  flags: { whtGrossUp: false },
 }
 
 const API = API_BASE
@@ -37,7 +40,11 @@ export function usePlatformNotice(): PlatformNotice {
       const r = await fetch(`${API}/api/announcement`, { credentials: 'include' })
       if (!r.ok) throw new Error('notice-failed')
       const j = (await r.json()) as Partial<PlatformNotice>
-      return { ...DEFAULT_NOTICE, ...j }
+      return {
+        announcement: { ...DEFAULT_NOTICE.announcement, ...j.announcement },
+        maintenance: { ...DEFAULT_NOTICE.maintenance, ...j.maintenance },
+        flags: { ...DEFAULT_NOTICE.flags, ...j.flags },
+      }
     },
   })
   return q.data ?? DEFAULT_NOTICE
