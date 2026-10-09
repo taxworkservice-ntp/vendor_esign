@@ -177,6 +177,16 @@ export function Settings() {
           <p className="mt-1.5 text-label text-ink-500">ข้อความนี้จะถูกเติมค่าจริงก่อนคัดลอกส่งให้ผู้ขาย และแก้ไขรายครั้งได้ที่หน้ารายการ</p>
         </div>
         <div>
+          <Label hint={'ตัวแปร: {{client}} {{link}}'}>ข้อความเชิญผู้ขายกรอกข้อมูล (เทมเพลต)</Label>
+          <Textarea
+            value={form.vendorInviteMessageTemplate}
+            onChange={(e) => set({ vendorInviteMessageTemplate: e.target.value })}
+            disabled={readOnly}
+            rows={5}
+          />
+          <p className="mt-1.5 text-label text-ink-500">ใช้กับลิงก์เชิญผู้ขายกรอกข้อมูลเอง (หน้าผู้ขาย) — เติมชื่อลูกค้าและลิงก์ให้อัตโนมัติ</p>
+        </div>
+        <div>
           <Label>ข้อความให้ความยินยอม (ฉบับที่ 1)</Label>
           <Textarea
             value={form.consentTextV1}

@@ -2,6 +2,7 @@ import { sql, withTenant } from '../../src/server/db'
 import {
   DEFAULT_CONSENT,
   DEFAULT_INVITE_TEMPLATE,
+  DEFAULT_VENDOR_INVITE_TEMPLATE,
   DEFAULT_WHT_MIN_THRESHOLD,
   DEFAULT_WHT_RATES,
   type TenantSettings,
@@ -43,6 +44,7 @@ export async function getTenantSettings(tenantId: string): Promise<TenantSetting
       receiptNote: String(m.get('receipt_note') ?? ''),
       showVerifyQr: Boolean(m.get('show_verify_qr') ?? false),
       inviteMessageTemplate: String(m.get('invite_message_template') ?? DEFAULT_INVITE_TEMPLATE),
+      vendorInviteMessageTemplate: String(m.get('vendor_invite_message_template') ?? DEFAULT_VENDOR_INVITE_TEMPLATE),
       signatureStoragePath: (m.get('signature_storage_path') as string | undefined) || undefined,
       stampStoragePath: (m.get('stamp_storage_path') as string | undefined) || undefined,
       signaturePlacement: (m.get('signature_placement') as TenantSettings['signaturePlacement']) || undefined,
@@ -70,6 +72,7 @@ export async function saveTenantSettings(tenantId: string, s: TenantSettings): P
     await put('receipt_note', s.receiptNote)
     await put('show_verify_qr', s.showVerifyQr)
     await put('invite_message_template', s.inviteMessageTemplate)
+    await put('vendor_invite_message_template', s.vendorInviteMessageTemplate)
     if (s.signatureStoragePath !== undefined) await put('signature_storage_path', s.signatureStoragePath)
     if (s.stampStoragePath !== undefined) await put('stamp_storage_path', s.stampStoragePath)
     if (s.signaturePlacement !== undefined) await put('signature_placement', s.signaturePlacement)

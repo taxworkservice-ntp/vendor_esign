@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { AlertTriangle, CheckCircle2, FileImage } from 'lucide-react'
+import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { useVendorInvites, useReviewVendorInvite } from '../hooks/useVendorInvites'
 import { INVITE_STATUS_LABEL } from '../lib/vendor-invite'
 import { maskTaxId } from '../lib/taxid'
@@ -11,6 +11,7 @@ import { Textarea } from '../components/ui/input'
 import { ErrorState } from '../components/ui/error-state'
 import { Spinner } from '../components/ui/spinner'
 import { useToast } from '../components/ui/toast'
+import { VendorDocument } from '../components/vendors/vendor-document'
 
 // Client-side review of a vendor's submitted onboarding data. Approving creates
 // the vendor record; the warnings (duplicate tax ID, bank-name mismatch) are the
@@ -91,8 +92,8 @@ export function VendorInviteReview() {
 
           <Card>
             <CardBody className="grid grid-cols-2 gap-3">
-              <DocPreview label="บัตรประชาชน" name={inv.idDocName} data={inv.idDocData} />
-              <DocPreview label="หน้าสมุดบัญชี" name={inv.bankDocName} data={inv.bankDocData} />
+              <VendorDocument owner={{ kind: 'invite', id: inv.id }} doc="id" label="บัตรประชาชน" hasDoc={!!inv.idDocName || !!inv.idDocData} />
+              <VendorDocument owner={{ kind: 'invite', id: inv.id }} doc="bank" label="หน้าสมุดบัญชี" hasDoc={!!inv.bankDocName || !!inv.bankDocData} />
             </CardBody>
           </Card>
 
@@ -143,22 +144,6 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
     <div className="grid grid-cols-[9rem_1fr] gap-2">
       <span className="text-label text-ink-500">{label}</span>
       <span className={mono ? 'font-mono text-body' : 'text-body'}>{value}</span>
-    </div>
-  )
-}
-
-function DocPreview({ label, name, data }: { label: string; name?: string; data?: string }) {
-  return (
-    <div>
-      <p className="mb-1 text-label text-ink-500">{label}</p>
-      {data ? (
-        <img src={data} alt={label} className="h-40 w-full rounded-control object-cover" />
-      ) : (
-        <div className="flex h-40 flex-col items-center justify-center gap-1 rounded-control bg-ink-50 text-ink-400">
-          <FileImage size={20} aria-hidden />
-          <span className="text-label">{name ?? 'ไม่มีไฟล์'}</span>
-        </div>
-      )}
     </div>
   )
 }

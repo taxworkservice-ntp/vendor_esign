@@ -9,6 +9,7 @@ import {
 } from './vendor-invite-mock'
 import { loadVendors, maskFromLast4, nextVendorNo, saveVendor, type ClientVendor } from './vendors-mock'
 import { encryptId } from './id-crypto'
+import { saveVendorDoc } from './vendor-doc-mock'
 import { isValidTaxIdChecksum, normalizeTaxId, taxIdHash } from './taxid'
 import {
   CONSENT_VERSION,
@@ -144,6 +145,16 @@ export async function reviewVendorInvite(
   if (action === 'approve') {
     if (!inv.draft) throw new Error('ยังไม่มีข้อมูลให้อนุมัติ')
     const vendor = await createVendorFromDraft(inv.tenantId, inv.draft)
+    // Keep the uploaded documents on the vendor record (server: R2 paths).
+    if (inv.idDocData) {
+      saveVendorDoc(vendor.id, 'id', inv.idDocData)
+      vendor.hasIdDoc = true
+    }
+    if (inv.bankDocData) {
+      saveVendorDoc(vendor.id, 'bank', inv.bankDocData)
+      vendor.hasBankDoc = true
+    }
+    saveVendor(vendor)
     inv.vendorId = vendor.id
     inv.status = 'approved'
     inv.reviewedAt = new Date().toISOString()

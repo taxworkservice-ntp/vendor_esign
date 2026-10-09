@@ -54,6 +54,8 @@ export interface TenantSettings {
   receiptNote: string
   showVerifyQr: boolean
   inviteMessageTemplate: string
+  /** Message sent with a vendor self-onboarding invite. Variables: {{link}} {{client}}. */
+  vendorInviteMessageTemplate: string
   /** R2 storage path for the authorised signature image, placed on WHT forms. */
   signatureStoragePath?: string
   /** R2 storage path for the company stamp image (PNG with transparency preferred). */
@@ -103,6 +105,23 @@ export function renderInviteMessage(template: string, vars: InviteMessageVars): 
     .replace(/\{\{client\}\}/g, vars.client)
 }
 
+// Self-onboarding invite: no vendor/date/amount exist yet, only the link and the
+// client's name. Kept separate from DEFAULT_INVITE_TEMPLATE so the wording fits.
+export const DEFAULT_VENDOR_INVITE_TEMPLATE = `เรียน ผู้ขาย/ผู้รับจ้าง
+
+{{client}} ขอความร่วมมือกรอกข้อมูลผู้ขาย เพื่อใช้ในการออกใบเสร็จรับเงินและโอนเงินให้ท่านอย่างถูกต้อง
+กรุณากรอกข้อมูลและแนบเอกสารผ่านลิงก์นี้ (ใช้เวลาประมาณ 2–3 นาที)
+{{link}}`
+
+export interface VendorInviteMessageVars {
+  client: string
+  link: string
+}
+
+export function renderVendorInviteMessage(template: string, vars: VendorInviteMessageVars): string {
+  return template.replace(/\{\{client\}\}/g, vars.client).replace(/\{\{link\}\}/g, vars.link)
+}
+
 export function validateSettings(s: TenantSettings): string | null {
   if (!/^[A-Z0-9-]{2,12}$/.test(s.clientCode)) return 'รหัสลูกค้าใช้ A-Z 0-9 ยาว 2–12 ตัว (ใช้เป็นคำนำหน้าเลขที่ใบเสร็จ)'
   if (!s.displayName.trim()) return 'กรุณากรอกชื่อบริษัท'
@@ -112,6 +131,7 @@ export function validateSettings(s: TenantSettings): string | null {
   if (!Number.isFinite(s.whtMinThreshold) || s.whtMinThreshold < 0) return 'ยอดขั้นต่ำหักภาษีต้องเป็นตัวเลข ≥ 0'
   if (!(s.linkExpiryDays > 0)) return 'อายุลิงก์ต้องมากกว่า 0 วัน'
   if (!(s.inviteMessageTemplate ?? '').trim()) return 'กรุณากรอกข้อความเชิญผู้ขาย'
+  if (!(s.vendorInviteMessageTemplate ?? '').trim()) return 'กรุณากรอกข้อความเชิญผู้ขายกรอกข้อมูล'
   return null
 }
 

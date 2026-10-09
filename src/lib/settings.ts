@@ -5,6 +5,7 @@ import {
   DEFAULT_INVITE_TEMPLATE,
   DEFAULT_SIGNATURE_PLACEMENT,
   DEFAULT_STAMP_PLACEMENT,
+  DEFAULT_VENDOR_INVITE_TEMPLATE,
   currentBeYear,
   type TenantSettings,
 } from './settings-types'
@@ -14,7 +15,7 @@ import {
 // Types + validation live in settings-types.ts (importable from the server).
 // Server parity: the `config` table + tenants profile columns.
 
-export { DEFAULT_CONSENT, DEFAULT_INVITE_TEMPLATE, currentBeYear, renderInviteMessage, validateSettings, whtRateFor } from './settings-types'
+export { DEFAULT_CONSENT, DEFAULT_INVITE_TEMPLATE, DEFAULT_VENDOR_INVITE_TEMPLATE, currentBeYear, renderInviteMessage, renderVendorInviteMessage, validateSettings, whtRateFor } from './settings-types'
 export type { TenantSettings, WhtRate } from './settings-types'
 
 export function defaultSettings(tenantId?: string): TenantSettings {
@@ -34,6 +35,7 @@ export function defaultSettings(tenantId?: string): TenantSettings {
     receiptNote: '',
     showVerifyQr: false,
     inviteMessageTemplate: DEFAULT_INVITE_TEMPLATE,
+    vendorInviteMessageTemplate: DEFAULT_VENDOR_INVITE_TEMPLATE,
     signaturePlacement: DEFAULT_SIGNATURE_PLACEMENT,
     stampPlacement: DEFAULT_STAMP_PLACEMENT,
   }

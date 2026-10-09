@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Archive, ArchiveRestore, ChevronLeft, ReceiptText, Users } from 'lucide-react'
+import { Archive, ArchiveRestore, ChevronLeft, FileImage, ReceiptText, Users } from 'lucide-react'
 import { useDeleteVendor, useForgetVendorId, useSetVendorActive, useUpdateVendor, useVendor } from '../hooks/useVendors'
 import { useTransactions } from '../hooks/useTransactions'
 import { displayTaxId } from '../lib/vendors-mock'
@@ -18,6 +18,7 @@ import { EmptyState } from '../components/ui/empty-state'
 import { ErrorState } from '../components/ui/error-state'
 import { PanelSkeleton } from '../components/ui/table-skeleton'
 import { StatusBadge } from '../components/ui/badge'
+import { VendorDocument } from '../components/vendors/vendor-document'
 
 export function VendorDetail() {
   const { id } = useParams()
@@ -314,6 +315,21 @@ export function VendorDetail() {
               </p>
             </div>
           </div>
+
+          <Card>
+            <CardBody className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="flex items-center gap-2 font-semibold">
+                  <FileImage size={16} className="text-ink-500" aria-hidden /> เอกสารผู้ขาย
+                </h2>
+              </div>
+              <p className="text-body text-ink-500">เอกสารที่ผู้ขายแนบตอนกรอกข้อมูล (เห็นเฉพาะเจ้าของเวิร์กสเปซ)</p>
+              <div className="grid grid-cols-2 gap-3">
+                <VendorDocument owner={{ kind: 'vendor', id: v.id }} doc="id" label="บัตรประชาชน" hasDoc={!!v.hasIdDoc} />
+                <VendorDocument owner={{ kind: 'vendor', id: v.id }} doc="bank" label="หน้าสมุดบัญชี" hasDoc={!!v.hasBankDoc} />
+              </div>
+            </CardBody>
+          </Card>
 
           <Card>
             <CardBody className="space-y-3">

@@ -4,6 +4,8 @@ import { requireClient } from './client-auth'
 import { impersonationFromCookie, type ImpersonationMode } from './impersonation'
 import { decryptId, encryptId } from './crypto'
 import { sha256hex } from './auth'
+import { readStoredDurable } from './storage'
+import { audit } from './shared'
 import type { SessionUser } from './auth'
 import { isVendorPrefix, prefixRequired } from '../../src/lib/vendor-name'
 import { getVendorMemory } from './vendor-memory'
@@ -110,6 +112,8 @@ function toVendor(r: Record<string, unknown>) {
     email: (r.email as string | null) ?? undefined,
     isVatRegistered: Boolean(r.is_vat_registered),
     isActive: r.is_active === undefined ? true : Boolean(r.is_active),
+    hasIdDoc: Boolean(r.id_doc_path),
+    hasBankDoc: Boolean(r.bank_doc_path),
     createdAt: new Date(String(r.created_at ?? Date.now())).toISOString(),
   }
 }
@@ -131,6 +135,7 @@ dataRoutes.get('/vendors', async (c) => {
     return (await db.query(
       `select v.id, v.user_id, v.vendor_no, v.prefix, v.name, v.address, v.id_number_encrypted,
               v.line_user_id, v.phone, v.email, v.is_vat_registered, v.is_active, v.created_at,
+              v.id_doc_path, v.bank_doc_path,
               coalesce(t.outstanding, 0)::numeric as outstanding,
               coalesce(t.txn_count, 0)::int as txn_count,
               to_char(t.last_activity, 'YYYY-MM-DD') as last_activity
@@ -202,6 +207,26 @@ dataRoutes.get('/vendors/:id/tax-id', async (c) => {
     }
   }
   return c.json({ taxId })
+})
+
+// Onboarding documents (ID card / bank-book page) for a vendor. Owner-only and
+// audit-logged; streamed through the app, never a public storage URL.
+dataRoutes.get('/vendors/:id/document/:kind', async (c) => {
+  const g = await guard(c)
+  if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  const kind = c.req.param('kind')
+  if (kind !== 'id' && kind !== 'bank') return c.json({ error: 'invalid-kind' }, 400)
+  const rows = await withTenant(g.ws, 'owner', async () => {
+    const db = sql()
+    return (await db`select id_doc_path, bank_doc_path from vendor_payees
+      where id = ${c.req.param('id')} and user_id = ${g.ws}`) as unknown as Record<string, unknown>[]
+  })
+  const path = kind === 'id' ? rows[0]?.id_doc_path : rows[0]?.bank_doc_path
+  const bytes = await readStoredDurable(g.ws, path ? String(path) : null)
+  if (!bytes) return c.json({ error: 'not-found' }, 404)
+  await withTenant(g.ws, 'owner', async () =>
+    audit(g.ws, 'vendor_payees', c.req.param('id'), 'vendor.doc-viewed', g.actor, { kind }, 'server'))
+  return c.body(bytes as unknown as ArrayBuffer, 200, { 'Content-Type': 'image/png' })
 })
 
 // Remembered defaults for a vendor, derived from this tenant's history — used

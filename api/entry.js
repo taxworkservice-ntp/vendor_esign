@@ -68519,6 +68519,11 @@ var DEFAULT_INVITE_TEMPLATE = `\u0E40\u0E23\u0E35\u0E22\u0E19 \u0E04\u0E38\u0E13
 
 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E1B\u0E34\u0E14\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E25\u0E07\u0E19\u0E32\u0E21\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E41\u0E25\u0E30\u0E21\u0E2D\u0E1A\u0E2D\u0E33\u0E19\u0E32\u0E08\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08 (\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E43\u0E0A\u0E49\u0E44\u0E14\u0E49\u0E08\u0E19\u0E01\u0E27\u0E48\u0E32\u0E08\u0E30\u0E25\u0E07\u0E19\u0E32\u0E21)
 {{link}}`;
+var DEFAULT_VENDOR_INVITE_TEMPLATE = `\u0E40\u0E23\u0E35\u0E22\u0E19 \u0E1C\u0E39\u0E49\u0E02\u0E32\u0E22/\u0E1C\u0E39\u0E49\u0E23\u0E31\u0E1A\u0E08\u0E49\u0E32\u0E07
+
+{{client}} \u0E02\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E23\u0E48\u0E27\u0E21\u0E21\u0E37\u0E2D\u0E01\u0E23\u0E2D\u0E01\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E1C\u0E39\u0E49\u0E02\u0E32\u0E22 \u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E43\u0E0A\u0E49\u0E43\u0E19\u0E01\u0E32\u0E23\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E41\u0E25\u0E30\u0E42\u0E2D\u0E19\u0E40\u0E07\u0E34\u0E19\u0E43\u0E2B\u0E49\u0E17\u0E48\u0E32\u0E19\u0E2D\u0E22\u0E48\u0E32\u0E07\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07
+\u0E01\u0E23\u0E38\u0E13\u0E32\u0E01\u0E23\u0E2D\u0E01\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E41\u0E25\u0E30\u0E41\u0E19\u0E1A\u0E40\u0E2D\u0E01\u0E2A\u0E32\u0E23\u0E1C\u0E48\u0E32\u0E19\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E19\u0E35\u0E49 (\u0E43\u0E0A\u0E49\u0E40\u0E27\u0E25\u0E32\u0E1B\u0E23\u0E30\u0E21\u0E32\u0E13 2\u20133 \u0E19\u0E32\u0E17\u0E35)
+{{link}}`;
 
 // server/src/settings.ts
 async function getTenantSettings(tenantId) {
@@ -68550,6 +68555,7 @@ async function getTenantSettings(tenantId) {
       receiptNote: String(m2.get("receipt_note") ?? ""),
       showVerifyQr: Boolean(m2.get("show_verify_qr") ?? false),
       inviteMessageTemplate: String(m2.get("invite_message_template") ?? DEFAULT_INVITE_TEMPLATE),
+      vendorInviteMessageTemplate: String(m2.get("vendor_invite_message_template") ?? DEFAULT_VENDOR_INVITE_TEMPLATE),
       signatureStoragePath: m2.get("signature_storage_path") || void 0,
       stampStoragePath: m2.get("stamp_storage_path") || void 0,
       signaturePlacement: m2.get("signature_placement") || void 0,
@@ -68576,6 +68582,7 @@ async function saveTenantSettings(tenantId, s) {
     await put("receipt_note", s.receiptNote);
     await put("show_verify_qr", s.showVerifyQr);
     await put("invite_message_template", s.inviteMessageTemplate);
+    await put("vendor_invite_message_template", s.vendorInviteMessageTemplate);
     if (s.signatureStoragePath !== void 0) await put("signature_storage_path", s.signatureStoragePath);
     if (s.stampStoragePath !== void 0) await put("stamp_storage_path", s.stampStoragePath);
     if (s.signaturePlacement !== void 0) await put("signature_placement", s.signaturePlacement);
@@ -68771,6 +68778,8 @@ function toVendor(r) {
     email: r.email ?? void 0,
     isVatRegistered: Boolean(r.is_vat_registered),
     isActive: r.is_active === void 0 ? true : Boolean(r.is_active),
+    hasIdDoc: Boolean(r.id_doc_path),
+    hasBankDoc: Boolean(r.bank_doc_path),
     createdAt: new Date(String(r.created_at ?? Date.now())).toISOString()
   };
 }
@@ -68783,6 +68792,7 @@ dataRoutes.get("/vendors", async (c) => {
     return await db.query(
       `select v.id, v.user_id, v.vendor_no, v.prefix, v.name, v.address, v.id_number_encrypted,
               v.line_user_id, v.phone, v.email, v.is_vat_registered, v.is_active, v.created_at,
+              v.id_doc_path, v.bank_doc_path,
               coalesce(t.outstanding, 0)::numeric as outstanding,
               coalesce(t.txn_count, 0)::int as txn_count,
               to_char(t.last_activity, 'YYYY-MM-DD') as last_activity
@@ -68849,6 +68859,22 @@ dataRoutes.get("/vendors/:id/tax-id", async (c) => {
     }
   }
   return c.json({ taxId });
+});
+dataRoutes.get("/vendors/:id/document/:kind", async (c) => {
+  const g = await guard(c);
+  if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  const kind = c.req.param("kind");
+  if (kind !== "id" && kind !== "bank") return c.json({ error: "invalid-kind" }, 400);
+  const rows = await withTenant(g.ws, "owner", async () => {
+    const db = sql();
+    return await db`select id_doc_path, bank_doc_path from vendor_payees
+      where id = ${c.req.param("id")} and user_id = ${g.ws}`;
+  });
+  const path = kind === "id" ? rows[0]?.id_doc_path : rows[0]?.bank_doc_path;
+  const bytes = await readStoredDurable(g.ws, path ? String(path) : null);
+  if (!bytes) return c.json({ error: "not-found" }, 404);
+  await withTenant(g.ws, "owner", async () => audit(g.ws, "vendor_payees", c.req.param("id"), "vendor.doc-viewed", g.actor, { kind }, "server"));
+  return c.body(bytes, 200, { "Content-Type": "image/png" });
 });
 dataRoutes.get("/vendors/:id/memory", async (c) => {
   const g = await guard(c);

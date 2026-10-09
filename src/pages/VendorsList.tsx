@@ -24,7 +24,7 @@ import { TableSkeleton } from '../components/ui/table-skeleton'
 import { useToast } from '../components/ui/toast'
 import { ConfirmDialog } from '../components/ui/confirm-dialog'
 import { RegistryToolbar } from '../components/ui/registry-toolbar'
-import { VendorInvitesPanel } from '../components/vendors/vendor-invites-panel'
+import { VendorInvitesSummary } from '../components/vendors/vendor-invites-summary'
 import { ClickableRow, LoadingBar, RegistryId, SortableTh, Td, Th, tableCls } from '../components/ui/data-table'
 import { cn } from '../lib/cn'
 
@@ -172,7 +172,7 @@ export function VendorsList() {
         </CardBody>
       </Card>
 
-      <VendorInvitesPanel />
+      <VendorInvitesSummary />
 
       <Card className="overflow-hidden">
         {isError ? (
