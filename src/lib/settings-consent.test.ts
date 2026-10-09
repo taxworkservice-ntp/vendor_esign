@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_CONSENT, DEFAULT_CONSENT_VERSION, PDPA_STATEMENT, renderConsent } from './settings-types'
+import { CONSENT_SUMMARY, DEFAULT_CONSENT, DEFAULT_CONSENT_VERSION, PDPA_STATEMENT, renderConsent } from './settings-types'
 
 describe('vendor consent statement', () => {
   it('substitutes every variable and leaves no placeholder', () => {
@@ -21,5 +21,10 @@ describe('vendor consent statement', () => {
     expect(DEFAULT_CONSENT).toContain('พระราชบัญญัติว่าด้วยธุรกรรมทางอิเล็กทรอนิกส์')
     expect(PDPA_STATEMENT).toContain('คุ้มครองข้อมูลส่วนบุคคล')
     expect(DEFAULT_CONSENT_VERSION).toBe('2')
+  })
+
+  it('has a short summary distinct from the full statement', () => {
+    expect(CONSENT_SUMMARY).toContain('{{client}}')
+    expect(CONSENT_SUMMARY.length).toBeLessThan(DEFAULT_CONSENT.length)
   })
 })

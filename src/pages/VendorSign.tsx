@@ -9,7 +9,7 @@ import { renderTypedSignature, SIGNATURE_FONT, signMethodLabel } from '../lib/ty
 import { cn } from '../lib/cn'
 import { ReceiptSheet, type ReceiptSheetData } from '../components/receipt/receipt-sheet'
 import { maskTaxId } from '../lib/taxid'
-import { loadSettings, renderConsent, PDPA_STATEMENT } from '../lib/settings'
+import { loadSettings, renderConsent, CONSENT_SUMMARY, PDPA_STATEMENT } from '../lib/settings'
 import type { PaymentTransaction } from '../lib/types'
 import { fmtTHB, fmtDateTH, fmtDateTimeTHLong } from '../lib/format'
 import { amountToThaiWords } from '../lib/thai-words'
@@ -25,18 +25,43 @@ import SigPad, { SigPadHandle } from '../components/ui/sigpad'
 // settings, or the server-rendered template on the vendor payload) with the real
 // amount/date/ref substituted. One source of truth so the text the vendor
 // accepts matches the version the server records.
-function consentInfoFor(t: PaymentTransaction): { text: string; version: string; clientName: string } {
+function consentInfoFor(t: PaymentTransaction): { text: string; summary: string; version: string; clientName: string } {
   const s = loadSettings(t.tenantId)
   const clientName = t.clientName || s.displayName || t.clientCode || s.clientCode
   const version = t.consentVersion || s.consentVersion
-  const text = renderConsent(t.consentTemplate || s.consentTextV1, {
+  const vars = {
     client: clientName,
     amount: fmtTHB(t.netAmount),
     date: fmtDateTH(t.transferDate),
     ref: t.ref ?? t.id,
     version,
-  })
-  return { text, version, clientName }
+  }
+  return {
+    text: renderConsent(t.consentTemplate || s.consentTextV1, vars),
+    summary: renderConsent(CONSENT_SUMMARY, vars),
+    version,
+    clientName,
+  }
+}
+
+// The full statement as a styled intro + numbered list (instead of a wall of
+// "(1)…(5)" text), shown inside an expandable disclosure.
+function ConsentBody({ text }: { text: string }) {
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean)
+  const intro = lines.filter((l) => !/^\(\d+\)/.test(l))
+  const items = lines.filter((l) => /^\(\d+\)/.test(l)).map((l) => l.replace(/^\(\d+\)\s*/, ''))
+  return (
+    <div className="space-y-2 text-label leading-relaxed text-ink-600">
+      {intro.map((l, i) => (
+        <p key={i}>{l}</p>
+      ))}
+      <ol className="list-decimal space-y-1 pl-5">
+        {items.map((l, i) => (
+          <li key={i}>{l}</li>
+        ))}
+      </ol>
+    </div>
+  )
 }
 
 function Shell({ children }: { children: React.ReactNode }) {  return (
@@ -582,9 +607,31 @@ export function VendorSign() {
             </p>
             <label className="flex gap-3 rounded-control bg-ink-50 p-4 text-body leading-relaxed active:bg-ink-100">
               <input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-ink-900" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-              <span className="whitespace-pre-line">{consentInfo.text}</span>
+              <span>{consentInfo.summary}</span>
             </label>
-            <p className="rounded-control bg-ink-50 p-3 text-label leading-relaxed text-ink-500">{PDPA_STATEMENT}</p>
+
+            <details className="rounded-control border border-card-border">
+              <summary className="cursor-pointer px-3.5 py-2.5 text-label font-medium text-primary-text">
+                อ่านข้อความให้ความยินยอมฉบับเต็ม
+              </summary>
+              <div className="border-t border-card-border px-3.5 py-3">
+                <ConsentBody text={consentInfo.text} />
+              </div>
+            </details>
+
+            <details className="rounded-control border border-card-border">
+              <summary className="cursor-pointer px-3.5 py-2.5 text-label font-medium text-primary-text">
+                ประกาศความเป็นส่วนตัว (PDPA)
+              </summary>
+              <div className="space-y-2 border-t border-card-border px-3.5 py-3 text-label leading-relaxed text-ink-600">
+                <p>{PDPA_STATEMENT}</p>
+                <p>
+                  ข้อมูลที่เก็บ: ชื่อ ที่อยู่ เลขบัตรประชาชน (เข้ารหัส) ลายเซ็น และเวลายืนยัน — ใช้เพื่อออกใบเสร็จสำหรับธุรกรรมนี้เท่านั้น ·
+                  ผู้ที่เข้าถึงข้อมูล: ลูกค้าผู้จ่ายและนักบัญชี · ระยะเวลาจัดเก็บ: ตามนโยบายของลูกค้าผู้จ่าย
+                </p>
+              </div>
+            </details>
+
             <p className="text-label leading-relaxed text-ink-400">
               เอกสารนี้จัดทำโดย <b>{consentInfo.clientName}</b> ในนามของผู้รับเงินโดยได้รับมอบอำนาจผ่านการลงนามอิเล็กทรอนิกส์ · ข้อตกลงความยินยอม ฉบับที่ {consentInfo.version}
             </p>
@@ -593,10 +640,6 @@ export function VendorSign() {
             <Button className="w-full py-3.5 text-base" onClick={submit} loading={submitting}>
               {submitting ? 'กำลังส่งข้อมูล…' : 'ลงนามรับเงินและส่งข้อมูล'}
             </Button>
-            <p className="text-label leading-relaxed text-ink-400">
-              ข้อมูลที่เก็บ: ชื่อ ที่อยู่ เลขบัตรประชาชน (เข้ารหัส) ลายเซ็น และเวลายืนยัน — ใช้เพื่อออกใบเสร็จสำหรับธุรกรรมนี้เท่านั้น
-              ผู้ที่เข้าถึงข้อมูล: ลูกค้าผู้จ่ายและนักบัญชี · ระยะเวลาจัดเก็บ: ตามนโยบายของลูกค้าผู้จ่าย
-            </p>
           </CardBody>
         </Card>
       </div>

@@ -17,7 +17,7 @@ import {
 // Types + validation live in settings-types.ts (importable from the server).
 // Server parity: the `config` table + tenants profile columns.
 
-export { DEFAULT_CONSENT, DEFAULT_CONSENT_VERSION, DEFAULT_INVITE_TEMPLATE, DEFAULT_VENDOR_INVITE_TEMPLATE, PDPA_STATEMENT, currentBeYear, renderConsent, renderInviteMessage, renderVendorInviteMessage, validateSettings, whtRateFor } from './settings-types'
+export { DEFAULT_CONSENT, DEFAULT_CONSENT_VERSION, CONSENT_SUMMARY, DEFAULT_INVITE_TEMPLATE, DEFAULT_VENDOR_INVITE_TEMPLATE, PDPA_STATEMENT, currentBeYear, renderConsent, renderInviteMessage, renderVendorInviteMessage, validateSettings, whtRateFor } from './settings-types'
 export type { ConsentVars, TenantSettings, WhtRate } from './settings-types'
 
 export function defaultSettings(tenantId?: string): TenantSettings {
