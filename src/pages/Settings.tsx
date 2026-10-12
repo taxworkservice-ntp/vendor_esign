@@ -177,18 +177,48 @@ export function Settings() {
           <p className="mt-1.5 text-label text-ink-500">ข้อความนี้จะถูกเติมค่าจริงก่อนคัดลอกส่งให้ผู้ขาย และแก้ไขรายครั้งได้ที่หน้ารายการ</p>
         </div>
         <div>
-          <Label>ข้อความให้ความยินยอม (ฉบับที่ 1)</Label>
+          <Label hint={'ตัวแปร: {{client}} {{link}}'}>ข้อความเชิญผู้ขายกรอกข้อมูล (เทมเพลต)</Label>
           <Textarea
-            value={form.consentTextV1}
-            onChange={(e) => set({ consentTextV1: e.target.value })}
+            value={form.vendorInviteMessageTemplate}
+            onChange={(e) => set({ vendorInviteMessageTemplate: e.target.value })}
             disabled={readOnly}
-            rows={3}
+            rows={5}
           />
+          <p className="mt-1.5 text-label text-ink-500">ใช้กับลิงก์เชิญผู้ขายกรอกข้อมูลเอง (หน้าผู้ขาย) — เติมชื่อลูกค้าและลิงก์ให้อัตโนมัติ</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-[1fr_7rem]">
+          <div>
+            <Label hint={'ตัวแปร: {{client}} {{amount}} {{date}} {{ref}} {{version}}'}>ข้อความให้ความยินยอม (ผู้ขาย)</Label>
+            <Textarea
+              value={form.consentTextV1}
+              onChange={(e) => set({ consentTextV1: e.target.value })}
+              disabled={readOnly}
+              rows={8}
+            />
+            <p className="mt-1.5 text-label text-ink-500">แสดงบนหน้าลงนามของผู้ขายและบันทึกเป็นหลักฐาน — เติมค่าจริงก่อนแสดง</p>
+          </div>
+          <div>
+            <Label hint="เช่น 2">เวอร์ชัน</Label>
+            <Input
+              value={form.consentVersion}
+              onChange={(e) => set({ consentVersion: e.target.value })}
+              disabled={readOnly}
+              className="font-mono"
+            />
+          </div>
         </div>
       </Section>
 
-      <Section step="4" title="ลายเซ็นและตราประทับ" desc="ใส่ลายเซ็นและตราประทับบนหนังสือรับรองภาษีหัก ณ ที่จ่าย (WHT)">
-        <div className="grid gap-4 sm:grid-cols-2">
+      <Section step="4" title="โลโก้ ลายเซ็น และตราประทับ" desc="โลโก้แสดงบนลิงก์ผู้ขาย (กรอกข้อมูลและลงนาม) · ลายเซ็นและตราประทับใช้บนหนังสือรับรองภาษีหัก ณ ที่จ่าย (WHT)">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <AssetUpload
+            label="โลโก้บริษัท"
+            hint="PNG/JPG — แสดงบนลิงก์ผู้ขาย แนวนอนหรือสี่เหลี่ยม"
+            storagePath={form.logoStoragePath}
+            onUploaded={(path) => set({ logoStoragePath: path })}
+            onError={(e) => toast.show(e, 'error')}
+            disabled={readOnly}
+          />
           <AssetUpload
             label="ลายเซ็นผู้มีอำนาจ"
             hint="PNG/JPG — แนะนำพื้นหลังโปร่งใส แนวนอน"

@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { readStored, resolveStored, saveBytes, storageRoot } from './storage'
+import { readStored, readTenantAsset, resolveStored, saveBytes, storageRoot } from './storage'
 
 // resolveStored turns a path that came out of the database into a real file
 // path. That makes it the boundary between "a column value" and "a byte on
@@ -21,6 +21,8 @@ beforeAll(() => {
   mkdirSync(join(root, OTHER, 'pdfs'), { recursive: true })
   writeFileSync(join(root, WS, 'pdfs', 'RCT-001-2569-001.pdf'), 'PDF-A')
   writeFileSync(join(root, WS, 'signatures', 'tx-1.png'), 'PNG-A')
+  // A tenant asset (logo/signature) uses the two-segment `<tenant>/<file>` shape.
+  writeFileSync(join(root, WS, '1234-logo.png'), 'LOGO-A')
   writeFileSync(join(root, OTHER, 'pdfs', 'secret.pdf'), 'PDF-OTHER')
   // A receipt number can only reach disk through saveBytes, which sanitises it —
   // verify that, since it is the other half of the path-safety story.
@@ -81,6 +83,25 @@ describe('readStored', () => {
   it('returns undefined instead of throwing for unsafe or missing paths', () => {
     expect(readStored(WS, 'ZZZ/pdfs/secret.pdf')).toBeUndefined()
     expect(readStored(WS, 'ABC/pdfs/nope.pdf')).toBeUndefined()
+  })
+})
+
+describe('readTenantAsset', () => {
+  it('reads a two-segment tenant asset', async () => {
+    const bytes = await readTenantAsset(WS, 'ABC/1234-logo.png')
+    expect(bytes && new TextDecoder().decode(bytes)).toBe('LOGO-A')
+  })
+
+  it('refuses another workspace, traversal and absolute paths', async () => {
+    expect(await readTenantAsset(WS, 'ZZZ/secret.png')).toBeUndefined()
+    expect(await readTenantAsset(WS, 'ABC/../ZZZ/secret.png')).toBeUndefined()
+    expect(await readTenantAsset(WS, join(root, WS, '1234-logo.png'))).toBeUndefined()
+  })
+
+  it('returns undefined for empty and missing input', async () => {
+    expect(await readTenantAsset(WS, '')).toBeUndefined()
+    expect(await readTenantAsset(WS, null)).toBeUndefined()
+    expect(await readTenantAsset(WS, 'ABC/missing.png')).toBeUndefined()
   })
 })
 

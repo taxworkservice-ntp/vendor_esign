@@ -14,7 +14,7 @@ export const Button = forwardRef<
     disabled={disabled || loading}
     aria-busy={loading || undefined}
     className={cn(
-      'inline-flex h-11 items-center justify-center gap-2 rounded-control px-5 text-body font-semibold transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50',
+      'inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-control px-5 text-body font-semibold transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50',
       variant === 'primary' && 'bg-primary text-white hover:brightness-110',
       variant === 'secondary' && 'border border-card-border bg-white text-ink-900 hover:border-ink-300',
       variant === 'ghost' && 'text-ink-700 hover:bg-ink-100',

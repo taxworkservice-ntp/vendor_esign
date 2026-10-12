@@ -15,6 +15,9 @@ export interface ClientVendor {
   lineUserId?: string
   phone?: string
   email?: string
+  /** Onboarding documents exist (ID card / bank-book page) — shown on detail. */
+  hasIdDoc?: boolean
+  hasBankDoc?: boolean
   /** Archived suppliers stay out of the default register. */
   isActive?: boolean
   // Money context, joined in by the list endpoint so the register can show what

@@ -40,12 +40,18 @@ describe('ReceiptSheet signing record', () => {
   it('states the electronic-signature legal basis for a typed signature', () => {
     const html = renderToString(<ReceiptSheet data={base()} />)
     expect(html).toContain('ลายมือชื่ออิเล็กทรอนิกส์ตาม พ.ร.บ.ว่าด้วยธุรกรรมทางอิเล็กทรอนิกส์ พ.ศ. 2544')
+    expect(html).toContain('ออกในนามผู้รับเงินโดยได้รับมอบอำนาจ')
   })
 
-  it('omits the legal line for a drawn signature', () => {
+  it('states the legal basis for a drawn signature too', () => {
     const html = renderToString(<ReceiptSheet data={base({ sigMethod: 'stub-deferred' })} />)
-    expect(html).not.toContain('ลายมือชื่ออิเล็กทรอนิกส์')
+    expect(html).toContain('ลายมือชื่ออิเล็กทรอนิกส์ตาม พ.ร.บ.ว่าด้วยธุรกรรมทางอิเล็กทรอนิกส์ พ.ศ. 2544')
     expect(html).toContain('ลายเซ็น (วาดด้วยนิ้ว/เมาส์)')
+  })
+
+  it('omits the legal line when unsigned', () => {
+    const html = renderToString(<ReceiptSheet data={base({ sigMethod: undefined, signedAt: undefined })} />)
+    expect(html).not.toContain('ลายมือชื่ออิเล็กทรอนิกส์')
   })
 
   it('omits the code and URL when there is none', () => {

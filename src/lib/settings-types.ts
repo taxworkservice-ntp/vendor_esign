@@ -51,21 +51,68 @@ export interface TenantSettings {
   whtMinThreshold: number
   linkExpiryDays: number
   consentTextV1: string
+  /** Version label of the consent wording, stored with each authorization. */
+  consentVersion: string
   receiptNote: string
   showVerifyQr: boolean
   inviteMessageTemplate: string
+  /** Message sent with a vendor self-onboarding invite. Variables: {{link}} {{client}}. */
+  vendorInviteMessageTemplate: string
   /** R2 storage path for the authorised signature image, placed on WHT forms. */
   signatureStoragePath?: string
   /** R2 storage path for the company stamp image (PNG with transparency preferred). */
   stampStoragePath?: string
+  /** R2 storage path for the client logo shown on the vendor-facing links. */
+  logoStoragePath?: string
   /** Where the signature is placed on the WHT form (falls back to the default). */
   signaturePlacement?: Placement
   /** Where the stamp is placed on the WHT form (falls back to the default). */
   stampPlacement?: Placement
 }
 
-export const DEFAULT_CONSENT =
+export const DEFAULT_CONSENT_VERSION = '2'
+
+// Full vendor consent. Variables: {{client}} {{amount}} {{date}} {{ref}} {{version}}.
+// Deliberately explicit: it is the vendor's authorization for the payer to issue
+// the receipt in the vendor's name, plus the electronic-signature legal basis.
+export const DEFAULT_CONSENT = `ข้าพเจ้าขอรับรองและให้ความยินยอมดังต่อไปนี้
+(1) ข้าพเจ้าขอรับรองว่าข้อมูลที่ให้ไว้ในเอกสารนี้ (ชื่อ ที่อยู่ เลขประจำตัวประชาชน และข้อมูลการรับเงิน) เป็นความจริงและถูกต้องทุกประการ และข้าพเจ้าเป็นผู้มีสิทธิรับเงินตามรายการนี้
+(2) ข้าพเจ้าได้รับชำระเงินค่าจ้าง/ค่าบริการตามรายการข้างต้นครบถ้วนแล้ว — ยอดรับสุทธิ {{amount}} บาท วันที่ {{date}} อ้างอิง {{ref}}
+(3) ข้าพเจ้าขอมอบอำนาจและให้ความยินยอมแก่ {{client}} ในการออกใบเสร็จรับเงินในนามของข้าพเจ้า สำหรับธุรกรรมนี้เท่านั้น
+(4) ข้าพเจ้ายินยอมให้ลายมือชื่ออิเล็กทรอนิกส์ที่ข้าพเจ้าลงในเอกสารนี้มีผลผูกพันทางกฎหมายเสมือนการลงลายมือชื่อด้วยมือ ตามพระราชบัญญัติว่าด้วยธุรกรรมทางอิเล็กทรอนิกส์ พ.ศ. 2544
+(5) ข้าพเจ้าได้อ่านและเข้าใจข้อความข้างต้นแล้ว จึงลงนามเพื่อยืนยัน`
+
+// The pre-upgrade default. Tenants whose stored consent still equals this are
+// shown the new default (see loadSettings / getTenantSettings) so the upgrade
+// takes effect without a data migration.
+export const LEGACY_DEFAULT_CONSENT =
   'ข้าพเจ้าได้รับเงินจำนวนดังกล่าวแล้ว และมอบอำนาจให้ลูกค้าออกใบเสร็จรับเงินในนามของข้าพเจ้าสำหรับธุรกรรมนี้เท่านั้น'
+
+// PDPA notice shown under the consent on the signing screen.
+export const PDPA_STATEMENT =
+  'การเก็บรวบรวม ใช้ และเปิดเผยข้อมูลส่วนบุคคลของข้าพเจ้า ดำเนินการตามพระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562 โดยมีวัตถุประสงค์เพื่อยืนยันตัวตน ออกเอกสารทางภาษี และดำเนินการชำระเงินสำหรับธุรกรรมนี้ · ผู้เข้าถึงข้อมูล: ลูกค้าผู้จ่ายและผู้ให้บริการระบบที่ได้รับมอบหมาย · ระยะเวลาจัดเก็บ: ตามที่กฎหมายกำหนดและนโยบายของลูกค้าผู้จ่าย · ข้าพเจ้ามีสิทธิขอเข้าถึง แก้ไข หรือถอนความยินยอมได้ตามกฎหมาย'
+
+// Short, scannable consent line for the checkbox. The full statement above is
+// the versioned legal record; this is the plain-language summary shown inline.
+export const CONSENT_SUMMARY =
+  'ข้าพเจ้ายืนยันว่าได้รับเงินตามรายการนี้ครบถ้วนแล้ว และขอมอบอำนาจให้ {{client}} ออกใบเสร็จรับเงินในนามของข้าพเจ้าสำหรับธุรกรรมนี้เท่านั้น · ข้าพเจ้ายินยอมให้ลายมือชื่ออิเล็กทรอนิกส์นี้มีผลผูกพันทางกฎหมาย (พ.ร.บ.ว่าด้วยธุรกรรมทางอิเล็กทรอนิกส์ พ.ศ. 2544)'
+
+export interface ConsentVars {
+  client: string
+  amount: string
+  date: string
+  ref: string
+  version: string
+}
+
+export function renderConsent(template: string, vars: ConsentVars): string {
+  return template
+    .replace(/\{\{client\}\}/g, vars.client)
+    .replace(/\{\{amount\}\}/g, vars.amount)
+    .replace(/\{\{date\}\}/g, vars.date)
+    .replace(/\{\{ref\}\}/g, vars.ref)
+    .replace(/\{\{version\}\}/g, vars.version)
+}
 
 // The receipt-year is never user-set: it is always the current Thai (BE) year,
 // derived from today. Used by the receipt-number series {CODE}-R-{BE}-{NNN}.
@@ -103,6 +150,23 @@ export function renderInviteMessage(template: string, vars: InviteMessageVars): 
     .replace(/\{\{client\}\}/g, vars.client)
 }
 
+// Self-onboarding invite: no vendor/date/amount exist yet, only the link and the
+// client's name. Kept separate from DEFAULT_INVITE_TEMPLATE so the wording fits.
+export const DEFAULT_VENDOR_INVITE_TEMPLATE = `เรียน ผู้ขาย/ผู้รับจ้าง
+
+{{client}} ขอความร่วมมือกรอกข้อมูลผู้ขาย เพื่อใช้ในการออกใบเสร็จรับเงินและโอนเงินให้ท่านอย่างถูกต้อง
+กรุณากรอกข้อมูลและแนบเอกสารผ่านลิงก์นี้ (ใช้เวลาประมาณ 2–3 นาที)
+{{link}}`
+
+export interface VendorInviteMessageVars {
+  client: string
+  link: string
+}
+
+export function renderVendorInviteMessage(template: string, vars: VendorInviteMessageVars): string {
+  return template.replace(/\{\{client\}\}/g, vars.client).replace(/\{\{link\}\}/g, vars.link)
+}
+
 export function validateSettings(s: TenantSettings): string | null {
   if (!/^[A-Z0-9-]{2,12}$/.test(s.clientCode)) return 'รหัสลูกค้าใช้ A-Z 0-9 ยาว 2–12 ตัว (ใช้เป็นคำนำหน้าเลขที่ใบเสร็จ)'
   if (!s.displayName.trim()) return 'กรุณากรอกชื่อบริษัท'
@@ -112,6 +176,9 @@ export function validateSettings(s: TenantSettings): string | null {
   if (!Number.isFinite(s.whtMinThreshold) || s.whtMinThreshold < 0) return 'ยอดขั้นต่ำหักภาษีต้องเป็นตัวเลข ≥ 0'
   if (!(s.linkExpiryDays > 0)) return 'อายุลิงก์ต้องมากกว่า 0 วัน'
   if (!(s.inviteMessageTemplate ?? '').trim()) return 'กรุณากรอกข้อความเชิญผู้ขาย'
+  if (!(s.vendorInviteMessageTemplate ?? '').trim()) return 'กรุณากรอกข้อความเชิญผู้ขายกรอกข้อมูล'
+  if (!(s.consentTextV1 ?? '').trim()) return 'กรุณากรอกข้อความให้ความยินยอม'
+  if (!(s.consentVersion ?? '').trim()) return 'กรุณากรอกเวอร์ชันความยินยอม'
   return null
 }
 

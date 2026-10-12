@@ -2,7 +2,7 @@
 
 This is the trimmed version for a pilot with **one client**. Build only what is listed here. Anything under "Not in the pilot" must not be built, even if it seems easy.
 
-> For the WHT withholding certificate form (ใบรับรองการหักภาษี ณ ที่จ่าย) — its exact coordinates, tax-ID cell geometry, print/PDF pipeline, and download races — see **`master-prompt-wht-form.md`**.
+> For the WHT withholding certificate form (ใบรับรองการหักภาษี ณ ที่จ่าย) — its exact coordinates, tax-ID cell geometry, print/PDF pipeline, and download races — see **`master-prompt-wht-form.md`**. WHT is **deduct-only** in the pilot (see §15).
 
 ## 0. How to work
 
@@ -60,7 +60,7 @@ Transaction status: `draft → sent → opened → signed → issued`, plus `exp
 - **RLS:** the client user sees only their tenant's data. The bookkeeper role sees everything. Write policies and tests for each role.
 - Storage: private buckets for slips, signatures, and PDFs, with short-lived signed URLs only.
 - Encrypt the ID number at rest. Mask it in every screen except the printed receipt and the reviewer's detail view.
-- **PDPA:** show a short privacy notice on the vendor page before they enter data (what is collected, why, who sees it, how long it is kept `[VERIFY]`), and keep an access log for anyone viewing ID data. Collect the ID **number** only. Do not collect ID card images in the pilot.
+- **PDPA:** show a short privacy notice on the vendor page before they enter data (what is collected, why, who sees it, how long it is kept `[VERIFY]`), and keep an access log for anyone viewing ID data. Collect the ID **number** (typed, checksum-validated). ID-card and bank-book **images** are collected only through vendor **self-onboarding** (§15) — the **ID-card image is required, the bank-book first page is optional** — with explicit consent, encrypted private storage, owner-only audited access, and a ~5-year retention.
 - Never log ID numbers, tokens, or personal data.
 
 ## 6. Numbering
@@ -84,8 +84,8 @@ Transaction status: `draft → sent → opened → signed → issued`, plus `exp
 
 - Draw-signature on a canvas (touch and mouse), exported as PNG, with a clear button. Reject an empty canvas.
 - **Fallback signing method:** a vendor who cannot or will not draw can **type their name** ("type to sign"). The name is rendered to a PNG in the Mali handwriting face (`src/lib/typed-signature.ts`) through the same storage pipeline, with the same versioned consent. The method is stored on the authorization as `verification_method` (`stub-deferred` for drawn, `typed-consent` for typed) and shown on the receipt and in the evidence panel. Do **not** add a bypass for a vendor unwilling to authorize — record refusal instead.
-- Verification is **LINE Login through LIFF only**. Store the LINE user id and the time. No SMS in the pilot.
-- The consent text is versioned and the version is stored. It states: I received this amount; I authorize [client name] to issue a receipt in my name for this transaction only.
+- Verification is **LINE Login through LIFF** — **deferred** (not yet enabled; see §15). Until then verification is the **versioned consent + drawn/typed signature**; store the LINE user id when available. No SMS in the pilot.
+- The consent text is versioned and the version is stored. The full statement (see §15, `DEFAULT_CONSENT`) declares: the information is true; the amount was received in full; the vendor authorizes [client name] to issue a receipt in the vendor's name **for this transaction only**; the electronic signature is legally binding under พ.ร.บ.ธุรกรรมทางอิเล็กทรอนิกส์ พ.ศ. 2544; and the vendor has read and understood it — plus a PDPA notice.
 - The signing audit event records time, IP, user agent, verification method, and LINE user id.
 - **Non-repudiation — surface the signing trail (do not re-capture it).** `vendor_authorizations` already stores signed_at, auth_ref, the signature image, ip, user_agent, consent version, and the tax-ID gate (`vendor_requests.unlocked_at`/`opened_at`). A transaction's detail page shows a **"หลักฐานการลงนาม"** panel from that data (signed-by + masked ID, signed-at, method, AUTH ref, receipt no. + verification code, signature image; device/IP behind a "รายละเอียดทางเทคนิค" disclosure). The public `/verify/:code` page proves the same facts (number, status incl. void, issue date, signed-at, method, masked vendor) so a vendor can check it themselves. The server `/api/verify/:code` is the source; the page must call it (never the mock).
 
@@ -162,3 +162,86 @@ Cash payments, SMS OTP, push notifications or reminders, bulk CSV upload, multi-
 ## 14. Definition of done for every phase
 
 Tests pass; migrations are reversible; no secrets or personal data in logs; UI tested on a small phone screen and inside the LINE browser; `[VERIFY]` and `[DECISION]` items are listed; and a short written report is delivered before moving on.
+
+## 15. Pilot status & decisions (as built)
+
+Sections 1–14 are the original spec. This section records what was decided and built
+since, so the spec matches the running system. **Where they differ, this section wins.**
+
+**Stack (actual).** React 18 + TypeScript + Vite; Tailwind over a token system
+(`src/design/tokens.ts`, enforced by `scripts/check-design.mjs`); TanStack Query v5;
+Hono on Node/Vercel serverless; **Neon Postgres** (`@neondatabase/serverless`) with
+row-level security; Cloudflare **R2** (or a local disk seam) for storage. Not Supabase
+and not shadcn/ui — the UI primitives live in `src/components/ui/`.
+
+**Vendor self-onboarding (new — precedes any transaction).** A client sends a
+**reusable invite link**; the vendor fills identity, **13-digit Tax ID
+(checksum-validated)**, bank details, and uploads **ID card (required) + bank-book first
+page (optional)**; the client **reviews and approves**, which creates the normal vendor record. Statuses:
+`invited → opened → submitted → approved | changes_requested | rejected | expired |
+cancelled`. Tables: `vendor_invites` (migration 028; `cancelled` added in 029); the
+created vendor keeps `bank_*`/`id_doc_path`/`bank_doc_path`/`id_number_hash`. This
+removes the manual LINE-chat intake. Documents are stored privately, shown
+**owner-only and audit-logged**, with a ~5-year retention. It **supersedes** the
+"do not collect ID card images" rule in §5.
+
+**WHT is deduct-only.** Gross-up is disabled platform-wide by default via an operator
+flag (`platform_settings.flags.whtGrossUp`, default off); the create route forces
+`whtMode: 'deduct'`, and the form hides the mode selector. When a vendor insists on a
+net amount, the client negotiates the **gross** (a "net→gross" helper,
+`src/lib/wht-grossup.ts`, computes it and can spread it across the line items). The
+price is the gross, WHT deducts normally, so the receipt stays internally consistent
+(`items sum = รวมเป็นเงิน`, `− WHT = net`). The gross-up code is kept dormant behind
+the flag.
+
+**Consent (upgraded, versioned).** The vendor consent is a full statement
+(`DEFAULT_CONSENT` in `src/lib/settings-types.ts`) rendered with `{{client}} {{amount}}
+{{date}} {{ref}} {{version}}`: accuracy declaration; full-payment acknowledgement;
+authorization to issue the receipt in the vendor's name **for this transaction only**;
+the e-signature legal basis (พ.ร.บ.ธุรกรรมทางอิเล็กทรอนิกส์ พ.ศ. 2544); and
+acknowledgement — plus a PDPA notice. Shown as a short summary with the full text
+behind a disclosure. `consentVersion` is stored on each authorization. Supersedes the
+shorter wording in §8.
+
+**Onboarding consent (PDPA).** The self-onboarding page carries its own consent
+(`CONSENT_VERSION = 'vendor-onboard-v2'` in `src/lib/vendor-invite.ts`) and shows a
+PDPA notice (`ONBOARD_PDPA_STATEMENT`) — the same collapsible disclosure component the
+signing screen uses (`src/components/consent/pdpa-notice.tsx`) — before the vendor
+submits. v2 is the first version that discloses it.
+
+**Client brand on the links (two-tier header).** The client can upload a **logo** on
+the Settings page (Section 4, alongside signature/stamp; stored as `logo_storage_path`
+in `config` — no migration). Both vendor links (onboarding and signing) lead with a
+slim, sticky **platform app bar** (`BrandBar` — TW logo + "TW VendorSign", mirroring the
+in-app header), with the **client logo + display name** as the identity row beneath it.
+No logo → a name **monogram**; no name → the TW mark in that row. Both public payloads
+return `logoUrl`, served by a public caching route `GET /api/branding/:tenantId/logo`
+(`readTenantAsset`).
+
+**Mobile onboarding UX.** The onboarding link is mobile-first: each document offers
+both **"ถ่ายรูป"** (camera) and **"เลือกจากอัลบั้ม"** (gallery), and the photo is
+downscaled + re-encoded to JPEG in the browser (`src/lib/image-upload.ts`) before
+upload — this fixes oversized photos and iPhone HEIC, which the server otherwise
+rejects. Validation is per-field (`src/lib/vendor-onboard.ts`) with inline errors and
+scroll-to-first-error; a failed fetch offers a retry (vs. a dead link); inputs are
+16px on mobile (no iOS focus-zoom); and a sticky progress bar + safe-area action bar
+keep the primary action reachable on both links.
+
+**Void propagates.** Voiding marks the receipt row `void`, revokes live links, voids
+an unfiled / supersedes a filed WHT certificate, and writes `receipt.voided`
+(migration 026 widened `wht_records.status`).
+
+**Security hardening.** The finalize endpoint is session-guarded and
+workspace-scoped; vendor document content is withheld until the ID gate passes;
+rate limits and gate attempts are persisted (`rate_hits`, `gate_attempts`, migration
+027); invite tokens are encrypted at rest.
+
+**Also shipped.** In-app user guide (`/help`, `/admin/help`); Taxwork logo and the
+"TW VendorSign" product label; a consistent breadcrumb in `PageHeader`; a vendors
+invites registry with follow-up ("ต้องติดตาม") plus manual resend/cancel; and preview
+deployments forced to demo (mock) mode (`src/lib/api-base.ts`, `__VERCEL_ENV__`).
+
+**Still deferred.** LINE Login/LIFF verification (vendor signs via versioned consent +
+signature for now); automated reminders (email/LINE OA); invite funnel analytics;
+gross-up re-enable (with a corrected receipt presentation); credit notes (plain
+receipts only).

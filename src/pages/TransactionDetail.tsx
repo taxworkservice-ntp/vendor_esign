@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, Copy, ExternalLink, FileSearch, Link2, RotateCcw, ShieldAlert, ShieldCheck, UploadCloud } from 'lucide-react'
+import { CheckCircle2, Copy, ExternalLink, FileSearch, Link2, RotateCcw, ShieldAlert, ShieldCheck, UploadCloud } from 'lucide-react'
 import { useTransaction, useTransactionActions } from '../hooks/useTransactions'
 import { useSettings } from '../hooks/useSettings'
 import { useReceiptAuthorization } from '../hooks/useReceiptAuthorization'
@@ -12,6 +12,7 @@ import { ConfirmDialog } from '../components/ui/confirm-dialog'
 import { EmptyState } from '../components/ui/empty-state'
 import { ErrorState } from '../components/ui/error-state'
 import { PanelSkeleton } from '../components/ui/table-skeleton'
+import { Breadcrumb } from '../components/ui/page-header'
 import { defaultSettings, renderInviteMessage } from '../lib/settings'
 import { itemsTotal, normalizeLineItem } from '../lib/line-items'
 import { vendorDisplayName } from '../lib/vendor-name'
@@ -57,7 +58,7 @@ export function TransactionDetail() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <Link to="/" className="text-body font-medium text-ink-500">← กลับรายการ</Link>
+        <Breadcrumb items={[{ to: '/', label: 'รายการธุรกรรม' }, { label: 'รายการ' }]} />
         <Card>
           <CardBody>
             <PanelSkeleton rows={6} cols={2} />
@@ -70,7 +71,7 @@ export function TransactionDetail() {
   if (isError) {
     return (
       <div className="space-y-4">
-        <Link to="/" className="text-body font-medium text-ink-500">← กลับรายการ</Link>
+        <Breadcrumb items={[{ to: '/', label: 'รายการธุรกรรม' }, { label: 'รายการ' }]} />
         <Card>
           <ErrorState
             title="โหลดรายการไม่สำเร็จ"
@@ -85,7 +86,7 @@ export function TransactionDetail() {
   if (!t) {
     return (
       <div className="space-y-4">
-        <Link to="/" className="text-body font-medium text-ink-500">← กลับรายการ</Link>
+        <Breadcrumb items={[{ to: '/', label: 'รายการธุรกรรม' }, { label: 'รายการ' }]} />
         <Card>
           <EmptyState
             icon={FileSearch}
@@ -189,9 +190,7 @@ export function TransactionDetail() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <button onClick={() => nav(-1)} className="inline-flex items-center gap-1.5 text-body font-medium text-ink-500 hover:text-ink-900">
-          <ArrowLeft size={16} /> กลับ
-        </button>
+        <Breadcrumb items={[{ to: '/', label: 'รายการธุรกรรม' }, { label: t.id }]} />
         <StatusBadge status={t.status} />
       </div>
 

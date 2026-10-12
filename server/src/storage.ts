@@ -13,7 +13,7 @@ export function storageRoot(): string {
   return process.env.STORAGE_DIR ?? join(process.cwd(), 'storage')
 }
 
-export type StorageArea = 'slips' | 'signatures' | 'pdfs'
+export type StorageArea = 'slips' | 'signatures' | 'pdfs' | 'vendor-docs'
 
 export function saveBytes(area: StorageArea, name: string, bytes: Uint8Array, tenantId?: string): string {
   const parts = tenantId ? [tenantId, area] : [area]
@@ -135,8 +135,41 @@ export async function readStoredDurable(
   return readStored(tenantId, relPath)
 }
 
+/**
+ * Read a tenant asset (logo / signature / stamp) by its stored path. These are
+ * written through presigned uploads as `<tenantId>/<file>` — two segments — so
+ * they do not fit `readStoredDurable`'s `<tenant>/<area>/<name>` shape. Still
+ * validated: the key must start with the caller's tenant, hold no `..`/empty
+ * segments, and (on disk) resolve back inside `<root>/<tenantId>/`.
+ */
+export async function readTenantAsset(
+  tenantId: string,
+  relPath: string | null | undefined,
+): Promise<Uint8Array | undefined> {
+  if (!tenantId || !relPath) return undefined
+  if (isAbsolute(relPath) || relPath.includes('\0')) return undefined
+  const segments = relPath.split(/[\\/]/)
+  if (segments.some((s) => s === '..' || s === '')) return undefined
+  if (segments[0] !== tenantId) return undefined
+
+  if (r2Configured()) {
+    const fromR2 = await getObject(relPath)
+    if (fromR2) return fromR2
+  }
+  // Local fallback: resolve directly under this tenant's directory.
+  const rootAbs = resolve(storageRoot())
+  const full = resolve(rootAbs, ...segments)
+  const inside = relative(join(rootAbs, tenantId), full)
+  if (inside === '' || inside.startsWith('..') || isAbsolute(inside)) return undefined
+  try {
+    if (!existsSync(full) || !statSync(full).isFile()) return undefined
+    return readFileSync(full)
+  } catch {
+    return undefined
+  }
+}
+
 /** The tenant's own directory, for assertions and tests. */
 export function tenantDir(tenantId: string): string {
   return join(storageRoot(), tenantId) + sep
 }
-

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { Download, Info } from 'lucide-react'
 import { useTransaction } from '../hooks/useTransactions'
 import { useReceiptAuthorization } from '../hooks/useReceiptAuthorization'
@@ -14,6 +14,7 @@ import { normalizeLineItem } from '../lib/line-items'
 import { ReceiptSheet, type ReceiptSheetData } from '../components/receipt/receipt-sheet'
 import { Button } from '../components/ui/button'
 import { StatusBadge } from '../components/ui/badge'
+import { Breadcrumb } from '../components/ui/page-header'
 import type { LineItem } from '../lib/types'
 
 // Number/code derivation lives in lib/receipt (mock) — the real backend assigns
@@ -64,7 +65,7 @@ export function ReceiptView() {
   if (!t) {
     return (
       <div className="space-y-3">
-        <Link to="/" className="text-body font-semibold text-ink-500">← กลับรายการ</Link>
+        <Breadcrumb items={[{ to: '/receipts', label: 'ทะเบียนใบเสร็จ' }, { label: 'ไม่พบรายการ' }]} />
         <p>ไม่พบรายการ</p>
       </div>
     )
@@ -162,6 +163,7 @@ export function ReceiptView() {
 
   return (
     <div className="receipt-doc mx-auto max-w-[210mm] space-y-4">
+      <Breadcrumb className="no-print" items={[{ to: '/receipts', label: 'ทะเบียนใบเสร็จ' }, { label: number || 'ใบเสร็จ' }]} />
       <div className="no-print flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <StatusBadge status={t.status} />

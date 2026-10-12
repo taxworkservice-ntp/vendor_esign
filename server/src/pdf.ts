@@ -331,17 +331,15 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
     regular,
     FAINT,
   )
-  // A typed name is only a signature if its legal basis is stated; a drawn
-  // stroke needs no such note.
-  if (input.verificationMethod === 'typed-consent') {
-    centerText(
-      'ลายมือชื่ออิเล็กทรอนิกส์ตาม พ.ร.บ.ว่าด้วยธุรกรรมทางอิเล็กทรอนิกส์ พ.ศ. 2544',
-      sigY - 54,
-      8,
-      regular,
-      FAINT,
-    )
-  }
+  // Any electronic signature (drawn or typed) is stated with its legal basis and
+  // the authority under which the payer issues the receipt in the payee's name.
+  centerText(
+    'ออกในนามผู้รับเงินโดยได้รับมอบอำนาจ · ลายมือชื่ออิเล็กทรอนิกส์ตาม พ.ร.บ.ว่าด้วยธุรกรรมทางอิเล็กทรอนิกส์ พ.ศ. 2544',
+    sigY - 54,
+    8,
+    regular,
+    FAINT,
+  )
   // Document footer — the public verification record sits at the page bottom,
   // out of the signature block, on every receipt.
   centerText(`รหัสตรวจสอบ ${input.verificationCode} · ${input.verifyUrl}`, 30, 8, regular, FAINT)

@@ -3,7 +3,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { sql, withTenant } from '../../src/server/db'
 import { isVendorPrefix, prefixRequired } from '../../src/lib/vendor-name'
 import { isoDay } from './dates'
-import { saveBytesDurable } from './storage'
+import { saveBytesDurable, readTenantAsset } from './storage'
 import { sha256hex } from './auth'
 import { authRoutes } from './client-auth'
 import { corsMw } from './cors'
@@ -16,6 +16,7 @@ import { txnRoutes } from './transactions'
 import { whtRoutes } from './wht'
 import { receiptRoutes } from './receipts-register'
 import { finalizeReceipt } from './receipts'
+import { inviteClientRoutes, invitePublicRoutes } from './vendor-invites'
 import { PILOT_TENANT, audit, one, rateLimited, gateBlocked, gateFail, gateClear } from './shared'
 
 // ── Public client/vendor operation ─────────────────────────────────────
@@ -63,10 +64,11 @@ app.use('*', async (c, next) => {
   return next()
 })
 
-// Public platform notice (announcement + maintenance) for the client shell.
+// Public platform notice (announcement + maintenance + curated client flags).
 app.get('/api/announcement', async (c) => {
-  const { announcement, maintenance } = await getPlatformSettingsCached()
-  return c.json({ announcement, maintenance })
+  const { announcement, maintenance, flags } = await getPlatformSettingsCached()
+  // Expose only the flags the client needs — never the raw internal map.
+  return c.json({ announcement, maintenance, flags: { whtGrossUp: flags.whtGrossUp === true } })
 })
 
 // Leaving impersonation is unauthenticated: it only clears the tw_imp cookie.
@@ -91,7 +93,29 @@ app.route('/api/client', whtRoutes)
 // Client receipt register (issued receipts by issue-date period).
 app.route('/api/client', receiptRoutes)
 
+// Vendor self-onboarding: client routes + public invite/submit.
+app.route('/api/client', inviteClientRoutes)
+app.route('/api/vendor-invite', invitePublicRoutes)
+
 app.get('/api/health', (c) => c.json({ ok: true, operation: 'public', tenant: TENANT }))
+
+// Public, caching logo proxy for the vendor-facing links. Branding only (no
+// personal data); the tenant id is already exposed on the vendor payloads.
+app.get('/api/branding/:tenantId/logo', async (c) => {
+  const ip = c.req.header('x-forwarded-for') ?? 'local'
+  if (await rateLimited(`branding:${ip}`, 120)) return c.json({ error: 'too-many-requests' }, 429)
+  const tenantId = c.req.param('tenantId')
+  const settings = await getTenantSettings(tenantId)
+  if (!settings.logoStoragePath) return c.json({ error: 'not-found' }, 404)
+  const bytes = await readTenantAsset(tenantId, settings.logoStoragePath)
+  if (!bytes) return c.json({ error: 'not-found' }, 404)
+  const ext = settings.logoStoragePath.split('.').pop()?.toLowerCase()
+  const type = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : 'image/png'
+  return c.body(bytes as unknown as ArrayBuffer, 200, {
+    'Content-Type': type,
+    'Cache-Control': 'public, max-age=300',
+  })
+})
 
 // Vendor: load own transaction (masked). First open stamps opened_at.
 // Multi-tenant: token_hash is globally unique — tenant is derived from the row,
@@ -126,6 +150,8 @@ app.get('/api/vendor/:token', async (c) => {
   }
   const gated = (r as Record<string, unknown>).tax_id_hash != null
   const unlocked = (r as Record<string, unknown>).unlocked_at != null
+  const settings = await getTenantSettings(rowTenant)
+  const logoUrl = settings.logoStoragePath ? `/api/branding/${rowTenant}/logo` : null
   // Before identity is proven, reveal only what the gate screen needs — never
   // the amounts, line items or vendor details. The full document is delivered
   // once unlocked (or immediately for a legacy ungated row).
@@ -133,6 +159,8 @@ app.get('/api/vendor/:token', async (c) => {
     return c.json({
       id: r.id, tenantId: rowTenant,
       clientCode: (r as Record<string, unknown>).client_code ?? null,
+      clientName: settings.displayName,
+      logoUrl,
       ref: r.ref, status: r.status,
       gated: true, unlocked: false,
       idLast4: (r as Record<string, unknown>).tax_id_last4 ?? null,
@@ -140,6 +168,10 @@ app.get('/api/vendor/:token', async (c) => {
   }
   return c.json({
     id: r.id, tenantId: rowTenant, clientCode: (r as Record<string, unknown>).client_code ?? null,
+    clientName: settings.displayName,
+    logoUrl,
+    consentTemplate: settings.consentTextV1,
+    consentVersion: settings.consentVersion,
     ref: r.ref, description: r.description, note: r.note, lineItems: r.line_items,
     paymentType: r.payment_type,
     grossAmount: r.gross_amount, whtRate: r.wht_rate, whtAmount: r.wht_amount,
@@ -272,6 +304,9 @@ app.post('/api/vendor/:token/sign', async (c) => {
   // right away. Distinct from the receipt number (assigned only at issuance, so
   // the statutory series never has gaps).
   const authRef = `AUTH-${randomBytes(4).toString('hex').toUpperCase()}`
+  // The exact consent version the vendor accepted (from tenant settings), stored
+  // as evidence — not a hardcoded label.
+  const consentVersion = (await getTenantSettings(rowTenant)).consentVersion
   await db`insert into vendor_authorizations
     (user_id, transaction_id, vendor_prefix, vendor_name, vendor_address, vendor_masked_id,
      vendor_phone, vendor_email, auth_ref, signature_image_path, verification_method, line_user_id, ip, user_agent,
@@ -280,13 +315,13 @@ app.post('/api/vendor/:token/sign', async (c) => {
       ${`x-xxxx-xxxxx-${last4.slice(0, 2)}-${last4.slice(2)}`},
       ${subPhone}, ${subEmail}, ${authRef},
       ${sigPath}, ${verificationMethod}, ${body.lineUserId ?? null}, ${ip},
-      ${(c.req.header('user-agent') ?? '').slice(0, 500)}, 'v1',
+      ${(c.req.header('user-agent') ?? '').slice(0, 500)}, ${consentVersion},
       ${JSON.stringify(corrections)})`
   await db`update vendor_requests set used_at = now() where id = ${String(r.req_id)}`
   await db`update vendor_payables set status = 'signed' where id = ${txnId}`
   await withTenant(rowTenant, 'client', async () =>
     audit(rowTenant, 'vendor_payables', txnId, 'vendor.signed', 'vendor',
-      { verificationMethod, signMethod, consentVersion: 'v1', corrections, authRef }, ip))
+      { verificationMethod, signMethod, consentVersion, corrections, authRef }, ip))
 
   // Issue the receipt now so the vendor gets the real series number and the PDF
   // immediately — no client round-trip. If issuance fails, the row stays

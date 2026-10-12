@@ -9,7 +9,13 @@ export const hasServer = !!API
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(`${API}${path}`, { credentials: 'include', ...init })
   const j = (await r.json().catch(() => null)) as (T & { error?: string }) | null
-  if (!r.ok) throw new Error(j?.error ?? 'request-failed')
+  if (!r.ok) {
+    // Attach the HTTP status so callers can tell "not found" (404/410) from a
+    // transient 5xx / network failure and offer the right recovery.
+    const err = new Error(j?.error ?? 'request-failed') as Error & { status?: number }
+    err.status = r.status
+    throw err
+  }
   return j as T
 }
 

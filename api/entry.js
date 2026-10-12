@@ -24668,8 +24668,8 @@ var require_fontkit_umd = __commonJS({
           if (this.charReceived) {
             var cr = this.charReceived;
             var buf = this.charBuffer;
-            var enc = this.encoding;
-            res += buf.slice(0, cr).toString(enc);
+            var enc2 = this.encoding;
+            res += buf.slice(0, cr).toString(enc2);
           }
           return res;
         };
@@ -24800,9 +24800,9 @@ var require_fontkit_umd = __commonJS({
       function needMoreData(state) {
         return !state.ended && (state.needReadable || state.length < state.highWaterMark || state.length === 0);
       }
-      Readable.prototype.setEncoding = function(enc) {
-        this._readableState.decoder = new string_decoder_1(enc);
-        this._readableState.encoding = enc;
+      Readable.prototype.setEncoding = function(enc2) {
+        this._readableState.decoder = new string_decoder_1(enc2);
+        this._readableState.encoding = enc2;
         return this;
       };
       var MAX_HWM = 8388608;
@@ -26114,23 +26114,23 @@ var require_fontkit_umd = __commonJS({
         return this.decoder.end();
       };
       function detectEncoding(buf, defaultEncoding) {
-        var enc = defaultEncoding || "utf-16le";
+        var enc2 = defaultEncoding || "utf-16le";
         if (buf.length >= 2) {
           if (buf[0] == 254 && buf[1] == 255)
-            enc = "utf-16be";
+            enc2 = "utf-16be";
           else if (buf[0] == 255 && buf[1] == 254)
-            enc = "utf-16le";
+            enc2 = "utf-16le";
           else {
             var asciiCharsLE = 0, asciiCharsBE = 0, _len = Math.min(buf.length - buf.length % 2, 64);
             for (var i2 = 0; i2 < _len; i2 += 2) {
               if (buf[i2] === 0 && buf[i2 + 1] !== 0) asciiCharsBE++;
               if (buf[i2] !== 0 && buf[i2 + 1] === 0) asciiCharsLE++;
             }
-            if (asciiCharsBE > asciiCharsLE) enc = "utf-16be";
-            else if (asciiCharsBE < asciiCharsLE) enc = "utf-16le";
+            if (asciiCharsBE > asciiCharsLE) enc2 = "utf-16be";
+            else if (asciiCharsBE < asciiCharsLE) enc2 = "utf-16le";
           }
         }
-        return enc;
+        return enc2;
       }
       var utf16 = {
         utf16be,
@@ -35822,8 +35822,8 @@ var require_fontkit_umd = __commonJS({
         var modules = [internal, utf16, utf7, sbcsCodec, sbcsData, sbcsDataGenerated, dbcsCodec, dbcsData];
         for (var i2 = 0; i2 < modules.length; i2++) {
           var module2 = modules[i2];
-          for (var enc in module2) {
-            if (Object.prototype.hasOwnProperty.call(module2, enc)) exports2[enc] = module2[enc];
+          for (var enc2 in module2) {
+            if (Object.prototype.hasOwnProperty.call(module2, enc2)) exports2[enc2] = module2[enc2];
           }
         }
       });
@@ -35946,8 +35946,8 @@ var require_fontkit_umd = __commonJS({
             "utf16le": true,
             "utf-16le": true
           };
-          Buffer$7.isNativeEncoding = function(enc) {
-            return enc && nodeNativeEncodings[enc.toLowerCase()];
+          Buffer$7.isNativeEncoding = function(enc2) {
+            return enc2 && nodeNativeEncodings[enc2.toLowerCase()];
           };
           var SlowBuffer = buffer.SlowBuffer;
           original.SlowBufferToString = SlowBuffer.prototype.toString;
@@ -36042,9 +36042,9 @@ var require_fontkit_umd = __commonJS({
           if (iconv.supportsStreams) {
             var Readable2 = Stream.Readable;
             original.ReadableSetEncoding = Readable2.prototype.setEncoding;
-            Readable2.prototype.setEncoding = function setEncoding(enc, options) {
-              this._readableState.decoder = iconv.getDecoder(enc, options);
-              this._readableState.encoding = enc;
+            Readable2.prototype.setEncoding = function setEncoding(enc2, options) {
+              this._readableState.decoder = iconv.getDecoder(enc2, options);
+              this._readableState.encoding = enc2;
             };
             Readable2.prototype.collect = iconv._collect;
           }
@@ -36094,9 +36094,9 @@ var require_fontkit_umd = __commonJS({
           var trail = decoder.end();
           return trail ? res + trail : res;
         };
-        iconv.encodingExists = function encodingExists(enc) {
+        iconv.encodingExists = function encodingExists(enc2) {
           try {
-            iconv.getCodec(enc);
+            iconv.getCodec(enc2);
             return true;
           } catch (e) {
             return false;
@@ -36107,30 +36107,30 @@ var require_fontkit_umd = __commonJS({
         iconv._codecDataCache = {};
         iconv.getCodec = function getCodec(encoding) {
           if (!iconv.encodings) iconv.encodings = encodings;
-          var enc = iconv._canonicalizeEncoding(encoding);
+          var enc2 = iconv._canonicalizeEncoding(encoding);
           var codecOptions = {};
           while (true) {
-            var codec = iconv._codecDataCache[enc];
+            var codec = iconv._codecDataCache[enc2];
             if (codec) return codec;
-            var codecDef = iconv.encodings[enc];
+            var codecDef = iconv.encodings[enc2];
             switch (typeof codecDef) {
               case "string":
-                enc = codecDef;
+                enc2 = codecDef;
                 break;
               case "object":
                 for (var key3 in codecDef) {
                   codecOptions[key3] = codecDef[key3];
                 }
-                if (!codecOptions.encodingName) codecOptions.encodingName = enc;
-                enc = codecDef.type;
+                if (!codecOptions.encodingName) codecOptions.encodingName = enc2;
+                enc2 = codecDef.type;
                 break;
               case "function":
-                if (!codecOptions.encodingName) codecOptions.encodingName = enc;
+                if (!codecOptions.encodingName) codecOptions.encodingName = enc2;
                 codec = new codecDef(codecOptions, iconv);
                 iconv._codecDataCache[codecOptions.encodingName] = codec;
                 return codec;
               default:
-                throw new Error("Encoding not recognized: '" + encoding + "' (searched as: '" + enc + "')");
+                throw new Error("Encoding not recognized: '" + encoding + "' (searched as: '" + enc2 + "')");
             }
           }
         };
@@ -62337,7 +62337,7 @@ var Hono2 = class extends Hono {
 };
 
 // server/src/api.ts
-import { randomBytes as randomBytes5, timingSafeEqual as timingSafeEqual3 } from "node:crypto";
+import { randomBytes as randomBytes6, timingSafeEqual as timingSafeEqual3 } from "node:crypto";
 
 // node_modules/@neondatabase/serverless/index.mjs
 var So = Object.create;
@@ -68048,6 +68048,27 @@ async function readStoredDurable(tenantId, relPath) {
   }
   return readStored(tenantId, relPath);
 }
+async function readTenantAsset(tenantId, relPath) {
+  if (!tenantId || !relPath) return void 0;
+  if (isAbsolute(relPath) || relPath.includes("\0")) return void 0;
+  const segments = relPath.split(/[\\/]/);
+  if (segments.some((s) => s === ".." || s === "")) return void 0;
+  if (segments[0] !== tenantId) return void 0;
+  if (r2Configured()) {
+    const fromR2 = await getObject(relPath);
+    if (fromR2) return fromR2;
+  }
+  const rootAbs = resolve(storageRoot());
+  const full = resolve(rootAbs, ...segments);
+  const inside = relative(join(rootAbs, tenantId), full);
+  if (inside === "" || inside.startsWith("..") || isAbsolute(inside)) return void 0;
+  try {
+    if (!existsSync(full) || !statSync(full).isFile()) return void 0;
+    return readFileSync(full);
+  } catch {
+    return void 0;
+  }
+}
 
 // server/src/auth.ts
 import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
@@ -68508,7 +68529,14 @@ var DEFAULT_WHT_RATES = [
   { value: 0, label: "\u0E44\u0E21\u0E48\u0E2B\u0E31\u0E01\u0E20\u0E32\u0E29\u0E35 \u0E13 \u0E17\u0E35\u0E48\u0E08\u0E48\u0E32\u0E22", paymentType: "\u0E44\u0E21\u0E48\u0E2B\u0E31\u0E01\u0E20\u0E32\u0E29\u0E35 \u0E13 \u0E17\u0E35\u0E48\u0E08\u0E48\u0E32\u0E22" }
 ];
 var DEFAULT_WHT_MIN_THRESHOLD = 1e3;
-var DEFAULT_CONSENT = "\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E44\u0E14\u0E49\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E08\u0E33\u0E19\u0E27\u0E19\u0E14\u0E31\u0E07\u0E01\u0E25\u0E48\u0E32\u0E27\u0E41\u0E25\u0E49\u0E27 \u0E41\u0E25\u0E30\u0E21\u0E2D\u0E1A\u0E2D\u0E33\u0E19\u0E32\u0E08\u0E43\u0E2B\u0E49\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E43\u0E19\u0E19\u0E32\u0E21\u0E02\u0E2D\u0E07\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E18\u0E38\u0E23\u0E01\u0E23\u0E23\u0E21\u0E19\u0E35\u0E49\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19";
+var DEFAULT_CONSENT_VERSION = "2";
+var DEFAULT_CONSENT = `\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E02\u0E2D\u0E23\u0E31\u0E1A\u0E23\u0E2D\u0E07\u0E41\u0E25\u0E30\u0E43\u0E2B\u0E49\u0E04\u0E27\u0E32\u0E21\u0E22\u0E34\u0E19\u0E22\u0E2D\u0E21\u0E14\u0E31\u0E07\u0E15\u0E48\u0E2D\u0E44\u0E1B\u0E19\u0E35\u0E49
+(1) \u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E02\u0E2D\u0E23\u0E31\u0E1A\u0E23\u0E2D\u0E07\u0E27\u0E48\u0E32\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E17\u0E35\u0E48\u0E43\u0E2B\u0E49\u0E44\u0E27\u0E49\u0E43\u0E19\u0E40\u0E2D\u0E01\u0E2A\u0E32\u0E23\u0E19\u0E35\u0E49 (\u0E0A\u0E37\u0E48\u0E2D \u0E17\u0E35\u0E48\u0E2D\u0E22\u0E39\u0E48 \u0E40\u0E25\u0E02\u0E1B\u0E23\u0E30\u0E08\u0E33\u0E15\u0E31\u0E27\u0E1B\u0E23\u0E30\u0E0A\u0E32\u0E0A\u0E19 \u0E41\u0E25\u0E30\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E01\u0E32\u0E23\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19) \u0E40\u0E1B\u0E47\u0E19\u0E04\u0E27\u0E32\u0E21\u0E08\u0E23\u0E34\u0E07\u0E41\u0E25\u0E30\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07\u0E17\u0E38\u0E01\u0E1B\u0E23\u0E30\u0E01\u0E32\u0E23 \u0E41\u0E25\u0E30\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E40\u0E1B\u0E47\u0E19\u0E1C\u0E39\u0E49\u0E21\u0E35\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E15\u0E32\u0E21\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E19\u0E35\u0E49
+(2) \u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E44\u0E14\u0E49\u0E23\u0E31\u0E1A\u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19\u0E04\u0E48\u0E32\u0E08\u0E49\u0E32\u0E07/\u0E04\u0E48\u0E32\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23\u0E15\u0E32\u0E21\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E02\u0E49\u0E32\u0E07\u0E15\u0E49\u0E19\u0E04\u0E23\u0E1A\u0E16\u0E49\u0E27\u0E19\u0E41\u0E25\u0E49\u0E27 \u2014 \u0E22\u0E2D\u0E14\u0E23\u0E31\u0E1A\u0E2A\u0E38\u0E17\u0E18\u0E34 {{amount}} \u0E1A\u0E32\u0E17 \u0E27\u0E31\u0E19\u0E17\u0E35\u0E48 {{date}} \u0E2D\u0E49\u0E32\u0E07\u0E2D\u0E34\u0E07 {{ref}}
+(3) \u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E02\u0E2D\u0E21\u0E2D\u0E1A\u0E2D\u0E33\u0E19\u0E32\u0E08\u0E41\u0E25\u0E30\u0E43\u0E2B\u0E49\u0E04\u0E27\u0E32\u0E21\u0E22\u0E34\u0E19\u0E22\u0E2D\u0E21\u0E41\u0E01\u0E48 {{client}} \u0E43\u0E19\u0E01\u0E32\u0E23\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E43\u0E19\u0E19\u0E32\u0E21\u0E02\u0E2D\u0E07\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32 \u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E18\u0E38\u0E23\u0E01\u0E23\u0E23\u0E21\u0E19\u0E35\u0E49\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19
+(4) \u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E22\u0E34\u0E19\u0E22\u0E2D\u0E21\u0E43\u0E2B\u0E49\u0E25\u0E32\u0E22\u0E21\u0E37\u0E2D\u0E0A\u0E37\u0E48\u0E2D\u0E2D\u0E34\u0E40\u0E25\u0E47\u0E01\u0E17\u0E23\u0E2D\u0E19\u0E34\u0E01\u0E2A\u0E4C\u0E17\u0E35\u0E48\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E25\u0E07\u0E43\u0E19\u0E40\u0E2D\u0E01\u0E2A\u0E32\u0E23\u0E19\u0E35\u0E49\u0E21\u0E35\u0E1C\u0E25\u0E1C\u0E39\u0E01\u0E1E\u0E31\u0E19\u0E17\u0E32\u0E07\u0E01\u0E0E\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E2A\u0E21\u0E37\u0E2D\u0E19\u0E01\u0E32\u0E23\u0E25\u0E07\u0E25\u0E32\u0E22\u0E21\u0E37\u0E2D\u0E0A\u0E37\u0E48\u0E2D\u0E14\u0E49\u0E27\u0E22\u0E21\u0E37\u0E2D \u0E15\u0E32\u0E21\u0E1E\u0E23\u0E30\u0E23\u0E32\u0E0A\u0E1A\u0E31\u0E0D\u0E0D\u0E31\u0E15\u0E34\u0E27\u0E48\u0E32\u0E14\u0E49\u0E27\u0E22\u0E18\u0E38\u0E23\u0E01\u0E23\u0E23\u0E21\u0E17\u0E32\u0E07\u0E2D\u0E34\u0E40\u0E25\u0E47\u0E01\u0E17\u0E23\u0E2D\u0E19\u0E34\u0E01\u0E2A\u0E4C \u0E1E.\u0E28. 2544
+(5) \u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E44\u0E14\u0E49\u0E2D\u0E48\u0E32\u0E19\u0E41\u0E25\u0E30\u0E40\u0E02\u0E49\u0E32\u0E43\u0E08\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E02\u0E49\u0E32\u0E07\u0E15\u0E49\u0E19\u0E41\u0E25\u0E49\u0E27 \u0E08\u0E36\u0E07\u0E25\u0E07\u0E19\u0E32\u0E21\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E22\u0E37\u0E19\u0E22\u0E31\u0E19`;
+var LEGACY_DEFAULT_CONSENT = "\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E44\u0E14\u0E49\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E08\u0E33\u0E19\u0E27\u0E19\u0E14\u0E31\u0E07\u0E01\u0E25\u0E48\u0E32\u0E27\u0E41\u0E25\u0E49\u0E27 \u0E41\u0E25\u0E30\u0E21\u0E2D\u0E1A\u0E2D\u0E33\u0E19\u0E32\u0E08\u0E43\u0E2B\u0E49\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E43\u0E19\u0E19\u0E32\u0E21\u0E02\u0E2D\u0E07\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E18\u0E38\u0E23\u0E01\u0E23\u0E23\u0E21\u0E19\u0E35\u0E49\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19";
 function currentBeYear(today = /* @__PURE__ */ new Date()) {
   return today.getFullYear() + 543;
 }
@@ -68518,6 +68546,11 @@ var DEFAULT_INVITE_TEMPLATE = `\u0E40\u0E23\u0E35\u0E22\u0E19 \u0E04\u0E38\u0E13
 \u0E22\u0E2D\u0E14\u0E23\u0E31\u0E1A\u0E2A\u0E38\u0E17\u0E18\u0E34 {{amount}} \u0E1A\u0E32\u0E17
 
 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E1B\u0E34\u0E14\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E25\u0E07\u0E19\u0E32\u0E21\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E41\u0E25\u0E30\u0E21\u0E2D\u0E1A\u0E2D\u0E33\u0E19\u0E32\u0E08\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08 (\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E43\u0E0A\u0E49\u0E44\u0E14\u0E49\u0E08\u0E19\u0E01\u0E27\u0E48\u0E32\u0E08\u0E30\u0E25\u0E07\u0E19\u0E32\u0E21)
+{{link}}`;
+var DEFAULT_VENDOR_INVITE_TEMPLATE = `\u0E40\u0E23\u0E35\u0E22\u0E19 \u0E1C\u0E39\u0E49\u0E02\u0E32\u0E22/\u0E1C\u0E39\u0E49\u0E23\u0E31\u0E1A\u0E08\u0E49\u0E32\u0E07
+
+{{client}} \u0E02\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E23\u0E48\u0E27\u0E21\u0E21\u0E37\u0E2D\u0E01\u0E23\u0E2D\u0E01\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E1C\u0E39\u0E49\u0E02\u0E32\u0E22 \u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E43\u0E0A\u0E49\u0E43\u0E19\u0E01\u0E32\u0E23\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E41\u0E25\u0E30\u0E42\u0E2D\u0E19\u0E40\u0E07\u0E34\u0E19\u0E43\u0E2B\u0E49\u0E17\u0E48\u0E32\u0E19\u0E2D\u0E22\u0E48\u0E32\u0E07\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07
+\u0E01\u0E23\u0E38\u0E13\u0E32\u0E01\u0E23\u0E2D\u0E01\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E41\u0E25\u0E30\u0E41\u0E19\u0E1A\u0E40\u0E2D\u0E01\u0E2A\u0E32\u0E23\u0E1C\u0E48\u0E32\u0E19\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E19\u0E35\u0E49 (\u0E43\u0E0A\u0E49\u0E40\u0E27\u0E25\u0E32\u0E1B\u0E23\u0E30\u0E21\u0E32\u0E13 2\u20133 \u0E19\u0E32\u0E17\u0E35)
 {{link}}`;
 
 // server/src/settings.ts
@@ -68529,6 +68562,8 @@ async function getTenantSettings(tenantId) {
     const cfg = await db`select key, value from config where user_id = ${tenantId}`;
     const row = tRows[0] ?? {};
     const m2 = new Map(cfg.map((r) => [r.key, r.value]));
+    const consentStored = String(m2.get("consent_text_v1")?.th ?? DEFAULT_CONSENT);
+    const consentTextV1 = consentStored === LEGACY_DEFAULT_CONSENT ? DEFAULT_CONSENT : consentStored;
     const ratesRaw = Array.isArray(m2.get("wht_rates")) ? m2.get("wht_rates") : [];
     const whtRates = ratesRaw.length ? ratesRaw.map((r) => ({
       paymentType: String(r.paymentType ?? ""),
@@ -68546,12 +68581,15 @@ async function getTenantSettings(tenantId) {
       whtRates,
       whtMinThreshold: Number(m2.get("wht_min_threshold") ?? DEFAULT_WHT_MIN_THRESHOLD),
       linkExpiryDays: Number(m2.get("link_expiry_days") ?? 7),
-      consentTextV1: String(m2.get("consent_text_v1")?.th ?? DEFAULT_CONSENT),
+      consentTextV1,
+      consentVersion: String(m2.get("consent_version") ?? DEFAULT_CONSENT_VERSION),
       receiptNote: String(m2.get("receipt_note") ?? ""),
       showVerifyQr: Boolean(m2.get("show_verify_qr") ?? false),
       inviteMessageTemplate: String(m2.get("invite_message_template") ?? DEFAULT_INVITE_TEMPLATE),
+      vendorInviteMessageTemplate: String(m2.get("vendor_invite_message_template") ?? DEFAULT_VENDOR_INVITE_TEMPLATE),
       signatureStoragePath: m2.get("signature_storage_path") || void 0,
       stampStoragePath: m2.get("stamp_storage_path") || void 0,
+      logoStoragePath: m2.get("logo_storage_path") || void 0,
       signaturePlacement: m2.get("signature_placement") || void 0,
       stampPlacement: m2.get("stamp_placement") || void 0
     };
@@ -68573,11 +68611,14 @@ async function saveTenantSettings(tenantId, s) {
     if (s.whtMinThreshold !== void 0) await put("wht_min_threshold", s.whtMinThreshold);
     await put("link_expiry_days", s.linkExpiryDays);
     await put("consent_text_v1", { th: s.consentTextV1 });
+    await put("consent_version", s.consentVersion);
     await put("receipt_note", s.receiptNote);
     await put("show_verify_qr", s.showVerifyQr);
     await put("invite_message_template", s.inviteMessageTemplate);
+    await put("vendor_invite_message_template", s.vendorInviteMessageTemplate);
     if (s.signatureStoragePath !== void 0) await put("signature_storage_path", s.signatureStoragePath);
     if (s.stampStoragePath !== void 0) await put("stamp_storage_path", s.stampStoragePath);
+    if (s.logoStoragePath !== void 0) await put("logo_storage_path", s.logoStoragePath);
     if (s.signaturePlacement !== void 0) await put("signature_placement", s.signaturePlacement);
     if (s.stampPlacement !== void 0) await put("stamp_placement", s.stampPlacement);
   });
@@ -68734,26 +68775,26 @@ function safeEncrypt(taxId) {
     return "";
   }
 }
-function decryptLast4(enc) {
-  if (!enc) return "";
+function decryptLast4(enc2) {
+  if (!enc2) return "";
   try {
-    const v2 = decryptId(enc);
+    const v2 = decryptId(enc2);
     return v2 ? v2.slice(-4) : "";
   } catch {
     return "";
   }
 }
-function decryptFull(enc) {
-  if (!enc) return void 0;
+function decryptFull(enc2) {
+  if (!enc2) return void 0;
   try {
-    return decryptId(enc) ?? void 0;
+    return decryptId(enc2) ?? void 0;
   } catch {
     return void 0;
   }
 }
 function toVendor(r) {
-  const enc = r.id_number_encrypted;
-  const last4 = decryptLast4(enc);
+  const enc2 = r.id_number_encrypted;
+  const last4 = decryptLast4(enc2);
   return {
     id: String(r.id),
     tenantId: String(r.user_id),
@@ -68763,7 +68804,7 @@ function toVendor(r) {
     address: String(r.address ?? ""),
     // The client owns this data: the portal shows the full tax ID (the same value
     // it can already read via /vendors/:id/tax-id). Masking is for the vendor PDF.
-    taxId: decryptFull(enc),
+    taxId: decryptFull(enc2),
     maskedId: maskTaxId(last4),
     taxLast4: last4 || void 0,
     lineUserId: r.line_user_id ?? void 0,
@@ -68771,6 +68812,8 @@ function toVendor(r) {
     email: r.email ?? void 0,
     isVatRegistered: Boolean(r.is_vat_registered),
     isActive: r.is_active === void 0 ? true : Boolean(r.is_active),
+    hasIdDoc: Boolean(r.id_doc_path),
+    hasBankDoc: Boolean(r.bank_doc_path),
     createdAt: new Date(String(r.created_at ?? Date.now())).toISOString()
   };
 }
@@ -68783,6 +68826,7 @@ dataRoutes.get("/vendors", async (c) => {
     return await db.query(
       `select v.id, v.user_id, v.vendor_no, v.prefix, v.name, v.address, v.id_number_encrypted,
               v.line_user_id, v.phone, v.email, v.is_vat_registered, v.is_active, v.created_at,
+              v.id_doc_path, v.bank_doc_path,
               coalesce(t.outstanding, 0)::numeric as outstanding,
               coalesce(t.txn_count, 0)::int as txn_count,
               to_char(t.last_activity, 'YYYY-MM-DD') as last_activity
@@ -68818,12 +68862,14 @@ dataRoutes.post("/vendors", async (c) => {
   const name = (b2?.name ?? "").trim();
   if (name.length < 2) return c.json({ error: "invalid-body" }, 400);
   if (prefixRequired(name) && !isVendorPrefix(prefix)) return c.json({ error: "invalid-prefix" }, 400);
+  const taxNorm = (b2?.taxId ?? "").replace(/\D/g, "");
+  const taxHash = taxNorm ? sha256hex(taxNorm) : null;
   const row = await withTenant(g.ws, "owner", async () => {
     const db = sql();
-    const ins = await db`insert into vendor_payees (user_id, vendor_no, prefix, name, address, id_number_encrypted, line_user_id, phone, email, is_vat_registered)
+    const ins = await db`insert into vendor_payees (user_id, vendor_no, prefix, name, address, id_number_encrypted, id_number_hash, line_user_id, phone, email, is_vat_registered)
       values (${g.ws},
         (select coalesce(max(vendor_no), 0) + 1 from vendor_payees where user_id = ${g.ws}),
-        ${isVendorPrefix(prefix) ? prefix : ""}, ${name}, ${(b2?.address ?? "").trim()}, ${safeEncrypt(b2?.taxId ?? "")},
+        ${isVendorPrefix(prefix) ? prefix : ""}, ${name}, ${(b2?.address ?? "").trim()}, ${safeEncrypt(b2?.taxId ?? "")}, ${taxHash},
         ${b2?.lineUserId?.trim() ?? null}, ${b2?.phone?.trim() ?? null}, ${b2?.email?.trim() ?? null}, ${Boolean(b2?.isVatRegistered)})
       returning id, user_id, vendor_no, prefix, name, address, id_number_encrypted, line_user_id, phone, email, is_vat_registered, created_at`;
     return ins[0];
@@ -68837,16 +68883,32 @@ dataRoutes.get("/vendors/:id/tax-id", async (c) => {
     const db = sql();
     return await db`select id_number_encrypted from vendor_payees where id = ${c.req.param("id")} and user_id = ${g.ws}`;
   });
-  const enc = rows[0]?.id_number_encrypted;
+  const enc2 = rows[0]?.id_number_encrypted;
   let taxId = null;
-  if (enc) {
+  if (enc2) {
     try {
-      taxId = decryptId(enc);
+      taxId = decryptId(enc2);
     } catch {
       taxId = null;
     }
   }
   return c.json({ taxId });
+});
+dataRoutes.get("/vendors/:id/document/:kind", async (c) => {
+  const g = await guard(c);
+  if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  const kind = c.req.param("kind");
+  if (kind !== "id" && kind !== "bank") return c.json({ error: "invalid-kind" }, 400);
+  const rows = await withTenant(g.ws, "owner", async () => {
+    const db = sql();
+    return await db`select id_doc_path, bank_doc_path from vendor_payees
+      where id = ${c.req.param("id")} and user_id = ${g.ws}`;
+  });
+  const path = kind === "id" ? rows[0]?.id_doc_path : rows[0]?.bank_doc_path;
+  const bytes = await readStoredDurable(g.ws, path ? String(path) : null);
+  if (!bytes) return c.json({ error: "not-found" }, 404);
+  await withTenant(g.ws, "owner", async () => audit(g.ws, "vendor_payees", c.req.param("id"), "vendor.doc-viewed", g.actor, { kind }, "server"));
+  return c.body(bytes, 200, { "Content-Type": "image/png" });
 });
 dataRoutes.get("/vendors/:id/memory", async (c) => {
   const g = await guard(c);
@@ -69673,7 +69735,8 @@ txnRoutes.post("/transactions", async (c) => {
   const b2 = await c.req.json().catch(() => null);
   const items = (Array.isArray(b2?.lineItems) ? b2.lineItems : []).map((it2) => normalizeLineItem(it2)).filter((it2) => it2.description && it2.amount > 0);
   if (!b2?.vendorId || items.length === 0) return c.json({ error: "invalid-body" }, 400);
-  const whtMode = b2.whtMode === "grossup" ? "grossup" : "deduct";
+  const { flags } = await getPlatformSettingsCached();
+  const whtMode = flags.whtGrossUp === true && b2.whtMode === "grossup" ? "grossup" : "deduct";
   const base = itemsTotal(items);
   const settings = await getTenantSettings(g.ws);
   const eff = applyWhtThreshold(
@@ -70535,15 +70598,13 @@ async function buildReceiptPdf(input) {
     regular,
     FAINT
   );
-  if (input.verificationMethod === "typed-consent") {
-    centerText(
-      "\u0E25\u0E32\u0E22\u0E21\u0E37\u0E2D\u0E0A\u0E37\u0E48\u0E2D\u0E2D\u0E34\u0E40\u0E25\u0E47\u0E01\u0E17\u0E23\u0E2D\u0E19\u0E34\u0E01\u0E2A\u0E4C\u0E15\u0E32\u0E21 \u0E1E.\u0E23.\u0E1A.\u0E27\u0E48\u0E32\u0E14\u0E49\u0E27\u0E22\u0E18\u0E38\u0E23\u0E01\u0E23\u0E23\u0E21\u0E17\u0E32\u0E07\u0E2D\u0E34\u0E40\u0E25\u0E47\u0E01\u0E17\u0E23\u0E2D\u0E19\u0E34\u0E01\u0E2A\u0E4C \u0E1E.\u0E28. 2544",
-      sigY - 54,
-      8,
-      regular,
-      FAINT
-    );
-  }
+  centerText(
+    "\u0E2D\u0E2D\u0E01\u0E43\u0E19\u0E19\u0E32\u0E21\u0E1C\u0E39\u0E49\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E42\u0E14\u0E22\u0E44\u0E14\u0E49\u0E23\u0E31\u0E1A\u0E21\u0E2D\u0E1A\u0E2D\u0E33\u0E19\u0E32\u0E08 \xB7 \u0E25\u0E32\u0E22\u0E21\u0E37\u0E2D\u0E0A\u0E37\u0E48\u0E2D\u0E2D\u0E34\u0E40\u0E25\u0E47\u0E01\u0E17\u0E23\u0E2D\u0E19\u0E34\u0E01\u0E2A\u0E4C\u0E15\u0E32\u0E21 \u0E1E.\u0E23.\u0E1A.\u0E27\u0E48\u0E32\u0E14\u0E49\u0E27\u0E22\u0E18\u0E38\u0E23\u0E01\u0E23\u0E23\u0E21\u0E17\u0E32\u0E07\u0E2D\u0E34\u0E40\u0E25\u0E47\u0E01\u0E17\u0E23\u0E2D\u0E19\u0E34\u0E01\u0E2A\u0E4C \u0E1E.\u0E28. 2544",
+    sigY - 54,
+    8,
+    regular,
+    FAINT
+  );
   centerText(`\u0E23\u0E2B\u0E31\u0E2A\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A ${input.verificationCode} \xB7 ${input.verifyUrl}`, 30, 8, regular, FAINT);
   if (input.showVerification) {
     const qrSize = 64;
@@ -70624,11 +70685,11 @@ async function finalizeReceipt(txnId, ip) {
       if (already) return;
       let taxId = "";
       try {
-        const enc = one(await db`
+        const enc2 = one(await db`
           select v.id_number_encrypted from vendor_payables p
           join vendor_payees v on v.id = p.vendor_id
           where p.id = ${txnId} and p.user_id = ${rowTenant}`);
-        if (enc?.id_number_encrypted) taxId = decryptId(enc.id_number_encrypted) ?? "";
+        if (enc2?.id_number_encrypted) taxId = decryptId(enc2.id_number_encrypted) ?? "";
       } catch {
       }
       const vName = vendorDisplayName(d2.vendor_prefix, d2.vendor_name);
@@ -70693,6 +70754,284 @@ async function finalizeReceipt(txnId, ip) {
   return { ok: true, number, verificationCode: code.toUpperCase(), pdfSha256: sha2562, pdfPath, pdfBytes: bytes };
 }
 
+// server/src/vendor-invites.ts
+import { randomBytes as randomBytes5 } from "node:crypto";
+
+// src/lib/vendor-invite.ts
+var INVITE_TTL_DAYS = 30;
+var CONSENT_VERSION = "vendor-onboard-v2";
+
+// server/src/vendor-invites.ts
+var normTaxId = (s) => s.replace(/\D/g, "");
+function validTaxIdChecksum(id) {
+  if (id.length !== 13) return false;
+  let sum = 0;
+  for (let i = 0; i < 12; i++) sum += Number(id[i]) * (13 - i);
+  return (11 - sum % 11) % 10 === Number(id[12]);
+}
+function enc(s) {
+  try {
+    return s ? encryptId(s) : null;
+  } catch {
+    return null;
+  }
+}
+function dataUrlBytes(dataUrl) {
+  const m2 = /^data:image\/(png|jpe?g|webp);base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
+  if (!m2) return null;
+  const buf = Buffer.from(m2[2], "base64");
+  if (buf.length === 0 || buf.length > 5 * 1024 * 1024) return null;
+  return new Uint8Array(buf);
+}
+function namesMatch(a2, b2) {
+  const n = (s) => s.replace(/\s+/g, "").toLowerCase();
+  return n(a2) !== "" && n(a2) === n(b2);
+}
+function inviteExpiry() {
+  return new Date(Date.now() + INVITE_TTL_DAYS * 864e5);
+}
+function toInvite(r) {
+  const taxId = r.tax_id_encrypted ? decryptId(String(r.tax_id_encrypted)) : null;
+  const bankAccount = r.bank_account_encrypted ? decryptId(String(r.bank_account_encrypted)) : null;
+  const submitted = r.submitted_at != null;
+  const storedStatus = String(r.status);
+  const expired = (storedStatus === "invited" || storedStatus === "opened") && new Date(String(r.expires_at)).getTime() < Date.now();
+  return {
+    id: r.id,
+    tenantId: r.user_id,
+    status: expired ? "expired" : storedStatus,
+    label: r.label ?? void 0,
+    createdAt: r.created_at,
+    expiresAt: r.expires_at,
+    openedAt: r.opened_at ?? void 0,
+    submittedAt: r.submitted_at ?? void 0,
+    reviewedAt: r.reviewed_at ?? void 0,
+    reviewNote: r.review_note ?? void 0,
+    duplicateOf: r.duplicate_of ?? void 0,
+    bankNameMatch: r.bank_name_match ?? void 0,
+    vendorId: r.vendor_id ?? void 0,
+    idDocName: r.id_doc_path ? String(r.id_doc_path).split("/").pop() : void 0,
+    bankDocName: r.bank_doc_path ? String(r.bank_doc_path).split("/").pop() : void 0,
+    consentVersion: r.consent_version ?? void 0,
+    draft: submitted ? {
+      prefix: r.prefix ?? "",
+      name: r.name ?? "",
+      address: r.address ?? "",
+      phone: r.phone ?? void 0,
+      email: r.email ?? void 0,
+      lineUserId: r.line_user_id ?? void 0,
+      taxId: taxId ?? "",
+      bankName: r.bank_name ?? "",
+      bankAccount: bankAccount ?? "",
+      accountHolder: r.account_holder ?? ""
+    } : void 0
+  };
+}
+var inviteClientRoutes = new Hono2();
+inviteClientRoutes.get("/vendor-invites", async (c) => {
+  const g = await guard(c);
+  if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  const rows = await withTenant(g.ws, "client", async () => {
+    const db = sql();
+    return await db.query(
+      `select i.*,
+         (select v.id from vendor_payees v
+            where v.user_id = i.user_id and v.id_number_hash is not null
+              and v.id_number_hash = i.tax_id_hash limit 1) as duplicate_of
+       from vendor_invites i
+       where i.user_id = $1
+       order by i.created_at desc`,
+      [g.ws]
+    );
+  });
+  return c.json({ invites: rows.map(toInvite) });
+});
+inviteClientRoutes.post("/vendor-invites", async (c) => {
+  const g = await guard(c);
+  if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  const b2 = await c.req.json().catch(() => null);
+  const token = randomBytes5(32).toString("base64url");
+  const row = await withTenant(g.ws, "owner", async () => {
+    const db = sql();
+    const ins = await db`insert into vendor_invites (user_id, token_hash, token, label, created_by, expires_at)
+      values (${g.ws}, ${sha256hex(token)}, ${encryptToken(token)}, ${b2?.label?.trim() ?? null}, ${g.actor}, ${inviteExpiry()})
+      returning *`;
+    return ins[0];
+  });
+  return c.json({ invite: { ...toInvite(row), token } });
+});
+inviteClientRoutes.post("/vendor-invites/:id/resend", async (c) => {
+  const g = await guard(c);
+  if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  const token = randomBytes5(32).toString("base64url");
+  const row = await withTenant(g.ws, "owner", async () => {
+    const db = sql();
+    const ins = await db`update vendor_invites
+      set token_hash = ${sha256hex(token)}, token = ${encryptToken(token)},
+          expires_at = ${inviteExpiry()}, status = 'invited', updated_at = now()
+      where id = ${c.req.param("id")} and user_id = ${g.ws}
+      returning *`;
+    return ins[0];
+  });
+  if (!row) return c.json({ error: "not-found" }, 404);
+  return c.json({ invite: { ...toInvite(row), token } });
+});
+inviteClientRoutes.post("/vendor-invites/:id/approve", async (c) => {
+  const g = await guard(c);
+  if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  const id = c.req.param("id");
+  const vendorId = await withTenant(g.ws, "owner", async () => {
+    const db = sql();
+    const rows = await db`select * from vendor_invites where id = ${id} and user_id = ${g.ws}`;
+    const inv = rows[0];
+    if (!inv) return { error: "not-found" };
+    if (inv.status !== "submitted") return { error: "not-submitted" };
+    const ins = await db`insert into vendor_payees
+        (user_id, vendor_no, prefix, name, address, id_number_encrypted, id_number_hash,
+         line_user_id, phone, email, bank_name, bank_account_encrypted, account_holder, id_doc_path, bank_doc_path)
+      values (${g.ws},
+        (select coalesce(max(vendor_no), 0) + 1 from vendor_payees where user_id = ${g.ws}),
+        ${inv.prefix ?? ""}, ${inv.name}, ${inv.address}, ${inv.tax_id_encrypted ?? ""}, ${inv.tax_id_hash},
+        ${inv.line_user_id}, ${inv.phone}, ${inv.email}, ${inv.bank_name}, ${inv.bank_account_encrypted},
+        ${inv.account_holder}, ${inv.id_doc_path}, ${inv.bank_doc_path})
+      returning id`;
+    const newVendorId = String(ins[0].id);
+    await db`update vendor_invites set status = 'approved', vendor_id = ${newVendorId},
+      reviewed_at = now(), reviewed_by = ${g.actor}, updated_at = now() where id = ${id} and user_id = ${g.ws}`;
+    await audit(g.ws, "vendor_invites", id, "vendor_invite.approved", g.actor, { vendorId: newVendorId }, "server");
+    return { vendorId: newVendorId };
+  });
+  if ("error" in vendorId) return c.json({ error: vendorId.error }, vendorId.error === "not-found" ? 404 : 409);
+  return c.json({ ok: true, vendorId: vendorId.vendorId });
+});
+for (const action of ["reject", "request-changes"]) {
+  inviteClientRoutes.post(`/vendor-invites/:id/${action}`, async (c) => {
+    const g = await guard(c);
+    if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+    const b2 = await c.req.json().catch(() => null);
+    const status = action === "reject" ? "rejected" : "changes_requested";
+    const ok = await withTenant(g.ws, "owner", async () => {
+      const db = sql();
+      const rows = await db`update vendor_invites set status = ${status}, review_note = ${b2?.note?.trim() ?? null},
+        reviewed_at = now(), reviewed_by = ${g.actor}, updated_at = now()
+        where id = ${c.req.param("id")} and user_id = ${g.ws} returning id`;
+      if (rows[0]) await audit(g.ws, "vendor_invites", c.req.param("id"), `vendor_invite.${status}`, g.actor, {}, "server");
+      return !!rows[0];
+    });
+    if (!ok) return c.json({ error: "not-found" }, 404);
+    return c.json({ ok: true });
+  });
+}
+inviteClientRoutes.post("/vendor-invites/:id/cancel", async (c) => {
+  const g = await guard(c);
+  if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  const ok = await withTenant(g.ws, "owner", async () => {
+    const db = sql();
+    const rows = await db`update vendor_invites set status = 'cancelled',
+      reviewed_at = now(), reviewed_by = ${g.actor}, updated_at = now()
+      where id = ${c.req.param("id")} and user_id = ${g.ws}
+        and status in ('invited','opened','expired','changes_requested')
+      returning id`;
+    if (rows[0]) await audit(g.ws, "vendor_invites", c.req.param("id"), "vendor_invite.cancelled", g.actor, {}, "server");
+    return !!rows[0];
+  });
+  if (!ok) return c.json({ error: "not-found" }, 404);
+  return c.json({ ok: true });
+});
+inviteClientRoutes.get("/vendor-invites/:id/document/:kind", async (c) => {
+  const g = await guard(c);
+  if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  const kind = c.req.param("kind");
+  if (kind !== "id" && kind !== "bank") return c.json({ error: "invalid-kind" }, 400);
+  const rows = await withTenant(g.ws, "owner", async () => {
+    const db = sql();
+    return await db`select id_doc_path, bank_doc_path from vendor_invites
+      where id = ${c.req.param("id")} and user_id = ${g.ws}`;
+  });
+  const path = kind === "id" ? rows[0]?.id_doc_path : rows[0]?.bank_doc_path;
+  const bytes = await readStoredDurable(g.ws, path ? String(path) : null);
+  if (!bytes) return c.json({ error: "not-found" }, 404);
+  await withTenant(g.ws, "owner", async () => audit(g.ws, "vendor_invites", c.req.param("id"), "vendor.doc-viewed", g.actor, { kind }, "server"));
+  return c.body(bytes, 200, { "Content-Type": "image/png" });
+});
+var invitePublicRoutes = new Hono2();
+invitePublicRoutes.get("/:token", async (c) => {
+  const ip = c.req.header("x-forwarded-for") ?? "local";
+  if (await rateLimited(`invite-get:${ip}`, 60)) return c.json({ error: "too-many-requests" }, 429);
+  const token = c.req.param("token");
+  const db = sql();
+  const rows = await db`select id, user_id, status, expires_at, review_note, submitted_at,
+      prefix, name, address, phone, email, line_user_id, tax_id_encrypted,
+      bank_name, bank_account_encrypted, account_holder
+    from vendor_invites where token_hash = ${sha256hex(token)}`;
+  const r = one(rows);
+  if (!r) return c.json({ error: "invalid" }, 404);
+  const expired = r.status === "invited" && new Date(String(r.expires_at)) < /* @__PURE__ */ new Date();
+  const status = expired ? "expired" : String(r.status);
+  if (r.status === "invited" && !expired) {
+    await db`update vendor_invites set status = 'opened', opened_at = coalesce(opened_at, now())
+      where id = ${r.id} and status = 'invited'`;
+  }
+  const tenantId = String(r.user_id);
+  const settings = await getTenantSettings(tenantId);
+  const logoUrl = settings.logoStoragePath ? `/api/branding/${tenantId}/logo` : null;
+  const draft = r.submitted_at != null ? {
+    prefix: r.prefix ?? "",
+    name: r.name ?? "",
+    address: r.address ?? "",
+    phone: r.phone ?? void 0,
+    email: r.email ?? void 0,
+    lineUserId: r.line_user_id ?? void 0,
+    taxId: r.tax_id_encrypted ? decryptId(String(r.tax_id_encrypted)) ?? "" : "",
+    bankName: r.bank_name ?? "",
+    bankAccount: r.bank_account_encrypted ? decryptId(String(r.bank_account_encrypted)) ?? "" : "",
+    accountHolder: r.account_holder ?? ""
+  } : void 0;
+  return c.json({ status, tenantId, clientName: settings.displayName, logoUrl, reviewNote: r.review_note ?? void 0, expiresAt: r.expires_at, draft });
+});
+invitePublicRoutes.post("/:token/submit", async (c) => {
+  const ip = c.req.header("x-forwarded-for") ?? "local";
+  if (await rateLimited(`invite-submit:${ip}`, 20)) return c.json({ error: "too-many-requests" }, 429);
+  const token = c.req.param("token");
+  const b2 = await c.req.json().catch(() => null);
+  if (!b2) return c.json({ error: "invalid-body" }, 400);
+  const taxId = normTaxId(String(b2.taxId ?? ""));
+  const name = String(b2.name ?? "").trim();
+  const address = String(b2.address ?? "").trim();
+  const accountHolder = String(b2.accountHolder ?? "").trim();
+  const bankAccount = String(b2.bankAccount ?? "").replace(/\D/g, "");
+  if (name.length < 2 || address.length < 4) return c.json({ error: "invalid-body" }, 400);
+  if (!validTaxIdChecksum(taxId)) return c.json({ error: "invalid-taxid" }, 400);
+  if (bankAccount.length < 8 || !accountHolder) return c.json({ error: "invalid-body" }, 400);
+  const idBytes = dataUrlBytes(String(b2.idDocData ?? ""));
+  if (!idBytes) return c.json({ error: "invalid-document" }, 400);
+  const bankBytes = b2.bankDocData ? dataUrlBytes(String(b2.bankDocData)) : null;
+  if (b2.bankDocData && !bankBytes) return c.json({ error: "invalid-document" }, 400);
+  const db = sql();
+  const rows = await db`select id, user_id, status, expires_at from vendor_invites where token_hash = ${sha256hex(token)}`;
+  const inv = rows[0];
+  if (!inv) return c.json({ error: "invalid" }, 404);
+  if (inv.status === "approved" || inv.status === "rejected") return c.json({ error: "closed" }, 409);
+  if (new Date(String(inv.expires_at)) < /* @__PURE__ */ new Date() && inv.status !== "submitted") return c.json({ error: "expired" }, 409);
+  const userId = String(inv.user_id);
+  const inviteId = String(inv.id);
+  const idPath = await saveBytesDurable("vendor-docs", `${inviteId}-id.png`, idBytes, userId);
+  const bankPath = bankBytes ? await saveBytesDurable("vendor-docs", `${inviteId}-bank.png`, bankBytes, userId) : null;
+  await db`update vendor_invites set
+      prefix = ${String(b2.prefix ?? "").trim()}, name = ${name}, address = ${address},
+      phone = ${String(b2.phone ?? "").trim() || null}, email = ${String(b2.email ?? "").trim() || null},
+      line_user_id = ${String(b2.lineUserId ?? "").trim() || null},
+      tax_id_encrypted = ${enc(taxId)}, tax_id_hash = ${sha256hex(taxId)},
+      bank_name = ${String(b2.bankName ?? "").trim()}, bank_account_encrypted = ${enc(bankAccount)},
+      account_holder = ${accountHolder}, id_doc_path = ${idPath}, bank_doc_path = ${bankPath},
+      bank_name_match = ${namesMatch(accountHolder, name)},
+      consent_version = ${String(b2.consentVersion ?? CONSENT_VERSION)},
+      consented_at = now(), status = 'submitted', submitted_at = now(), updated_at = now()
+    where id = ${inviteId} and user_id = ${userId}`;
+  await audit(userId, "vendor_invites", inviteId, "vendor_invite.submitted", "vendor", {}, ip);
+  return c.json({ ok: true });
+});
+
 // server/src/api.ts
 var TENANT = PILOT_TENANT;
 var GATE_MAX = 5;
@@ -70722,8 +71061,8 @@ app.use("*", async (c, next) => {
   return next();
 });
 app.get("/api/announcement", async (c) => {
-  const { announcement, maintenance } = await getPlatformSettingsCached();
-  return c.json({ announcement, maintenance });
+  const { announcement, maintenance, flags } = await getPlatformSettingsCached();
+  return c.json({ announcement, maintenance, flags: { whtGrossUp: flags.whtGrossUp === true } });
 });
 app.post("/api/impersonate/stop", (c) => {
   return new Response(JSON.stringify({ ok: true }), {
@@ -70735,7 +71074,24 @@ app.route("/api/client", dataRoutes);
 app.route("/api/client", txnRoutes);
 app.route("/api/client", whtRoutes);
 app.route("/api/client", receiptRoutes);
+app.route("/api/client", inviteClientRoutes);
+app.route("/api/vendor-invite", invitePublicRoutes);
 app.get("/api/health", (c) => c.json({ ok: true, operation: "public", tenant: TENANT }));
+app.get("/api/branding/:tenantId/logo", async (c) => {
+  const ip = c.req.header("x-forwarded-for") ?? "local";
+  if (await rateLimited(`branding:${ip}`, 120)) return c.json({ error: "too-many-requests" }, 429);
+  const tenantId = c.req.param("tenantId");
+  const settings = await getTenantSettings(tenantId);
+  if (!settings.logoStoragePath) return c.json({ error: "not-found" }, 404);
+  const bytes = await readTenantAsset(tenantId, settings.logoStoragePath);
+  if (!bytes) return c.json({ error: "not-found" }, 404);
+  const ext = settings.logoStoragePath.split(".").pop()?.toLowerCase();
+  const type = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : ext === "webp" ? "image/webp" : "image/png";
+  return c.body(bytes, 200, {
+    "Content-Type": type,
+    "Cache-Control": "public, max-age=300"
+  });
+});
 app.get("/api/vendor/:token", async (c) => {
   const ip = c.req.header("x-forwarded-for") ?? "local";
   if (await rateLimited(`get:${ip}`)) return c.json({ error: "too-many-requests" }, 429);
@@ -70765,11 +71121,15 @@ app.get("/api/vendor/:token", async (c) => {
   }
   const gated = r.tax_id_hash != null;
   const unlocked = r.unlocked_at != null;
+  const settings = await getTenantSettings(rowTenant);
+  const logoUrl = settings.logoStoragePath ? `/api/branding/${rowTenant}/logo` : null;
   if (gated && !unlocked) {
     return c.json({
       id: r.id,
       tenantId: rowTenant,
       clientCode: r.client_code ?? null,
+      clientName: settings.displayName,
+      logoUrl,
       ref: r.ref,
       status: r.status,
       gated: true,
@@ -70781,6 +71141,10 @@ app.get("/api/vendor/:token", async (c) => {
     id: r.id,
     tenantId: rowTenant,
     clientCode: r.client_code ?? null,
+    clientName: settings.displayName,
+    logoUrl,
+    consentTemplate: settings.consentTextV1,
+    consentVersion: settings.consentVersion,
     ref: r.ref,
     description: r.description,
     note: r.note,
@@ -70893,7 +71257,8 @@ app.post("/api/vendor/:token/sign", async (c) => {
   const sigPath = await saveBytesDurable("signatures", `${txnId}.png`, png, rowTenant);
   const subPhone = String(body.vendorPhone ?? "").trim().slice(0, 50);
   const subEmail = String(body.vendorEmail ?? "").trim().slice(0, 200);
-  const authRef = `AUTH-${randomBytes5(4).toString("hex").toUpperCase()}`;
+  const authRef = `AUTH-${randomBytes6(4).toString("hex").toUpperCase()}`;
+  const consentVersion = (await getTenantSettings(rowTenant)).consentVersion;
   await db`insert into vendor_authorizations
     (user_id, transaction_id, vendor_prefix, vendor_name, vendor_address, vendor_masked_id,
      vendor_phone, vendor_email, auth_ref, signature_image_path, verification_method, line_user_id, ip, user_agent,
@@ -70902,7 +71267,7 @@ app.post("/api/vendor/:token/sign", async (c) => {
       ${`x-xxxx-xxxxx-${last4.slice(0, 2)}-${last4.slice(2)}`},
       ${subPhone}, ${subEmail}, ${authRef},
       ${sigPath}, ${verificationMethod}, ${body.lineUserId ?? null}, ${ip},
-      ${(c.req.header("user-agent") ?? "").slice(0, 500)}, 'v1',
+      ${(c.req.header("user-agent") ?? "").slice(0, 500)}, ${consentVersion},
       ${JSON.stringify(corrections)})`;
   await db`update vendor_requests set used_at = now() where id = ${String(r.req_id)}`;
   await db`update vendor_payables set status = 'signed' where id = ${txnId}`;
@@ -70912,7 +71277,7 @@ app.post("/api/vendor/:token/sign", async (c) => {
     txnId,
     "vendor.signed",
     "vendor",
-    { verificationMethod, signMethod, consentVersion: "v1", corrections, authRef },
+    { verificationMethod, signMethod, consentVersion, corrections, authRef },
     ip
   ));
   let issued;

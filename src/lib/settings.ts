@@ -2,9 +2,12 @@ import { PILOT_CONFIG } from './config'
 import { clientFor } from './mock-clients'
 import {
   DEFAULT_CONSENT,
+  DEFAULT_CONSENT_VERSION,
   DEFAULT_INVITE_TEMPLATE,
   DEFAULT_SIGNATURE_PLACEMENT,
   DEFAULT_STAMP_PLACEMENT,
+  DEFAULT_VENDOR_INVITE_TEMPLATE,
+  LEGACY_DEFAULT_CONSENT,
   currentBeYear,
   type TenantSettings,
 } from './settings-types'
@@ -14,8 +17,8 @@ import {
 // Types + validation live in settings-types.ts (importable from the server).
 // Server parity: the `config` table + tenants profile columns.
 
-export { DEFAULT_CONSENT, DEFAULT_INVITE_TEMPLATE, currentBeYear, renderInviteMessage, validateSettings, whtRateFor } from './settings-types'
-export type { TenantSettings, WhtRate } from './settings-types'
+export { DEFAULT_CONSENT, DEFAULT_CONSENT_VERSION, CONSENT_SUMMARY, DEFAULT_INVITE_TEMPLATE, DEFAULT_VENDOR_INVITE_TEMPLATE, PDPA_STATEMENT, currentBeYear, renderConsent, renderInviteMessage, renderVendorInviteMessage, validateSettings, whtRateFor } from './settings-types'
+export type { ConsentVars, TenantSettings, WhtRate } from './settings-types'
 
 export function defaultSettings(tenantId?: string): TenantSettings {
   const client = clientFor(tenantId)
@@ -31,9 +34,11 @@ export function defaultSettings(tenantId?: string): TenantSettings {
     whtMinThreshold: PILOT_CONFIG.whtMinThreshold,
     linkExpiryDays: PILOT_CONFIG.linkExpiryDays,
     consentTextV1: DEFAULT_CONSENT,
+    consentVersion: DEFAULT_CONSENT_VERSION,
     receiptNote: '',
     showVerifyQr: false,
     inviteMessageTemplate: DEFAULT_INVITE_TEMPLATE,
+    vendorInviteMessageTemplate: DEFAULT_VENDOR_INVITE_TEMPLATE,
     signaturePlacement: DEFAULT_SIGNATURE_PLACEMENT,
     stampPlacement: DEFAULT_STAMP_PLACEMENT,
   }
@@ -56,6 +61,9 @@ export function loadSettings(tenantId = 'ABC'): TenantSettings {
           label: typeof r.label === 'string' ? r.label.replace(/\s*—\s*\d+(\.\d+)?%?\s*$/, '') : r.label,
         }))
       }
+      // Upgrade tenants still on the pre-upgrade consent wording to the full one.
+      if (stored.consentTextV1 === LEGACY_DEFAULT_CONSENT) stored.consentTextV1 = DEFAULT_CONSENT
+      if (!stored.consentVersion) stored.consentVersion = DEFAULT_CONSENT_VERSION
       return { ...base, ...stored }
     }
   } catch { /* ignore */ }

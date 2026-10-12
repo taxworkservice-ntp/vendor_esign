@@ -1,9 +1,12 @@
 import { sql, withTenant } from '../../src/server/db'
 import {
   DEFAULT_CONSENT,
+  DEFAULT_CONSENT_VERSION,
   DEFAULT_INVITE_TEMPLATE,
+  DEFAULT_VENDOR_INVITE_TEMPLATE,
   DEFAULT_WHT_MIN_THRESHOLD,
   DEFAULT_WHT_RATES,
+  LEGACY_DEFAULT_CONSENT,
   type TenantSettings,
   type WhtRate,
 } from '../../src/lib/settings-types'
@@ -20,6 +23,8 @@ export async function getTenantSettings(tenantId: string): Promise<TenantSetting
       { key: string; value: unknown }[]
     const row = tRows[0] ?? {}
     const m = new Map(cfg.map((r) => [r.key, r.value]))
+    const consentStored = String((m.get('consent_text_v1') as { th?: string } | undefined)?.th ?? DEFAULT_CONSENT)
+    const consentTextV1 = consentStored === LEGACY_DEFAULT_CONSENT ? DEFAULT_CONSENT : consentStored
     const ratesRaw = Array.isArray(m.get('wht_rates')) ? (m.get('wht_rates') as Record<string, unknown>[]) : []
     const whtRates: WhtRate[] = ratesRaw.length
       ? ratesRaw.map((r) => ({
@@ -39,12 +44,15 @@ export async function getTenantSettings(tenantId: string): Promise<TenantSetting
       whtRates,
       whtMinThreshold: Number(m.get('wht_min_threshold') ?? DEFAULT_WHT_MIN_THRESHOLD),
       linkExpiryDays: Number(m.get('link_expiry_days') ?? 7),
-      consentTextV1: String((m.get('consent_text_v1') as { th?: string } | undefined)?.th ?? DEFAULT_CONSENT),
+      consentTextV1,
+      consentVersion: String(m.get('consent_version') ?? DEFAULT_CONSENT_VERSION),
       receiptNote: String(m.get('receipt_note') ?? ''),
       showVerifyQr: Boolean(m.get('show_verify_qr') ?? false),
       inviteMessageTemplate: String(m.get('invite_message_template') ?? DEFAULT_INVITE_TEMPLATE),
+      vendorInviteMessageTemplate: String(m.get('vendor_invite_message_template') ?? DEFAULT_VENDOR_INVITE_TEMPLATE),
       signatureStoragePath: (m.get('signature_storage_path') as string | undefined) || undefined,
       stampStoragePath: (m.get('stamp_storage_path') as string | undefined) || undefined,
+      logoStoragePath: (m.get('logo_storage_path') as string | undefined) || undefined,
       signaturePlacement: (m.get('signature_placement') as TenantSettings['signaturePlacement']) || undefined,
       stampPlacement: (m.get('stamp_placement') as TenantSettings['stampPlacement']) || undefined,
     }
@@ -67,11 +75,14 @@ export async function saveTenantSettings(tenantId: string, s: TenantSettings): P
     if (s.whtMinThreshold !== undefined) await put('wht_min_threshold', s.whtMinThreshold)
     await put('link_expiry_days', s.linkExpiryDays)
     await put('consent_text_v1', { th: s.consentTextV1 })
+    await put('consent_version', s.consentVersion)
     await put('receipt_note', s.receiptNote)
     await put('show_verify_qr', s.showVerifyQr)
     await put('invite_message_template', s.inviteMessageTemplate)
+    await put('vendor_invite_message_template', s.vendorInviteMessageTemplate)
     if (s.signatureStoragePath !== undefined) await put('signature_storage_path', s.signatureStoragePath)
     if (s.stampStoragePath !== undefined) await put('stamp_storage_path', s.stampStoragePath)
+    if (s.logoStoragePath !== undefined) await put('logo_storage_path', s.logoStoragePath)
     if (s.signaturePlacement !== undefined) await put('signature_placement', s.signaturePlacement)
     if (s.stampPlacement !== undefined) await put('stamp_placement', s.stampPlacement)
   })

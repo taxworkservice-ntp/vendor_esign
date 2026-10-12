@@ -9,37 +9,83 @@ import { renderTypedSignature, SIGNATURE_FONT, signMethodLabel } from '../lib/ty
 import { cn } from '../lib/cn'
 import { ReceiptSheet, type ReceiptSheetData } from '../components/receipt/receipt-sheet'
 import { maskTaxId } from '../lib/taxid'
-import { loadSettings } from '../lib/settings'
+import { loadSettings, renderConsent, CONSENT_SUMMARY, PDPA_STATEMENT } from '../lib/settings'
+import type { PaymentTransaction } from '../lib/types'
 import { fmtTHB, fmtDateTH, fmtDateTimeTHLong } from '../lib/format'
 import { amountToThaiWords } from '../lib/thai-words'
 import { VENDOR_PREFIXES, isVendorPrefix, prefixRequired } from '../lib/vendor-name'
 import { Card, CardBody } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { ConfirmDialog } from '../components/ui/confirm-dialog'
+import { PdpaNotice } from '../components/consent/pdpa-notice'
+import { ActionBar } from '../components/ui/action-bar'
+import { BrandBar, BrandHeader, type Brand } from '../components/vendor/brand'
 import { FieldError, Input, Label } from '../components/ui/input'
 import { Select } from '../components/ui/select'
 import SigPad, { SigPadHandle } from '../components/ui/sigpad'
 
-function Shell({ children }: { children: React.ReactNode }) {
+// Render the vendor consent statement: the client's wording (from tenant
+// settings, or the server-rendered template on the vendor payload) with the real
+// amount/date/ref substituted. One source of truth so the text the vendor
+// accepts matches the version the server records.
+function consentInfoFor(t: PaymentTransaction): { text: string; summary: string; version: string; clientName: string } {
+  const s = loadSettings(t.tenantId)
+  const clientName = t.clientName || s.displayName || t.clientCode || s.clientCode
+  const version = t.consentVersion || s.consentVersion
+  const vars = {
+    client: clientName,
+    amount: fmtTHB(t.netAmount),
+    date: fmtDateTH(t.transferDate),
+    ref: t.ref ?? t.id,
+    version,
+  }
+  return {
+    text: renderConsent(t.consentTemplate || s.consentTextV1, vars),
+    summary: renderConsent(CONSENT_SUMMARY, vars),
+    version,
+    clientName,
+  }
+}
+
+// The full statement as a styled intro + numbered list (instead of a wall of
+// "(1)…(5)" text), shown inside an expandable disclosure.
+function ConsentBody({ text }: { text: string }) {
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean)
+  const intro = lines.filter((l) => !/^\(\d+\)/.test(l))
+  const items = lines.filter((l) => /^\(\d+\)/.test(l)).map((l) => l.replace(/^\(\d+\)\s*/, ''))
   return (
-    <div className="min-h-screen bg-paper">
-      <div className="mx-auto w-full max-w-xl px-4 py-6">
-        <div className="mb-4 flex items-center gap-2.5">
-          <img src="/logo.png" alt="" aria-hidden className="h-9 w-9 shrink-0 rounded-full object-contain" />
-          <div className="leading-tight">
-            <p className="text-body font-semibold">ใบเสร็จรับเงิน — ยืนยันรับเงิน</p>
-            <p className="text-label text-ink-500">ระบบออกใบเสร็จรับเงิน · ไม่ต้องสมัครสมาชิก</p>
-          </div>
-        </div>
+    <div className="space-y-2 text-label leading-relaxed text-ink-600">
+      {intro.map((l, i) => (
+        <p key={i}>{l}</p>
+      ))}
+      <ol className="list-decimal space-y-1 pl-5">
+        {items.map((l, i) => (
+          <li key={i}>{l}</li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
+function Shell({ children, brand }: { children: React.ReactNode; brand?: Brand }) {
+  return (
+    <div className="flex min-h-screen flex-col bg-paper">
+      <BrandBar />
+      <div className="mx-auto w-full max-w-xl flex-1 px-4 py-4 sm:py-6">
+        <BrandHeader
+          brand={brand}
+          title="ใบเสร็จรับเงิน — ยืนยันรับเงิน"
+          subtitle="ระบบออกใบเสร็จรับเงิน · ไม่ต้องสมัครสมาชิก"
+        />
         {children}
       </div>
     </div>
   )
 }
 
-function StateCard({ title, body, extra }: { title: string; body: string; extra?: React.ReactNode }) {
+function StateCard({ title, body, extra, brand }: { title: string; body: string; extra?: React.ReactNode; brand?: Brand }) {
   return (
-    <Shell>
+    <Shell brand={brand}>
       <Card>
         <CardBody className="py-10 text-center">
           <p className="text-lg font-semibold">{title}</p>
@@ -82,6 +128,8 @@ export function VendorSign() {
   const [submitting, setSubmitting] = useState(false)
   const [submitErr, setSubmitErr] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
+
+  const brand: Brand = { clientName: t?.clientName, logoUrl: t?.logoUrl }
 
   // Tax ID gate: wrong-recipient guard. Legacy rows without a stored hash
   // skip the gate with a notice.
@@ -127,21 +175,23 @@ export function VendorSign() {
     }
   }
 
-  if (isLoading) return <StateCard title="กำลังโหลด…" body="โปรดรอสักครู่" />
+  if (isLoading) return <StateCard title="กำลังโหลด…" body="โปรดรอสักครู่" brand={brand} />
   if (t?.status === 'cancelled')
-    return <StateCard title="ลิงก์ถูกเพิกถอนแล้ว" body="ลูกค้าผู้จ่ายได้เพิกถอนลิงก์นี้ โปรดติดต่อลูกค้าผู้จ่ายเพื่อขอลิงก์ใหม่" />
+    return <StateCard title="ลิงก์ถูกเพิกถอนแล้ว" body="ลูกค้าผู้จ่ายได้เพิกถอนลิงก์นี้ โปรดติดต่อลูกค้าผู้จ่ายเพื่อขอลิงก์ใหม่" brand={brand} />
   if (t?.status === 'void')
-    return <StateCard title="เอกสารนี้ถูกยกเลิกแล้ว" body="ไม่จำเป็นต้องดำเนินการใด ๆ โปรดติดต่อลูกค้าผู้จ่ายหากมีข้อสงสัย" />
+    return <StateCard title="เอกสารนี้ถูกยกเลิกแล้ว" body="ไม่จำเป็นต้องดำเนินการใด ๆ โปรดติดต่อลูกค้าผู้จ่ายหากมีข้อสงสัย" brand={brand} />
   // The invite token is consumed on signing, so the lookup can return empty
   // afterwards — keep a snapshot id so the success state still renders.
   if (done || t?.status === 'signed' || t?.status === 'issued') {
     const receiptId = t?.id ?? signedId
     const number = receipt?.number ?? t?.receiptNumber
+    const successClient = vendorData?.client?.displayName || t?.clientName || 'ลูกค้าผู้จ่าย'
     return (
       <>
       <StateCard
         title="ยืนยันการลงนามเรียบร้อยแล้ว"
-        body="ระบบได้บันทึกการลงนามอิเล็กทรอนิกส์ของท่านเพื่อยืนยันการรับเงินและมอบอำนาจให้ลูกค้าออกใบเสร็จในนามของท่านสำหรับธุรกรรมนี้ และได้ออกใบเสร็จรับเงินเรียบร้อยแล้ว"
+        body={`ระบบได้บันทึกการลงนามอิเล็กทรอนิกส์ของท่านเพื่อยืนยันการรับเงินและมอบอำนาจให้ ${successClient} ออกใบเสร็จรับเงินในนามของท่านสำหรับธุรกรรมนี้ และได้ออกใบเสร็จรับเงินเรียบร้อยแล้ว`}
+        brand={brand}
         extra={
           <div className="mt-5 space-y-3">
             {number && (
@@ -204,8 +254,11 @@ export function VendorSign() {
       <StateCard
         title="ลิงก์ไม่ถูกต้องหรือหมดอายุ"
         body={`ลิงก์นี้อาจหมดอายุ (เกิน ${loadSettings().linkExpiryDays} วัน) ถูกเพิกถอน หรือถูกใช้ไปแล้ว โปรดติดต่อลูกค้าผู้จ่ายเพื่อขอลิงก์ใหม่`}
+        brand={brand}
       />
     )
+
+  const consentInfo = consentInfoFor(t)
 
   // Length-only for now — checksum policy comes later. Once the gate is passed
   // on this device the ID is already proven, so it need not be retyped.
@@ -252,7 +305,7 @@ export function VendorSign() {
 
   if (needsGate)
     return (
-      <Shell>
+      <Shell brand={brand}>
         <Card>
           <CardBody className="space-y-4">
             <p className="mx-auto grid h-12 w-12 place-items-center rounded-card bg-primary text-white">
@@ -375,7 +428,7 @@ export function VendorSign() {
   }
 
   return (
-    <Shell>
+    <Shell brand={brand}>
       <div className="space-y-4">
         {!t.taxIdHash ? (
           <p className="flex gap-2 rounded-control bg-warning-soft p-3 text-body font-medium text-warning">
@@ -469,7 +522,7 @@ export function VendorSign() {
             ) : (
               <div>
                 <Label hint={`${tid.length}/13 หลัก — เก็บเฉพาะตัวเลข`}>เลขบัตรประชาชน</Label>
-                <Input value={tid} onChange={(e) => setTid(e.target.value.replace(/\D/g, '').slice(0, 13))} placeholder="x-xxxx-xxxxx-xx-x" inputMode="numeric" />
+                <Input value={tid} onChange={(e) => setTid(e.target.value.replace(/\D/g, '').slice(0, 13))} placeholder="x-xxxx-xxxxx-xx-x" inputMode="numeric" autoCapitalize="none" spellCheck={false} enterKeyHint="done" />
                 {tried && !idOk && <FieldError msg="กรุณากรอกให้ครบ 13 หลัก" />}
                 {idOk && <p className="mt-1.5 flex items-center gap-1 text-body font-medium text-success"><CheckCircle2 size={14} /> ครบ 13 หลัก</p>}
               </div>
@@ -561,23 +614,41 @@ export function VendorSign() {
             </p>
             <label className="flex gap-3 rounded-control bg-ink-50 p-4 text-body leading-relaxed active:bg-ink-100">
               <input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-ink-900" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-              <span>
-                ข้าพเจ้าได้รับเงินจำนวนดังกล่าวแล้ว และมอบอำนาจให้ <b>{t.clientCode ?? loadSettings(t.tenantId).clientCode}</b> ออกใบเสร็จรับเงิน
-               ในนามของข้าพเจ้า <b>เฉพาะธุรกรรมนี้เท่านั้น</b>
-              </span>
+              <span>{consentInfo.summary}</span>
             </label>
-            {tried && !consent && <FieldError msg="กรุณายืนยันความยินยอมก่อนส่ง" />}
-            {submitErr && <FieldError msg={submitErr} />}
-            <Button className="w-full py-3.5 text-base" onClick={submit} loading={submitting}>
-              {submitting ? 'กำลังส่งข้อมูล…' : 'ลงนามรับเงินและส่งข้อมูล'}
-            </Button>
+
+            <details className="rounded-control border border-card-border">
+              <summary className="cursor-pointer px-3.5 py-2.5 text-label font-medium text-primary-text">
+                อ่านข้อความให้ความยินยอมฉบับเต็ม
+              </summary>
+              <div className="border-t border-card-border px-3.5 py-3">
+                <ConsentBody text={consentInfo.text} />
+              </div>
+            </details>
+
+            <PdpaNotice
+              text={PDPA_STATEMENT}
+              detail={
+                <p>
+                  ข้อมูลที่เก็บ: ชื่อ ที่อยู่ เลขบัตรประชาชน (เข้ารหัส) ลายเซ็น และเวลายืนยัน — ใช้เพื่อออกใบเสร็จสำหรับธุรกรรมนี้เท่านั้น ·
+                  ผู้ที่เข้าถึงข้อมูล: ลูกค้าผู้จ่ายและนักบัญชี · ระยะเวลาจัดเก็บ: ตามนโยบายของลูกค้าผู้จ่าย
+                </p>
+              }
+            />
+
             <p className="text-label leading-relaxed text-ink-400">
-              ข้อมูลที่เก็บ: ชื่อ ที่อยู่ เลขบัตรประชาชน (เข้ารหัส) ลายเซ็น และเวลายืนยัน — ใช้เพื่อออกใบเสร็จสำหรับธุรกรรมนี้เท่านั้น
-              ผู้ที่เข้าถึงข้อมูล: ลูกค้าผู้จ่ายและนักบัญชี · ระยะเวลาจัดเก็บ: ตามนโยบายของลูกค้าผู้จ่าย
+              เอกสารนี้จัดทำโดย <b>{consentInfo.clientName}</b> ในนามของผู้รับเงินโดยได้รับมอบอำนาจผ่านการลงนามอิเล็กทรอนิกส์ · ข้อตกลงความยินยอม ฉบับที่ {consentInfo.version}
             </p>
+            {tried && !consent && <FieldError msg="กรุณายืนยันความยินยอมก่อนส่ง" />}
           </CardBody>
         </Card>
       </div>
+      <ActionBar>
+        {submitErr && <FieldError msg={submitErr} />}
+        <Button type="button" className="mt-1.5 w-full py-3.5 text-base" onClick={submit} loading={submitting}>
+          {submitting ? 'กำลังส่งข้อมูล…' : 'ลงนามรับเงินและส่งข้อมูล'}
+        </Button>
+      </ActionBar>
       <ConfirmDialog
         open={confirmOpen}
         tone="primary"
