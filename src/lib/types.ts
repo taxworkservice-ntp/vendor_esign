@@ -71,6 +71,8 @@ export interface PaymentTransaction {
   clientCode?: string
   /** Client legal name — used in the vendor consent statement. */
   clientName?: string
+  /** Server path for the client logo shown in the vendor link header. */
+  logoUrl?: string | null
   /** Human transaction reference (e.g. TX-1050); equals `id` in the mock. */
   ref?: string
   /** Consent wording (with {{placeholders}}) + its version, from tenant settings. */

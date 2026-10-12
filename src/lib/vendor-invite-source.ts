@@ -10,6 +10,7 @@ import {
 import { loadVendors, maskFromLast4, nextVendorNo, saveVendor, type ClientVendor } from './vendors-mock'
 import { encryptId } from './id-crypto'
 import { saveVendorDoc } from './vendor-doc-mock'
+import { loadSettings } from './settings'
 import { isValidTaxIdChecksum, normalizeTaxId, taxIdHash } from './taxid'
 import {
   CONSENT_VERSION,
@@ -96,7 +97,17 @@ export async function getVendorInviteByToken(token: string): Promise<VendorInvit
     inv.openedAt = new Date().toISOString()
     saveInvite(inv)
   }
-  return { status: inv.status, draft: inv.draft, reviewNote: inv.reviewNote, expiresAt: inv.expiresAt }
+  const settings = loadSettings(inv.tenantId)
+  return {
+    status: inv.status,
+    tenantId: inv.tenantId,
+    clientName: settings.displayName,
+    // Mock has no R2 proxy; the header falls back to the name/monogram.
+    logoUrl: null,
+    draft: inv.draft,
+    reviewNote: inv.reviewNote,
+    expiresAt: inv.expiresAt,
+  }
 }
 
 export async function submitVendorInvite(

@@ -3,7 +3,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { sql, withTenant } from '../../src/server/db'
 import { isVendorPrefix, prefixRequired } from '../../src/lib/vendor-name'
 import { isoDay } from './dates'
-import { saveBytesDurable } from './storage'
+import { saveBytesDurable, readTenantAsset } from './storage'
 import { sha256hex } from './auth'
 import { authRoutes } from './client-auth'
 import { corsMw } from './cors'
@@ -99,6 +99,24 @@ app.route('/api/vendor-invite', invitePublicRoutes)
 
 app.get('/api/health', (c) => c.json({ ok: true, operation: 'public', tenant: TENANT }))
 
+// Public, caching logo proxy for the vendor-facing links. Branding only (no
+// personal data); the tenant id is already exposed on the vendor payloads.
+app.get('/api/branding/:tenantId/logo', async (c) => {
+  const ip = c.req.header('x-forwarded-for') ?? 'local'
+  if (await rateLimited(`branding:${ip}`, 120)) return c.json({ error: 'too-many-requests' }, 429)
+  const tenantId = c.req.param('tenantId')
+  const settings = await getTenantSettings(tenantId)
+  if (!settings.logoStoragePath) return c.json({ error: 'not-found' }, 404)
+  const bytes = await readTenantAsset(tenantId, settings.logoStoragePath)
+  if (!bytes) return c.json({ error: 'not-found' }, 404)
+  const ext = settings.logoStoragePath.split('.').pop()?.toLowerCase()
+  const type = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : 'image/png'
+  return c.body(bytes as unknown as ArrayBuffer, 200, {
+    'Content-Type': type,
+    'Cache-Control': 'public, max-age=300',
+  })
+})
+
 // Vendor: load own transaction (masked). First open stamps opened_at.
 // Multi-tenant: token_hash is globally unique — tenant is derived from the row,
 // never from a hardcoded constant, so one deploy serves all clients.
@@ -132,6 +150,8 @@ app.get('/api/vendor/:token', async (c) => {
   }
   const gated = (r as Record<string, unknown>).tax_id_hash != null
   const unlocked = (r as Record<string, unknown>).unlocked_at != null
+  const settings = await getTenantSettings(rowTenant)
+  const logoUrl = settings.logoStoragePath ? `/api/branding/${rowTenant}/logo` : null
   // Before identity is proven, reveal only what the gate screen needs — never
   // the amounts, line items or vendor details. The full document is delivered
   // once unlocked (or immediately for a legacy ungated row).
@@ -139,15 +159,17 @@ app.get('/api/vendor/:token', async (c) => {
     return c.json({
       id: r.id, tenantId: rowTenant,
       clientCode: (r as Record<string, unknown>).client_code ?? null,
+      clientName: settings.displayName,
+      logoUrl,
       ref: r.ref, status: r.status,
       gated: true, unlocked: false,
       idLast4: (r as Record<string, unknown>).tax_id_last4 ?? null,
     })
   }
-  const settings = await getTenantSettings(rowTenant)
   return c.json({
     id: r.id, tenantId: rowTenant, clientCode: (r as Record<string, unknown>).client_code ?? null,
     clientName: settings.displayName,
+    logoUrl,
     consentTemplate: settings.consentTextV1,
     consentVersion: settings.consentVersion,
     ref: r.ref, description: r.description, note: r.note, lineItems: r.line_items,

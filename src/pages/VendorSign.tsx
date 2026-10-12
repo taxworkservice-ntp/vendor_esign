@@ -18,6 +18,7 @@ import { Card, CardBody } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { ConfirmDialog } from '../components/ui/confirm-dialog'
 import { PdpaNotice } from '../components/consent/pdpa-notice'
+import { BrandFooter, BrandHeader, type Brand } from '../components/vendor/brand'
 import { FieldError, Input, Label } from '../components/ui/input'
 import { Select } from '../components/ui/select'
 import SigPad, { SigPadHandle } from '../components/ui/sigpad'
@@ -65,25 +66,25 @@ function ConsentBody({ text }: { text: string }) {
   )
 }
 
-function Shell({ children }: { children: React.ReactNode }) {  return (
-    <div className="min-h-screen bg-paper">
-      <div className="mx-auto w-full max-w-xl px-4 py-6">
-        <div className="mb-4 flex items-center gap-2.5">
-          <img src="/logo.png" alt="" aria-hidden className="h-9 w-9 shrink-0 rounded-full object-contain" />
-          <div className="leading-tight">
-            <p className="text-body font-semibold">ใบเสร็จรับเงิน — ยืนยันรับเงิน</p>
-            <p className="text-label text-ink-500">ระบบออกใบเสร็จรับเงิน · ไม่ต้องสมัครสมาชิก</p>
-          </div>
-        </div>
+function Shell({ children, brand }: { children: React.ReactNode; brand?: Brand }) {
+  return (
+    <div className="flex min-h-screen flex-col bg-paper">
+      <div className="mx-auto w-full max-w-xl flex-1 px-4 py-6">
+        <BrandHeader
+          brand={brand}
+          title="ใบเสร็จรับเงิน — ยืนยันรับเงิน"
+          subtitle="ระบบออกใบเสร็จรับเงิน · ไม่ต้องสมัครสมาชิก"
+        />
         {children}
       </div>
+      <BrandFooter />
     </div>
   )
 }
 
-function StateCard({ title, body, extra }: { title: string; body: string; extra?: React.ReactNode }) {
+function StateCard({ title, body, extra, brand }: { title: string; body: string; extra?: React.ReactNode; brand?: Brand }) {
   return (
-    <Shell>
+    <Shell brand={brand}>
       <Card>
         <CardBody className="py-10 text-center">
           <p className="text-lg font-semibold">{title}</p>
@@ -126,6 +127,8 @@ export function VendorSign() {
   const [submitting, setSubmitting] = useState(false)
   const [submitErr, setSubmitErr] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
+
+  const brand: Brand = { clientName: t?.clientName, logoUrl: t?.logoUrl }
 
   // Tax ID gate: wrong-recipient guard. Legacy rows without a stored hash
   // skip the gate with a notice.
@@ -171,11 +174,11 @@ export function VendorSign() {
     }
   }
 
-  if (isLoading) return <StateCard title="กำลังโหลด…" body="โปรดรอสักครู่" />
+  if (isLoading) return <StateCard title="กำลังโหลด…" body="โปรดรอสักครู่" brand={brand} />
   if (t?.status === 'cancelled')
-    return <StateCard title="ลิงก์ถูกเพิกถอนแล้ว" body="ลูกค้าผู้จ่ายได้เพิกถอนลิงก์นี้ โปรดติดต่อลูกค้าผู้จ่ายเพื่อขอลิงก์ใหม่" />
+    return <StateCard title="ลิงก์ถูกเพิกถอนแล้ว" body="ลูกค้าผู้จ่ายได้เพิกถอนลิงก์นี้ โปรดติดต่อลูกค้าผู้จ่ายเพื่อขอลิงก์ใหม่" brand={brand} />
   if (t?.status === 'void')
-    return <StateCard title="เอกสารนี้ถูกยกเลิกแล้ว" body="ไม่จำเป็นต้องดำเนินการใด ๆ โปรดติดต่อลูกค้าผู้จ่ายหากมีข้อสงสัย" />
+    return <StateCard title="เอกสารนี้ถูกยกเลิกแล้ว" body="ไม่จำเป็นต้องดำเนินการใด ๆ โปรดติดต่อลูกค้าผู้จ่ายหากมีข้อสงสัย" brand={brand} />
   // The invite token is consumed on signing, so the lookup can return empty
   // afterwards — keep a snapshot id so the success state still renders.
   if (done || t?.status === 'signed' || t?.status === 'issued') {
@@ -187,6 +190,7 @@ export function VendorSign() {
       <StateCard
         title="ยืนยันการลงนามเรียบร้อยแล้ว"
         body={`ระบบได้บันทึกการลงนามอิเล็กทรอนิกส์ของท่านเพื่อยืนยันการรับเงินและมอบอำนาจให้ ${successClient} ออกใบเสร็จรับเงินในนามของท่านสำหรับธุรกรรมนี้ และได้ออกใบเสร็จรับเงินเรียบร้อยแล้ว`}
+        brand={brand}
         extra={
           <div className="mt-5 space-y-3">
             {number && (
@@ -249,6 +253,7 @@ export function VendorSign() {
       <StateCard
         title="ลิงก์ไม่ถูกต้องหรือหมดอายุ"
         body={`ลิงก์นี้อาจหมดอายุ (เกิน ${loadSettings().linkExpiryDays} วัน) ถูกเพิกถอน หรือถูกใช้ไปแล้ว โปรดติดต่อลูกค้าผู้จ่ายเพื่อขอลิงก์ใหม่`}
+        brand={brand}
       />
     )
 
@@ -299,7 +304,7 @@ export function VendorSign() {
 
   if (needsGate)
     return (
-      <Shell>
+      <Shell brand={brand}>
         <Card>
           <CardBody className="space-y-4">
             <p className="mx-auto grid h-12 w-12 place-items-center rounded-card bg-primary text-white">
@@ -422,7 +427,7 @@ export function VendorSign() {
   }
 
   return (
-    <Shell>
+    <Shell brand={brand}>
       <div className="space-y-4">
         {!t.taxIdHash ? (
           <p className="flex gap-2 rounded-control bg-warning-soft p-3 text-body font-medium text-warning">

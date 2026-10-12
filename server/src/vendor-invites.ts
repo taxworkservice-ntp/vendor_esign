@@ -5,6 +5,7 @@ import { guard } from './data'
 import { sha256hex } from './auth'
 import { audit, one, rateLimited } from './shared'
 import { saveBytesDurable, readStoredDurable } from './storage'
+import { getTenantSettings } from './settings'
 import { decryptId, decryptToken, encryptId, encryptToken } from './crypto'
 import { INVITE_TTL_DAYS, CONSENT_VERSION } from '../../src/lib/vendor-invite'
 
@@ -241,7 +242,7 @@ invitePublicRoutes.get('/:token', async (c) => {
   if (await rateLimited(`invite-get:${ip}`, 60)) return c.json({ error: 'too-many-requests' }, 429)
   const token = c.req.param('token')
   const db = sql()
-  const rows = (await db`select id, status, expires_at, review_note, submitted_at,
+  const rows = (await db`select id, user_id, status, expires_at, review_note, submitted_at,
       prefix, name, address, phone, email, line_user_id, tax_id_encrypted,
       bank_name, bank_account_encrypted, account_holder
     from vendor_invites where token_hash = ${sha256hex(token)}`) as unknown as Row[]
@@ -253,6 +254,9 @@ invitePublicRoutes.get('/:token', async (c) => {
     await db`update vendor_invites set status = 'opened', opened_at = coalesce(opened_at, now())
       where id = ${r.id} and status = 'invited'`
   }
+  const tenantId = String(r.user_id)
+  const settings = await getTenantSettings(tenantId)
+  const logoUrl = settings.logoStoragePath ? `/api/branding/${tenantId}/logo` : null
   const draft =
     r.submitted_at != null
       ? {
@@ -268,7 +272,7 @@ invitePublicRoutes.get('/:token', async (c) => {
           accountHolder: r.account_holder ?? '',
         }
       : undefined
-  return c.json({ status, reviewNote: r.review_note ?? undefined, expiresAt: r.expires_at, draft })
+  return c.json({ status, tenantId, clientName: settings.displayName, logoUrl, reviewNote: r.review_note ?? undefined, expiresAt: r.expires_at, draft })
 })
 
 invitePublicRoutes.post('/:token/submit', async (c) => {

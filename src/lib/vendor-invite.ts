@@ -68,8 +68,12 @@ export interface VendorInvite {
 /** A short-lived public view of an invite for the onboard page. */
 export interface VendorInvitePublic {
   status: VendorInviteStatus
+  /** Workspace the invite belongs to (drives the branding logo). */
+  tenantId?: string
   /** Client display name, so the vendor knows who is asking. */
   clientName?: string
+  /** Server path for the client logo shown in the link header. */
+  logoUrl?: string | null
   /** Prefill when resuming a partially/incorrectly completed form. */
   draft?: VendorInviteDraft
   reviewNote?: string

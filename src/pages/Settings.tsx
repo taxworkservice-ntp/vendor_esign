@@ -209,8 +209,16 @@ export function Settings() {
         </div>
       </Section>
 
-      <Section step="4" title="ลายเซ็นและตราประทับ" desc="ใส่ลายเซ็นและตราประทับบนหนังสือรับรองภาษีหัก ณ ที่จ่าย (WHT)">
-        <div className="grid gap-4 sm:grid-cols-2">
+      <Section step="4" title="โลโก้ ลายเซ็น และตราประทับ" desc="โลโก้แสดงบนลิงก์ผู้ขาย (กรอกข้อมูลและลงนาม) · ลายเซ็นและตราประทับใช้บนหนังสือรับรองภาษีหัก ณ ที่จ่าย (WHT)">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <AssetUpload
+            label="โลโก้บริษัท"
+            hint="PNG/JPG — แสดงบนลิงก์ผู้ขาย แนวนอนหรือสี่เหลี่ยม"
+            storagePath={form.logoStoragePath}
+            onUploaded={(path) => set({ logoStoragePath: path })}
+            onError={(e) => toast.show(e, 'error')}
+            disabled={readOnly}
+          />
           <AssetUpload
             label="ลายเซ็นผู้มีอำนาจ"
             hint="PNG/JPG — แนะนำพื้นหลังโปร่งใส แนวนอน"

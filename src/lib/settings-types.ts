@@ -62,6 +62,8 @@ export interface TenantSettings {
   signatureStoragePath?: string
   /** R2 storage path for the company stamp image (PNG with transparency preferred). */
   stampStoragePath?: string
+  /** R2 storage path for the client logo shown on the vendor-facing links. */
+  logoStoragePath?: string
   /** Where the signature is placed on the WHT form (falls back to the default). */
   signaturePlacement?: Placement
   /** Where the stamp is placed on the WHT form (falls back to the default). */

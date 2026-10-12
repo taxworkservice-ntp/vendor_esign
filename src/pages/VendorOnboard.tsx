@@ -13,6 +13,7 @@ import { PdpaNotice } from '../components/consent/pdpa-notice'
 import { FieldError, Input, Label, Textarea } from '../components/ui/input'
 import { Select } from '../components/ui/select'
 import { Spinner } from '../components/ui/spinner'
+import { BrandFooter, BrandHeader, type Brand } from '../components/vendor/brand'
 
 // Public vendor self-onboarding form. No account: the invite token is the
 // credential. Mobile-first, three sections, resume-friendly (the token keeps
@@ -38,9 +39,11 @@ export function VendorOnboard() {
     queryFn: () => getVendorInviteByToken(token as string),
   })
 
+  const brand: Brand = { clientName: q.data?.clientName, logoUrl: q.data?.logoUrl }
+
   if (q.isLoading) {
     return (
-      <Shell>
+      <Shell brand={brand}>
         <div className="flex items-center justify-center gap-2 py-16 text-body text-ink-500">
           <Spinner /> กำลังโหลด…
         </div>
@@ -51,7 +54,7 @@ export function VendorOnboard() {
   const data = q.data
   if (!data) {
     return (
-      <Shell>
+      <Shell brand={brand}>
         <Card>
           <CardBody className="py-12 text-center">
             <p className="font-semibold">ลิงก์ไม่ถูกต้องหรือหมดอายุ</p>
@@ -64,14 +67,14 @@ export function VendorOnboard() {
 
   if (data.status === 'approved') {
     return (
-      <Shell>
+      <Shell brand={brand}>
         <Done title="ส่งข้อมูลเรียบร้อยแล้ว" detail="ข้อมูลของท่านได้รับการอนุมัติจากผู้ว่าจ้างแล้ว" />
       </Shell>
     )
   }
   if (data.status === 'rejected') {
     return (
-      <Shell>
+      <Shell brand={brand}>
         <Card>
           <CardBody className="py-12 text-center">
             <p className="font-semibold">ลิงก์นี้ถูกปิดแล้ว</p>
@@ -83,29 +86,27 @@ export function VendorOnboard() {
   }
   if (data.status === 'submitted') {
     return (
-      <Shell>
+      <Shell brand={brand}>
         <Done title="ส่งข้อมูลเรียบร้อยแล้ว" detail="กำลังรอผู้ว่าจ้างตรวจสอบ — หากต้องการแก้ไข โปรดติดต่อผู้ว่าจ้าง" />
       </Shell>
     )
   }
 
   return (
-    <Shell>
+    <Shell brand={brand}>
       <OnboardForm token={token as string} initial={data.draft} reviewNote={data.reviewNote} />
     </Shell>
   )
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({ children, brand }: { children: React.ReactNode; brand?: Brand }) {
   return (
-    <div className="min-h-screen bg-paper">
-      <div className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
-        <div className="mb-6 flex items-center gap-2.5">
-          <img src="/logo.png" alt="" aria-hidden className="h-9 w-9 rounded-full object-contain" />
-          <span className="text-title font-semibold tracking-tight">TW VendorSign</span>
-        </div>
+    <div className="flex min-h-screen flex-col bg-paper">
+      <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-8 sm:py-12">
+        <BrandHeader brand={brand} />
         {children}
       </div>
+      <BrandFooter />
     </div>
   )
 }
@@ -253,8 +254,11 @@ function OnboardForm({
           </div>
         </div>
         <div>
-          <Label required>ที่อยู่</Label>
-          <Textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} placeholder="บ้านเลขที่ ตำบล อำเภอ จังหวัด รหัสไปรษณีย์" />
+          <Label required hint="ที่อยู่ตามบัตรประชาชน/ทะเบียนราษฎร">ที่อยู่</Label>
+          <Textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} placeholder="บ้านเลขที่ ตำบล อำเภอ จังหวัด รหัสไปรษณีย์ (ตามทะเบียนราษฎร)" />
+          <p className="mt-1.5 text-label text-ink-500">
+            กรอกที่อยู่ตามที่ปรากฏในเอกสารทะเบียนราษฎร / เลขประจำตัวผู้เสียภาษี (ไม่ใช่ที่อยู่ปัจจุบัน)
+          </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>

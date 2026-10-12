@@ -68048,6 +68048,27 @@ async function readStoredDurable(tenantId, relPath) {
   }
   return readStored(tenantId, relPath);
 }
+async function readTenantAsset(tenantId, relPath) {
+  if (!tenantId || !relPath) return void 0;
+  if (isAbsolute(relPath) || relPath.includes("\0")) return void 0;
+  const segments = relPath.split(/[\\/]/);
+  if (segments.some((s) => s === ".." || s === "")) return void 0;
+  if (segments[0] !== tenantId) return void 0;
+  if (r2Configured()) {
+    const fromR2 = await getObject(relPath);
+    if (fromR2) return fromR2;
+  }
+  const rootAbs = resolve(storageRoot());
+  const full = resolve(rootAbs, ...segments);
+  const inside = relative(join(rootAbs, tenantId), full);
+  if (inside === "" || inside.startsWith("..") || isAbsolute(inside)) return void 0;
+  try {
+    if (!existsSync(full) || !statSync(full).isFile()) return void 0;
+    return readFileSync(full);
+  } catch {
+    return void 0;
+  }
+}
 
 // server/src/auth.ts
 import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
@@ -68568,6 +68589,7 @@ async function getTenantSettings(tenantId) {
       vendorInviteMessageTemplate: String(m2.get("vendor_invite_message_template") ?? DEFAULT_VENDOR_INVITE_TEMPLATE),
       signatureStoragePath: m2.get("signature_storage_path") || void 0,
       stampStoragePath: m2.get("stamp_storage_path") || void 0,
+      logoStoragePath: m2.get("logo_storage_path") || void 0,
       signaturePlacement: m2.get("signature_placement") || void 0,
       stampPlacement: m2.get("stamp_placement") || void 0
     };
@@ -68596,6 +68618,7 @@ async function saveTenantSettings(tenantId, s) {
     await put("vendor_invite_message_template", s.vendorInviteMessageTemplate);
     if (s.signatureStoragePath !== void 0) await put("signature_storage_path", s.signatureStoragePath);
     if (s.stampStoragePath !== void 0) await put("stamp_storage_path", s.stampStoragePath);
+    if (s.logoStoragePath !== void 0) await put("logo_storage_path", s.logoStoragePath);
     if (s.signaturePlacement !== void 0) await put("signature_placement", s.signaturePlacement);
     if (s.stampPlacement !== void 0) await put("stamp_placement", s.stampPlacement);
   });
@@ -70736,7 +70759,7 @@ import { randomBytes as randomBytes5 } from "node:crypto";
 
 // src/lib/vendor-invite.ts
 var INVITE_TTL_DAYS = 30;
-var CONSENT_VERSION = "vendor-onboard-v1";
+var CONSENT_VERSION = "vendor-onboard-v2";
 
 // server/src/vendor-invites.ts
 var normTaxId = (s) => s.replace(/\D/g, "");
@@ -70937,7 +70960,7 @@ invitePublicRoutes.get("/:token", async (c) => {
   if (await rateLimited(`invite-get:${ip}`, 60)) return c.json({ error: "too-many-requests" }, 429);
   const token = c.req.param("token");
   const db = sql();
-  const rows = await db`select id, status, expires_at, review_note, submitted_at,
+  const rows = await db`select id, user_id, status, expires_at, review_note, submitted_at,
       prefix, name, address, phone, email, line_user_id, tax_id_encrypted,
       bank_name, bank_account_encrypted, account_holder
     from vendor_invites where token_hash = ${sha256hex(token)}`;
@@ -70949,6 +70972,9 @@ invitePublicRoutes.get("/:token", async (c) => {
     await db`update vendor_invites set status = 'opened', opened_at = coalesce(opened_at, now())
       where id = ${r.id} and status = 'invited'`;
   }
+  const tenantId = String(r.user_id);
+  const settings = await getTenantSettings(tenantId);
+  const logoUrl = settings.logoStoragePath ? `/api/branding/${tenantId}/logo` : null;
   const draft = r.submitted_at != null ? {
     prefix: r.prefix ?? "",
     name: r.name ?? "",
@@ -70961,7 +70987,7 @@ invitePublicRoutes.get("/:token", async (c) => {
     bankAccount: r.bank_account_encrypted ? decryptId(String(r.bank_account_encrypted)) ?? "" : "",
     accountHolder: r.account_holder ?? ""
   } : void 0;
-  return c.json({ status, reviewNote: r.review_note ?? void 0, expiresAt: r.expires_at, draft });
+  return c.json({ status, tenantId, clientName: settings.displayName, logoUrl, reviewNote: r.review_note ?? void 0, expiresAt: r.expires_at, draft });
 });
 invitePublicRoutes.post("/:token/submit", async (c) => {
   const ip = c.req.header("x-forwarded-for") ?? "local";
@@ -71051,6 +71077,21 @@ app.route("/api/client", receiptRoutes);
 app.route("/api/client", inviteClientRoutes);
 app.route("/api/vendor-invite", invitePublicRoutes);
 app.get("/api/health", (c) => c.json({ ok: true, operation: "public", tenant: TENANT }));
+app.get("/api/branding/:tenantId/logo", async (c) => {
+  const ip = c.req.header("x-forwarded-for") ?? "local";
+  if (await rateLimited(`branding:${ip}`, 120)) return c.json({ error: "too-many-requests" }, 429);
+  const tenantId = c.req.param("tenantId");
+  const settings = await getTenantSettings(tenantId);
+  if (!settings.logoStoragePath) return c.json({ error: "not-found" }, 404);
+  const bytes = await readTenantAsset(tenantId, settings.logoStoragePath);
+  if (!bytes) return c.json({ error: "not-found" }, 404);
+  const ext = settings.logoStoragePath.split(".").pop()?.toLowerCase();
+  const type = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : ext === "webp" ? "image/webp" : "image/png";
+  return c.body(bytes, 200, {
+    "Content-Type": type,
+    "Cache-Control": "public, max-age=300"
+  });
+});
 app.get("/api/vendor/:token", async (c) => {
   const ip = c.req.header("x-forwarded-for") ?? "local";
   if (await rateLimited(`get:${ip}`)) return c.json({ error: "too-many-requests" }, 429);
@@ -71080,11 +71121,15 @@ app.get("/api/vendor/:token", async (c) => {
   }
   const gated = r.tax_id_hash != null;
   const unlocked = r.unlocked_at != null;
+  const settings = await getTenantSettings(rowTenant);
+  const logoUrl = settings.logoStoragePath ? `/api/branding/${rowTenant}/logo` : null;
   if (gated && !unlocked) {
     return c.json({
       id: r.id,
       tenantId: rowTenant,
       clientCode: r.client_code ?? null,
+      clientName: settings.displayName,
+      logoUrl,
       ref: r.ref,
       status: r.status,
       gated: true,
@@ -71092,12 +71137,12 @@ app.get("/api/vendor/:token", async (c) => {
       idLast4: r.tax_id_last4 ?? null
     });
   }
-  const settings = await getTenantSettings(rowTenant);
   return c.json({
     id: r.id,
     tenantId: rowTenant,
     clientCode: r.client_code ?? null,
     clientName: settings.displayName,
+    logoUrl,
     consentTemplate: settings.consentTextV1,
     consentVersion: settings.consentVersion,
     ref: r.ref,

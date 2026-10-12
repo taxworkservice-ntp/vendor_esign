@@ -209,6 +209,14 @@ PDPA notice (`ONBOARD_PDPA_STATEMENT`) — the same collapsible disclosure compo
 signing screen uses (`src/components/consent/pdpa-notice.tsx`) — before the vendor
 submits. v2 is the first version that discloses it.
 
+**Client brand on the links (white-label).** The client can upload a **logo** on the
+Settings page (Section 4, alongside signature/stamp; stored as `logo_storage_path` in
+`config` — no migration). It shows in the header of both vendor links (onboarding and
+signing), which now lead with the **client logo + display name**; the platform mark
+moves to a muted "powered by TW VendorSign" footer. No logo → a name **monogram**;
+no name → the TW mark. Both public payloads return `logoUrl`, served by a public
+caching route `GET /api/branding/:tenantId/logo` (`readTenantAsset`).
+
 **Void propagates.** Voiding marks the receipt row `void`, revokes live links, voids
 an unfiled / supersedes a filed WHT certificate, and writes `receipt.voided`
 (migration 026 widened `wht_records.status`).

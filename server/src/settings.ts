@@ -52,6 +52,7 @@ export async function getTenantSettings(tenantId: string): Promise<TenantSetting
       vendorInviteMessageTemplate: String(m.get('vendor_invite_message_template') ?? DEFAULT_VENDOR_INVITE_TEMPLATE),
       signatureStoragePath: (m.get('signature_storage_path') as string | undefined) || undefined,
       stampStoragePath: (m.get('stamp_storage_path') as string | undefined) || undefined,
+      logoStoragePath: (m.get('logo_storage_path') as string | undefined) || undefined,
       signaturePlacement: (m.get('signature_placement') as TenantSettings['signaturePlacement']) || undefined,
       stampPlacement: (m.get('stamp_placement') as TenantSettings['stampPlacement']) || undefined,
     }
@@ -81,6 +82,7 @@ export async function saveTenantSettings(tenantId: string, s: TenantSettings): P
     await put('vendor_invite_message_template', s.vendorInviteMessageTemplate)
     if (s.signatureStoragePath !== undefined) await put('signature_storage_path', s.signatureStoragePath)
     if (s.stampStoragePath !== undefined) await put('stamp_storage_path', s.stampStoragePath)
+    if (s.logoStoragePath !== undefined) await put('logo_storage_path', s.logoStoragePath)
     if (s.signaturePlacement !== undefined) await put('signature_placement', s.signaturePlacement)
     if (s.stampPlacement !== undefined) await put('stamp_placement', s.stampPlacement)
   })
