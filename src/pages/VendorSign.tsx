@@ -17,6 +17,7 @@ import { VENDOR_PREFIXES, isVendorPrefix, prefixRequired } from '../lib/vendor-n
 import { Card, CardBody } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { ConfirmDialog } from '../components/ui/confirm-dialog'
+import { PdpaNotice } from '../components/consent/pdpa-notice'
 import { FieldError, Input, Label } from '../components/ui/input'
 import { Select } from '../components/ui/select'
 import SigPad, { SigPadHandle } from '../components/ui/sigpad'
@@ -619,18 +620,15 @@ export function VendorSign() {
               </div>
             </details>
 
-            <details className="rounded-control border border-card-border">
-              <summary className="cursor-pointer px-3.5 py-2.5 text-label font-medium text-primary-text">
-                ประกาศความเป็นส่วนตัว (PDPA)
-              </summary>
-              <div className="space-y-2 border-t border-card-border px-3.5 py-3 text-label leading-relaxed text-ink-600">
-                <p>{PDPA_STATEMENT}</p>
+            <PdpaNotice
+              text={PDPA_STATEMENT}
+              detail={
                 <p>
                   ข้อมูลที่เก็บ: ชื่อ ที่อยู่ เลขบัตรประชาชน (เข้ารหัส) ลายเซ็น และเวลายืนยัน — ใช้เพื่อออกใบเสร็จสำหรับธุรกรรมนี้เท่านั้น ·
                   ผู้ที่เข้าถึงข้อมูล: ลูกค้าผู้จ่ายและนักบัญชี · ระยะเวลาจัดเก็บ: ตามนโยบายของลูกค้าผู้จ่าย
                 </p>
-              </div>
-            </details>
+              }
+            />
 
             <p className="text-label leading-relaxed text-ink-400">
               เอกสารนี้จัดทำโดย <b>{consentInfo.clientName}</b> ในนามของผู้รับเงินโดยได้รับมอบอำนาจผ่านการลงนามอิเล็กทรอนิกส์ · ข้อตกลงความยินยอม ฉบับที่ {consentInfo.version}

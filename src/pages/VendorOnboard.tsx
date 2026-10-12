@@ -3,12 +3,13 @@ import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, FileImage, Upload } from 'lucide-react'
 import { getVendorInviteByToken, submitVendorInvite } from '../lib/vendor-invite-source'
-import { CONSENT_VERSION, VENDOR_DOCS, type VendorInviteDraft } from '../lib/vendor-invite'
+import { CONSENT_VERSION, ONBOARD_PDPA_STATEMENT, VENDOR_DOCS, type VendorInviteDraft } from '../lib/vendor-invite'
 import { VENDOR_PREFIXES, isVendorPrefix, prefixRequired } from '../lib/vendor-name'
 import { isValidTaxIdChecksum, normalizeTaxId } from '../lib/taxid'
 import { Card, CardBody } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Checkbox } from '../components/ui/checkbox'
+import { PdpaNotice } from '../components/consent/pdpa-notice'
 import { FieldError, Input, Label, Textarea } from '../components/ui/input'
 import { Select } from '../components/ui/select'
 import { Spinner } from '../components/ui/spinner'
@@ -318,6 +319,7 @@ function OnboardForm({
           onChange={(e) => setConsent(e.target.checked)}
           label="ข้าพเจ้ายินยอมให้เก็บรวบรวม ใช้ และเปิดเผยข้อมูลส่วนบุคคล (รวมถึงเอกสารที่แนบ เช่น สำเนาบัตรประชาชน) เพื่อวัตถุประสงค์ในการยืนยันตัวตน การออกเอกสารทางภาษี และการชำระเงิน"
         />
+        <PdpaNotice text={ONBOARD_PDPA_STATEMENT} />
         <p className="text-label text-ink-400">เวอร์ชันความยินยอม: {CONSENT_VERSION}</p>
       </Section>
 

@@ -77,7 +77,16 @@ export interface VendorInvitePublic {
 }
 
 export const INVITE_TTL_DAYS = 30
-export const CONSENT_VERSION = 'vendor-onboard-v1'
+export const CONSENT_VERSION = 'vendor-onboard-v2'
+
+/**
+ * PDPA (พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562) privacy notice shown on the
+ * self-onboarding page before the vendor consents. Worded for onboarding /
+ * identity collection rather than a single signing transaction, and aligned
+ * with the ~5-year retention described in the pilot spec.
+ */
+export const ONBOARD_PDPA_STATEMENT =
+  'การเก็บรวบรวม ใช้ และเปิดเผยข้อมูลส่วนบุคคลของข้าพเจ้า ดำเนินการตามพระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562 โดยมีวัตถุประสงค์เพื่อยืนยันตัวตนของผู้ขาย ออกเอกสารทางภาษี และดำเนินการชำระเงิน · ข้อมูลที่เก็บ: ชื่อ ที่อยู่ เลขประจำตัวประชาชน/เลขผู้เสียภาษี (เข้ารหัส) ข้อมูลบัญชีธนาคาร และรูปเอกสารที่แนบ · ผู้เข้าถึงข้อมูล: ลูกค้าผู้จ่ายและผู้ให้บริการระบบที่ได้รับมอบหมาย (เข้าถึงแบบจำกัดสิทธิ์และบันทึกการเข้าถึง) · ระยะเวลาจัดเก็บ: ประมาณ 5 ปี หรือตามที่กฎหมายกำหนด · ข้าพเจ้ามีสิทธิขอเข้าถึง แก้ไข หรือถอนความยินยอมได้ตามกฎหมาย'
 
 export const INVITE_STATUS_LABEL: Record<VendorInviteStatus, string> = {
   invited: 'ส่งลิงก์แล้ว — รอผู้ขายกรอก',

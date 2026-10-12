@@ -203,6 +203,12 @@ acknowledgement — plus a PDPA notice. Shown as a short summary with the full t
 behind a disclosure. `consentVersion` is stored on each authorization. Supersedes the
 shorter wording in §8.
 
+**Onboarding consent (PDPA).** The self-onboarding page carries its own consent
+(`CONSENT_VERSION = 'vendor-onboard-v2'` in `src/lib/vendor-invite.ts`) and shows a
+PDPA notice (`ONBOARD_PDPA_STATEMENT`) — the same collapsible disclosure component the
+signing screen uses (`src/components/consent/pdpa-notice.tsx`) — before the vendor
+submits. v2 is the first version that discloses it.
+
 **Void propagates.** Voiding marks the receipt row `void`, revokes live links, voids
 an unfiled / supersedes a filed WHT certificate, and writes `receipt.voided`
 (migration 026 widened `wht_records.status`).

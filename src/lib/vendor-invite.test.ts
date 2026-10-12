@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { VENDOR_DOCS, inviteAttention, isInviteExpired, type VendorInvite } from './vendor-invite'
+import {
+  CONSENT_VERSION,
+  ONBOARD_PDPA_STATEMENT,
+  VENDOR_DOCS,
+  inviteAttention,
+  isInviteExpired,
+  type VendorInvite,
+} from './vendor-invite'
 
 const DAY = 86_400_000
 const iso = (daysAgo: number) => new Date(Date.now() - daysAgo * DAY).toISOString()
@@ -53,5 +60,17 @@ describe('VENDOR_DOCS', () => {
 
   it('marks exactly the ID card as required', () => {
     expect(VENDOR_DOCS.filter((d) => d.required).map((d) => d.key)).toEqual(['idDoc'])
+  })
+})
+
+describe('onboarding consent', () => {
+  it('is the v2 disclosure now that the PDPA notice is shown', () => {
+    expect(CONSENT_VERSION).toBe('vendor-onboard-v2')
+  })
+
+  it('states the PDPA legal basis, data, retention and rights', () => {
+    expect(ONBOARD_PDPA_STATEMENT).toContain('คุ้มครองข้อมูลส่วนบุคคล')
+    expect(ONBOARD_PDPA_STATEMENT).toContain('ระยะเวลาจัดเก็บ')
+    expect(ONBOARD_PDPA_STATEMENT).toContain('สิทธิ')
   })
 })
