@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { renderToString } from 'react-dom/server'
-import { BrandFooter, BrandHeader } from './brand'
+import { BrandBar, BrandHeader } from './brand'
 
 // White-label header: the client's logo + name own the header, with a name
 // monogram and the TW mark as fallbacks; the platform mark lives in the footer.
@@ -25,8 +25,10 @@ describe('BrandHeader', () => {
   })
 })
 
-describe('BrandFooter', () => {
-  it('carries the platform attribution', () => {
-    expect(renderToString(<BrandFooter />)).toContain('TW VendorSign')
+describe('BrandBar', () => {
+  it('renders the platform brand app bar', () => {
+    const html = renderToString(<BrandBar />)
+    expect(html).toContain('TW VendorSign')
+    expect(html).toContain('/logo.png')
   })
 })

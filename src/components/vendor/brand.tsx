@@ -1,13 +1,26 @@
 import { API_BASE } from '../../lib/api-base'
 import { initials } from '../../lib/brand'
 
-// Header + footer identity for the public vendor links (onboard and sign).
-// White-label: the client's logo + name own the header; the platform mark moves
-// to a muted "powered by" footer.
+// Header identity for the public vendor links (onboard and sign), two-tier:
+//   1. BrandBar   — the platform's slim app bar at the very top (TW VendorSign).
+//   2. BrandHeader — the client's own identity row beneath it (logo + name).
+// The tenant still owns the document's visual identity; the platform owns the
+// shell, like a white-label SaaS app.
 
 export interface Brand {
   logoUrl?: string | null
   clientName?: string | null
+}
+
+export function BrandBar() {
+  return (
+    <header role="banner" className="sticky top-0 z-10 border-b border-card-border/70 bg-white/95 backdrop-blur">
+      <div className="flex h-14 items-center gap-2 px-4 sm:px-6">
+        <img src="/logo.png" alt="" aria-hidden className="h-8 w-8 shrink-0 rounded-full object-contain" />
+        <span className="truncate text-body font-semibold">TW VendorSign</span>
+      </div>
+    </header>
+  )
 }
 
 export function BrandHeader({ brand, title, subtitle }: { brand?: Brand; title?: string; subtitle?: string }) {
@@ -34,16 +47,5 @@ export function BrandHeader({ brand, title, subtitle }: { brand?: Brand; title?:
         {subtitle && <p className="truncate text-label text-ink-500">{subtitle}</p>}
       </div>
     </div>
-  )
-}
-
-export function BrandFooter() {
-  return (
-    <footer className="border-t border-card-border/70">
-      <div className="mx-auto flex w-full max-w-2xl items-center gap-2 px-4 py-5 sm:px-6">
-        <img src="/logo.png" alt="" aria-hidden className="h-5 w-5 shrink-0 rounded-full object-contain" />
-        <p className="text-label text-ink-400">ขับเคลื่อนโดย TW VendorSign · เอกสารและลิงก์นี้จัดทำโดยผู้ว่าจ้าง</p>
-      </div>
-    </footer>
   )
 }

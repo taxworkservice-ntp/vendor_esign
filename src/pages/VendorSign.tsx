@@ -18,7 +18,7 @@ import { Card, CardBody } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { ConfirmDialog } from '../components/ui/confirm-dialog'
 import { PdpaNotice } from '../components/consent/pdpa-notice'
-import { BrandFooter, BrandHeader, type Brand } from '../components/vendor/brand'
+import { BrandBar, BrandHeader, type Brand } from '../components/vendor/brand'
 import { FieldError, Input, Label } from '../components/ui/input'
 import { Select } from '../components/ui/select'
 import SigPad, { SigPadHandle } from '../components/ui/sigpad'
@@ -69,6 +69,7 @@ function ConsentBody({ text }: { text: string }) {
 function Shell({ children, brand }: { children: React.ReactNode; brand?: Brand }) {
   return (
     <div className="flex min-h-screen flex-col bg-paper">
+      <BrandBar />
       <div className="mx-auto w-full max-w-xl flex-1 px-4 py-6">
         <BrandHeader
           brand={brand}
@@ -77,7 +78,6 @@ function Shell({ children, brand }: { children: React.ReactNode; brand?: Brand }
         />
         {children}
       </div>
-      <BrandFooter />
     </div>
   )
 }

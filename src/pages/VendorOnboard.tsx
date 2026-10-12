@@ -13,7 +13,7 @@ import { PdpaNotice } from '../components/consent/pdpa-notice'
 import { FieldError, Input, Label, Textarea } from '../components/ui/input'
 import { Select } from '../components/ui/select'
 import { Spinner } from '../components/ui/spinner'
-import { BrandFooter, BrandHeader, type Brand } from '../components/vendor/brand'
+import { BrandBar, BrandHeader, type Brand } from '../components/vendor/brand'
 
 // Public vendor self-onboarding form. No account: the invite token is the
 // credential. Mobile-first, three sections, resume-friendly (the token keeps
@@ -102,11 +102,11 @@ export function VendorOnboard() {
 function Shell({ children, brand }: { children: React.ReactNode; brand?: Brand }) {
   return (
     <div className="flex min-h-screen flex-col bg-paper">
+      <BrandBar />
       <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-8 sm:py-12">
         <BrandHeader brand={brand} />
         {children}
       </div>
-      <BrandFooter />
     </div>
   )
 }
