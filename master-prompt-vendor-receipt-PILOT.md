@@ -218,6 +218,15 @@ No logo → a name **monogram**; no name → the TW mark in that row. Both publi
 return `logoUrl`, served by a public caching route `GET /api/branding/:tenantId/logo`
 (`readTenantAsset`).
 
+**Mobile onboarding UX.** The onboarding link is mobile-first: each document offers
+both **"ถ่ายรูป"** (camera) and **"เลือกจากอัลบั้ม"** (gallery), and the photo is
+downscaled + re-encoded to JPEG in the browser (`src/lib/image-upload.ts`) before
+upload — this fixes oversized photos and iPhone HEIC, which the server otherwise
+rejects. Validation is per-field (`src/lib/vendor-onboard.ts`) with inline errors and
+scroll-to-first-error; a failed fetch offers a retry (vs. a dead link); inputs are
+16px on mobile (no iOS focus-zoom); and a sticky progress bar + safe-area action bar
+keep the primary action reachable on both links.
+
 **Void propagates.** Voiding marks the receipt row `void`, revokes live links, voids
 an unfiled / supersedes a filed WHT certificate, and writes `receipt.voided`
 (migration 026 widened `wht_records.status`).

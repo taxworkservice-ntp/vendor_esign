@@ -81,11 +81,9 @@ export async function createVendorInvite(tenantId: string, label?: string): Prom
 
 export async function getVendorInviteByToken(token: string): Promise<VendorInvitePublic | null> {
   if (hasServer) {
-    try {
-      return await apiGet<VendorInvitePublic>(`/api/vendor-invite/${encodeURIComponent(token)}`)
-    } catch {
-      return null
-    }
+    // Let transport/HTTP errors propagate so the page can distinguish a bad link
+    // (404/410) from a transient failure (network/5xx) and offer a retry.
+    return await apiGet<VendorInvitePublic>(`/api/vendor-invite/${encodeURIComponent(token)}`)
   }
   const inv = findInviteByToken(token)
   if (!inv) return null

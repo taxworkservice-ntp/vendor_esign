@@ -18,6 +18,7 @@ import { Card, CardBody } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { ConfirmDialog } from '../components/ui/confirm-dialog'
 import { PdpaNotice } from '../components/consent/pdpa-notice'
+import { ActionBar } from '../components/ui/action-bar'
 import { BrandBar, BrandHeader, type Brand } from '../components/vendor/brand'
 import { FieldError, Input, Label } from '../components/ui/input'
 import { Select } from '../components/ui/select'
@@ -70,7 +71,7 @@ function Shell({ children, brand }: { children: React.ReactNode; brand?: Brand }
   return (
     <div className="flex min-h-screen flex-col bg-paper">
       <BrandBar />
-      <div className="mx-auto w-full max-w-xl flex-1 px-4 py-6">
+      <div className="mx-auto w-full max-w-xl flex-1 px-4 py-4 sm:py-6">
         <BrandHeader
           brand={brand}
           title="ใบเสร็จรับเงิน — ยืนยันรับเงิน"
@@ -521,7 +522,7 @@ export function VendorSign() {
             ) : (
               <div>
                 <Label hint={`${tid.length}/13 หลัก — เก็บเฉพาะตัวเลข`}>เลขบัตรประชาชน</Label>
-                <Input value={tid} onChange={(e) => setTid(e.target.value.replace(/\D/g, '').slice(0, 13))} placeholder="x-xxxx-xxxxx-xx-x" inputMode="numeric" />
+                <Input value={tid} onChange={(e) => setTid(e.target.value.replace(/\D/g, '').slice(0, 13))} placeholder="x-xxxx-xxxxx-xx-x" inputMode="numeric" autoCapitalize="none" spellCheck={false} enterKeyHint="done" />
                 {tried && !idOk && <FieldError msg="กรุณากรอกให้ครบ 13 หลัก" />}
                 {idOk && <p className="mt-1.5 flex items-center gap-1 text-body font-medium text-success"><CheckCircle2 size={14} /> ครบ 13 หลัก</p>}
               </div>
@@ -639,13 +640,15 @@ export function VendorSign() {
               เอกสารนี้จัดทำโดย <b>{consentInfo.clientName}</b> ในนามของผู้รับเงินโดยได้รับมอบอำนาจผ่านการลงนามอิเล็กทรอนิกส์ · ข้อตกลงความยินยอม ฉบับที่ {consentInfo.version}
             </p>
             {tried && !consent && <FieldError msg="กรุณายืนยันความยินยอมก่อนส่ง" />}
-            {submitErr && <FieldError msg={submitErr} />}
-            <Button className="w-full py-3.5 text-base" onClick={submit} loading={submitting}>
-              {submitting ? 'กำลังส่งข้อมูล…' : 'ลงนามรับเงินและส่งข้อมูล'}
-            </Button>
           </CardBody>
         </Card>
       </div>
+      <ActionBar>
+        {submitErr && <FieldError msg={submitErr} />}
+        <Button type="button" className="mt-1.5 w-full py-3.5 text-base" onClick={submit} loading={submitting}>
+          {submitting ? 'กำลังส่งข้อมูล…' : 'ลงนามรับเงินและส่งข้อมูล'}
+        </Button>
+      </ActionBar>
       <ConfirmDialog
         open={confirmOpen}
         tone="primary"
