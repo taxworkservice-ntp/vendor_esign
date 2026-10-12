@@ -289,8 +289,10 @@ invitePublicRoutes.post('/:token/submit', async (c) => {
   if (!validTaxIdChecksum(taxId)) return c.json({ error: 'invalid-taxid' }, 400)
   if (bankAccount.length < 8 || !accountHolder) return c.json({ error: 'invalid-body' }, 400)
   const idBytes = dataUrlBytes(String(b.idDocData ?? ''))
-  const bankBytes = dataUrlBytes(String(b.bankDocData ?? ''))
-  if (!idBytes || !bankBytes) return c.json({ error: 'invalid-document' }, 400)
+  if (!idBytes) return c.json({ error: 'invalid-document' }, 400)
+  // The bank-book page is optional; validate it only when the vendor sends one.
+  const bankBytes = b.bankDocData ? dataUrlBytes(String(b.bankDocData)) : null
+  if (b.bankDocData && !bankBytes) return c.json({ error: 'invalid-document' }, 400)
 
   const db = sql()
   const rows = (await db`select id, user_id, status, expires_at from vendor_invites where token_hash = ${sha256hex(token)}`) as unknown as Row[]
@@ -302,7 +304,9 @@ invitePublicRoutes.post('/:token/submit', async (c) => {
   const userId = String(inv.user_id)
   const inviteId = String(inv.id)
   const idPath = await saveBytesDurable('vendor-docs', `${inviteId}-id.png`, idBytes, userId)
-  const bankPath = await saveBytesDurable('vendor-docs', `${inviteId}-bank.png`, bankBytes, userId)
+  const bankPath = bankBytes
+    ? await saveBytesDurable('vendor-docs', `${inviteId}-bank.png`, bankBytes, userId)
+    : null
   await db`update vendor_invites set
       prefix = ${String(b.prefix ?? '').trim()}, name = ${name}, address = ${address},
       phone = ${String(b.phone ?? '').trim() || null}, email = ${String(b.email ?? '').trim() || null},

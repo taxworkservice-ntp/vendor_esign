@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, FileImage, Upload } from 'lucide-react'
 import { getVendorInviteByToken, submitVendorInvite } from '../lib/vendor-invite-source'
-import { CONSENT_VERSION, REQUIRED_DOCS, type VendorInviteDraft } from '../lib/vendor-invite'
+import { CONSENT_VERSION, VENDOR_DOCS, type VendorInviteDraft } from '../lib/vendor-invite'
 import { VENDOR_PREFIXES, isVendorPrefix, prefixRequired } from '../lib/vendor-name'
 import { isValidTaxIdChecksum, normalizeTaxId } from '../lib/taxid'
 import { Card, CardBody } from '../components/ui/card'
@@ -154,10 +154,10 @@ function OnboardForm({
       name.trim().length >= 2 && address.trim().length >= 4,
       normalizeTaxId(taxId).length === 13,
       !!bankName.trim() && bankAccount.trim().length >= 8 && !!accountHolder.trim(),
-      !!idDoc && !!bankDoc && consent,
+      !!idDoc && consent,
     ]
     return Math.round((steps.filter(Boolean).length / steps.length) * 100)
-  }, [name, address, taxId, bankName, bankAccount, accountHolder, idDoc, bankDoc, consent])
+  }, [name, address, taxId, bankName, bankAccount, accountHolder, idDoc, consent])
 
   const onFile = async (which: 'id' | 'bank', file: File | undefined) => {
     setErr('')
@@ -187,7 +187,6 @@ function OnboardForm({
     if (bankAccount.replace(/\D/g, '').length < 8) return setErr('กรุณากรอกเลขบัญชีให้ถูกต้อง')
     if (!accountHolder.trim()) return setErr('กรุณากรอกชื่อบัญชี')
     if (!idDoc) return setErr('กรุณาแนบรูปบัตรประชาชน')
-    if (!bankDoc) return setErr('กรุณาแนบหน้าสมุดบัญชีธนาคาร')
     if (!consent) return setErr('กรุณายินยอมให้เก็บและใช้ข้อมูล')
 
     setBusy(true)
@@ -195,7 +194,12 @@ function OnboardForm({
       const res = await submitVendorInvite(
         token,
         { prefix, name, address, phone, email, lineUserId, taxId: id, bankName, bankAccount, accountHolder },
-        { idDocData: idDoc.data, idDocName: idDoc.name, bankDocData: bankDoc.data, bankDocName: bankDoc.name },
+        {
+          idDocData: idDoc.data,
+          idDocName: idDoc.name,
+          bankDocData: bankDoc?.data,
+          bankDocName: bankDoc?.name,
+        },
       )
       if (!res.ok) {
         setErr(res.error === 'invalid-taxid' ? 'เลขบัตรประชาชนไม่ถูกต้อง' : 'ส่งข้อมูลไม่สำเร็จ กรุณาลองใหม่')
@@ -296,21 +300,23 @@ function OnboardForm({
 
       <Section title="3 · เอกสารและความยินยอม">
         <DocField
-          label={REQUIRED_DOCS[0].label}
-          hint={REQUIRED_DOCS[0].hint}
+          label={VENDOR_DOCS[0].label}
+          hint={VENDOR_DOCS[0].hint}
+          required={VENDOR_DOCS[0].required}
           value={idDoc}
           onPick={(f) => void onFile('id', f)}
         />
         <DocField
-          label={REQUIRED_DOCS[1].label}
-          hint={REQUIRED_DOCS[1].hint}
+          label={VENDOR_DOCS[1].label}
+          hint={VENDOR_DOCS[1].hint}
+          required={VENDOR_DOCS[1].required}
           value={bankDoc}
           onPick={(f) => void onFile('bank', f)}
         />
         <Checkbox
           checked={consent}
           onChange={(e) => setConsent(e.target.checked)}
-          label="ข้าพเจ้ายินยอมให้เก็บรวบรวม ใช้ และเปิดเผยข้อมูลส่วนบุคคล (รวมถึงสำเนาบัตรประชาชนและบัญชีธนาคาร) เพื่อวัตถุประสงค์ในการยืนยันตัวตน การออกเอกสารทางภาษี และการชำระเงิน"
+          label="ข้าพเจ้ายินยอมให้เก็บรวบรวม ใช้ และเปิดเผยข้อมูลส่วนบุคคล (รวมถึงเอกสารที่แนบ เช่น สำเนาบัตรประชาชน) เพื่อวัตถุประสงค์ในการยืนยันตัวตน การออกเอกสารทางภาษี และการชำระเงิน"
         />
         <p className="text-label text-ink-400">เวอร์ชันความยินยอม: {CONSENT_VERSION}</p>
       </Section>
@@ -337,17 +343,19 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function DocField({
   label,
   hint,
+  required,
   value,
   onPick,
 }: {
   label: string
   hint: string
+  required?: boolean
   value: { data: string; name: string } | null
   onPick: (file: File | undefined) => void
 }) {
   return (
     <div>
-      <Label required>{label}</Label>
+      <Label required={required} hint={required ? undefined : 'ไม่บังคับ'}>{label}</Label>
       <label className="flex cursor-pointer items-center gap-3 rounded-control border border-dashed border-card-border bg-white p-3 transition hover:border-ink-900">
         {value ? (
           <img src={value.data} alt="" className="h-12 w-12 rounded object-cover" />

@@ -60,7 +60,7 @@ Transaction status: `draft → sent → opened → signed → issued`, plus `exp
 - **RLS:** the client user sees only their tenant's data. The bookkeeper role sees everything. Write policies and tests for each role.
 - Storage: private buckets for slips, signatures, and PDFs, with short-lived signed URLs only.
 - Encrypt the ID number at rest. Mask it in every screen except the printed receipt and the reviewer's detail view.
-- **PDPA:** show a short privacy notice on the vendor page before they enter data (what is collected, why, who sees it, how long it is kept `[VERIFY]`), and keep an access log for anyone viewing ID data. Collect the ID **number** (typed, checksum-validated). ID-card and bank-book **images** are collected only through vendor **self-onboarding** (§15), with explicit consent, encrypted private storage, owner-only audited access, and a ~5-year retention.
+- **PDPA:** show a short privacy notice on the vendor page before they enter data (what is collected, why, who sees it, how long it is kept `[VERIFY]`), and keep an access log for anyone viewing ID data. Collect the ID **number** (typed, checksum-validated). ID-card and bank-book **images** are collected only through vendor **self-onboarding** (§15) — the **ID-card image is required, the bank-book first page is optional** — with explicit consent, encrypted private storage, owner-only audited access, and a ~5-year retention.
 - Never log ID numbers, tokens, or personal data.
 
 ## 6. Numbering
@@ -176,8 +176,8 @@ and not shadcn/ui — the UI primitives live in `src/components/ui/`.
 
 **Vendor self-onboarding (new — precedes any transaction).** A client sends a
 **reusable invite link**; the vendor fills identity, **13-digit Tax ID
-(checksum-validated)**, bank details, and uploads **ID card + bank-book first page**;
-the client **reviews and approves**, which creates the normal vendor record. Statuses:
+(checksum-validated)**, bank details, and uploads **ID card (required) + bank-book first
+page (optional)**; the client **reviews and approves**, which creates the normal vendor record. Statuses:
 `invited → opened → submitted → approved | changes_requested | rejected | expired |
 cancelled`. Tables: `vendor_invites` (migration 028; `cancelled` added in 029); the
 created vendor keeps `bank_*`/`id_doc_path`/`bank_doc_path`/`id_number_hash`. This

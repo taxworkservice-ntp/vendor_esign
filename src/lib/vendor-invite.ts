@@ -48,7 +48,7 @@ export interface VendorInvite {
   reviewNote?: string
   /** Submitted data (present once submitted). */
   draft?: VendorInviteDraft
-  /** Document file names (both required). */
+  /** Document file names (ID card required; bank-book page optional). */
   idDocName?: string
   bankDocName?: string
   /** Document bytes as data URLs — mock path only; the server stores to R2. */
@@ -90,10 +90,14 @@ export const INVITE_STATUS_LABEL: Record<VendorInviteStatus, string> = {
   cancelled: 'ยกเลิกโดยลูกค้า',
 }
 
-/** Labels for the documents the vendor must provide. */
-export const REQUIRED_DOCS = [
-  { key: 'idDoc' as const, label: 'รูปบัตรประชาชน (หน้าบัตร)', hint: 'ถ่ายให้เห็นเลขชัดเจน' },
-  { key: 'bankDoc' as const, label: 'หน้าสมุดบัญชีธนาคาร', hint: 'หน้าแรกที่แสดงชื่อบัญชีและเลขบัญชี' },
+/**
+ * The documents a vendor may attach during onboarding. The ID-card photo is
+ * mandatory; the bank-book first page is optional — some vendors decline to
+ * share it, and the bank details are already captured as typed fields.
+ */
+export const VENDOR_DOCS = [
+  { key: 'idDoc' as const, required: true, label: 'รูปบัตรประชาชน (หน้าบัตร)', hint: 'ถ่ายให้เห็นเลขชัดเจน' },
+  { key: 'bankDoc' as const, required: false, label: 'หน้าสมุดบัญชีธนาคาร', hint: 'หน้าแรกที่แสดงชื่อบัญชีและเลขบัญชี' },
 ]
 
 // How long a live invite may sit without the vendor acting before it is flagged

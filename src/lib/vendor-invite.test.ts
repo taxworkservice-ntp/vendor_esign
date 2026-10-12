@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { inviteAttention, isInviteExpired, type VendorInvite } from './vendor-invite'
+import { VENDOR_DOCS, inviteAttention, isInviteExpired, type VendorInvite } from './vendor-invite'
 
 const DAY = 86_400_000
 const iso = (daysAgo: number) => new Date(Date.now() - daysAgo * DAY).toISOString()
@@ -42,5 +42,16 @@ describe('isInviteExpired', () => {
     expect(isInviteExpired(invite({ status: 'opened', expiresAt: iso(1) }))).toBe(true)
     expect(isInviteExpired(invite({ status: 'invited', expiresAt: iso(-1) }))).toBe(false)
     expect(isInviteExpired(invite({ status: 'submitted', expiresAt: iso(1) }))).toBe(false)
+  })
+})
+
+describe('VENDOR_DOCS', () => {
+  it('requires the ID card but not the bank-book page', () => {
+    expect(VENDOR_DOCS.find((d) => d.key === 'idDoc')?.required).toBe(true)
+    expect(VENDOR_DOCS.find((d) => d.key === 'bankDoc')?.required).toBe(false)
+  })
+
+  it('marks exactly the ID card as required', () => {
+    expect(VENDOR_DOCS.filter((d) => d.required).map((d) => d.key)).toEqual(['idDoc'])
   })
 })

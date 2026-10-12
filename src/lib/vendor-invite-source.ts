@@ -102,7 +102,7 @@ export async function getVendorInviteByToken(token: string): Promise<VendorInvit
 export async function submitVendorInvite(
   token: string,
   draft: VendorInviteDraft,
-  docs: { idDocData: string; idDocName: string; bankDocData: string; bankDocName: string },
+  docs: { idDocData: string; idDocName: string; bankDocData?: string; bankDocName?: string },
 ): Promise<{ ok: boolean; error?: string }> {
   const taxId = normalizeTaxId(draft.taxId)
   if (!isValidTaxIdChecksum(taxId)) return { ok: false, error: 'invalid-taxid' }
