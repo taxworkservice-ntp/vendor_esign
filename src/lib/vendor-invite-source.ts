@@ -11,6 +11,7 @@ import { loadVendors, maskFromLast4, nextVendorNo, saveVendor, type ClientVendor
 import { encryptId } from './id-crypto'
 import { saveVendorDoc } from './vendor-doc-mock'
 import { loadSettings } from './settings'
+import { onboardRef } from './vendor-onboard'
 import { isValidTaxIdChecksum, normalizeTaxId, taxIdHash } from './taxid'
 import {
   CONSENT_VERSION,
@@ -102,6 +103,10 @@ export async function getVendorInviteByToken(token: string): Promise<VendorInvit
     clientName: settings.displayName,
     // Mock has no R2 proxy; the header falls back to the name/monogram.
     logoUrl: null,
+    ref: onboardRef(inv.id),
+    submittedAt: inv.submittedAt,
+    consentVersion: inv.consentVersion,
+    docs: { id: !!inv.idDocData, bank: !!inv.bankDocData },
     draft: inv.draft,
     reviewNote: inv.reviewNote,
     expiresAt: inv.expiresAt,

@@ -18,22 +18,13 @@ import { drawContain, loadImage, type OverlayImage } from './raster-image'
  * path, so every browser produces the same PDF.
  */
 export async function receiptSheetToA4PdfBytes(el: HTMLElement): Promise<Uint8Array> {
-  const { jsPDF } = await import('jspdf')
-  // Neutralise the on-screen fit-to-width zoom and screen chrome for the capture.
-  const prevZoom = el.style.zoom
-  el.style.zoom = '1'
-  el.classList.add('pdf-export')
-  try {
-    await readyForCapture(el)
-    const overlay = measureOverlay(el)
-    const canvas = await captureElement(el, {
-      pixelRatio: 2,
-      backgroundColor: '#ffffff',
-      // Screen-only affordances (e.g. the fallback download button) and the
-      // signature overlay must not appear in the captured SVG.
-      filter: (node) => !node.classList?.contains('no-print') && node.dataset?.role !== 'overlay',
-    })
-    if (overlay) {
+  return elementToA4PdfBytes(el, {
+    // Screen-only affordances (e.g. the fallback download button) and the
+    // signature overlay must not appear in the captured SVG.
+    filter: (node) => !node.classList?.contains('no-print') && node.dataset?.role !== 'overlay',
+    beforePdf: async (canvas) => {
+      const overlay = measureOverlay(el)
+      if (!overlay) return
       try {
         const img = await loadImage(overlay.src)
         const ctx = canvas.getContext('2d')
@@ -42,7 +33,36 @@ export async function receiptSheetToA4PdfBytes(el: HTMLElement): Promise<Uint8Ar
         // A broken signature overlay must not abort the sheet capture; the
         // caller falls back to the server-archived PDF instead.
       }
-    }
+    },
+  })
+}
+
+/**
+ * Rasterise any on-screen element onto a single A4 page (jsPDF over an
+ * html-to-image canvas). Shared by the receipt sheet and the onboarding
+ * submission evidence. `filter` drops screen-only nodes; `beforePdf` lets the
+ * caller composite extra layers (e.g. a signature) before the PDF is written.
+ */
+export async function elementToA4PdfBytes(
+  el: HTMLElement,
+  opts: {
+    filter?: (node: HTMLElement) => boolean
+    beforePdf?: (canvas: HTMLCanvasElement) => void | Promise<void>
+  } = {},
+): Promise<Uint8Array> {
+  const { jsPDF } = await import('jspdf')
+  // Neutralise the on-screen fit-to-width zoom and screen chrome for the capture.
+  const prevZoom = el.style.zoom
+  el.style.zoom = '1'
+  el.classList.add('pdf-export')
+  try {
+    await readyForCapture(el)
+    const canvas = await captureElement(el, {
+      pixelRatio: 2,
+      backgroundColor: '#ffffff',
+      filter: opts.filter ?? ((node) => !node.classList?.contains('no-print')),
+    })
+    if (opts.beforePdf) await opts.beforePdf(canvas)
     const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' })
     pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 595.28, 841.89)
     return new Uint8Array(pdf.output('arraybuffer'))

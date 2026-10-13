@@ -12,6 +12,7 @@ import { Card, CardBody } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Checkbox } from '../components/ui/checkbox'
 import { PdpaNotice } from '../components/consent/pdpa-notice'
+import { SubmissionEvidence } from '../components/vendor/submission-evidence'
 import { ActionBar } from '../components/ui/action-bar'
 import { FieldError, Input, Label, Textarea } from '../components/ui/input'
 import { cn } from '../lib/cn'
@@ -52,6 +53,7 @@ export function VendorOnboard() {
   })
 
   const brand: Brand = { clientName: q.data?.clientName, logoUrl: q.data?.logoUrl }
+  const [justSubmitted, setJustSubmitted] = useState(false)
 
   if (q.isLoading) {
     return (
@@ -86,10 +88,27 @@ export function VendorOnboard() {
     )
   }
 
+  const evidence = data.draft ? (
+    <SubmissionEvidence
+      data={{
+        inviteRef: data.ref ?? '',
+        submittedAt: data.submittedAt,
+        consentVersion: data.consentVersion,
+        docs: data.docs,
+        draft: data.draft,
+        clientName: data.clientName,
+        logoUrl: data.logoUrl,
+      }}
+    />
+  ) : null
+
   if (data.status === 'approved') {
     return (
       <Shell brand={brand}>
-        <Done title="ส่งข้อมูลเรียบร้อยแล้ว" detail="ข้อมูลของท่านได้รับการอนุมัติจากผู้ว่าจ้างแล้ว" />
+        <div className="space-y-4">
+          <Done title="ส่งข้อมูลเรียบร้อยแล้ว" detail="ข้อมูลของท่านได้รับการอนุมัติจากผู้ว่าจ้างแล้ว" />
+          {evidence}
+        </div>
       </Shell>
     )
   }
@@ -100,17 +119,32 @@ export function VendorOnboard() {
       </Shell>
     )
   }
-  if (data.status === 'submitted') {
+  if (justSubmitted || data.status === 'submitted') {
     return (
       <Shell brand={brand}>
-        <Done title="ส่งข้อมูลเรียบร้อยแล้ว" detail="กำลังรอผู้ว่าจ้างตรวจสอบ — หากต้องการแก้ไข โปรดติดต่อผู้ว่าจ้าง" />
+        <div className="space-y-4">
+          <Done title="ส่งข้อมูลเรียบร้อยแล้ว" detail="กำลังรอผู้ว่าจ้างตรวจสอบ — หากต้องการแก้ไข โปรดติดต่อผู้ว่าจ้าง" />
+          {evidence ?? (
+            <div className="flex items-center justify-center gap-2 py-6 text-body text-ink-500">
+              <Spinner /> กำลังจัดเตรียมหลักฐาน…
+            </div>
+          )}
+        </div>
       </Shell>
     )
   }
 
   return (
     <Shell brand={brand}>
-      <OnboardForm token={token as string} initial={data.draft} reviewNote={data.reviewNote} />
+      <OnboardForm
+        token={token as string}
+        initial={data.draft}
+        reviewNote={data.reviewNote}
+        onSubmitted={() => {
+          setJustSubmitted(true)
+          void q.refetch()
+        }}
+      />
     </Shell>
   )
 }
@@ -166,10 +200,12 @@ function OnboardForm({
   token,
   initial,
   reviewNote,
+  onSubmitted,
 }: {
   token: string
   initial?: VendorInviteDraft
   reviewNote?: string
+  onSubmitted?: () => void
 }) {
   const [prefix, setPrefix] = useState(initial?.prefix ?? '')
   const [name, setName] = useState(initial?.name ?? '')
@@ -190,7 +226,6 @@ function OnboardForm({
   const [tried, setTried] = useState(false)
   const [submitErr, setSubmitErr] = useState('')
   const [busy, setBusy] = useState(false)
-  const [done, setDone] = useState(false)
 
   const progress = useMemo(() => {
     const steps = [
@@ -275,17 +310,13 @@ function OnboardForm({
         }
         return
       }
-      setDone(true)
       window.scrollTo({ top: 0 })
+      onSubmitted?.()
     } catch {
       setSubmitErr('ส่งข้อมูลไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่')
     } finally {
       setBusy(false)
     }
-  }
-
-  if (done) {
-    return <Done title="ส่งข้อมูลเรียบร้อยแล้ว" detail="ข้อมูลของท่านถูกส่งให้ผู้ว่าจ้างตรวจสอบแล้ว" />
   }
 
   const errorCount = Object.values(errors).filter(Boolean).length

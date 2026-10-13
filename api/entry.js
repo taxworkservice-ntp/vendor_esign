@@ -70761,6 +70761,12 @@ import { randomBytes as randomBytes5 } from "node:crypto";
 var INVITE_TTL_DAYS = 30;
 var CONSENT_VERSION = "vendor-onboard-v2";
 
+// src/lib/vendor-onboard.ts
+function onboardRef(id) {
+  const clean = id.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+  return `VN-${clean.slice(0, 8)}`;
+}
+
 // server/src/vendor-invites.ts
 var normTaxId = (s) => s.replace(/\D/g, "");
 function validTaxIdChecksum(id) {
@@ -70960,9 +70966,10 @@ invitePublicRoutes.get("/:token", async (c) => {
   if (await rateLimited(`invite-get:${ip}`, 60)) return c.json({ error: "too-many-requests" }, 429);
   const token = c.req.param("token");
   const db = sql();
-  const rows = await db`select id, user_id, status, expires_at, review_note, submitted_at,
+  const rows = await db`select id, user_id, status, expires_at, review_note, submitted_at, consent_version,
       prefix, name, address, phone, email, line_user_id, tax_id_encrypted,
-      bank_name, bank_account_encrypted, account_holder
+      bank_name, bank_account_encrypted, account_holder,
+      id_doc_path, bank_doc_path
     from vendor_invites where token_hash = ${sha256hex(token)}`;
   const r = one(rows);
   if (!r) return c.json({ error: "invalid" }, 404);
@@ -70987,7 +70994,19 @@ invitePublicRoutes.get("/:token", async (c) => {
     bankAccount: r.bank_account_encrypted ? decryptId(String(r.bank_account_encrypted)) ?? "" : "",
     accountHolder: r.account_holder ?? ""
   } : void 0;
-  return c.json({ status, tenantId, clientName: settings.displayName, logoUrl, reviewNote: r.review_note ?? void 0, expiresAt: r.expires_at, draft });
+  return c.json({
+    status,
+    tenantId,
+    clientName: settings.displayName,
+    logoUrl,
+    ref: onboardRef(String(r.id)),
+    submittedAt: r.submitted_at ?? void 0,
+    consentVersion: r.consent_version ?? void 0,
+    docs: { id: !!r.id_doc_path, bank: !!r.bank_doc_path },
+    reviewNote: r.review_note ?? void 0,
+    expiresAt: r.expires_at,
+    draft
+  });
 });
 invitePublicRoutes.post("/:token/submit", async (c) => {
   const ip = c.req.header("x-forwarded-for") ?? "local";

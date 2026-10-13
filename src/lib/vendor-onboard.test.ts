@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { firstInvalidField, validateOnboard, type OnboardInput } from './vendor-onboard'
+import { firstInvalidField, onboardRef, validateOnboard, type OnboardInput } from './vendor-onboard'
 
 const valid: OnboardInput = {
   prefix: 'นาย',
@@ -38,5 +38,12 @@ describe('validateOnboard', () => {
     const errors = validateOnboard({ ...valid, name: '', consent: false })
     expect(firstInvalidField(errors)).toBe('name')
     expect(firstInvalidField({})).toBeNull()
+  })
+})
+
+describe('onboardRef', () => {
+  it('derives a short, stable reference from the invite id', () => {
+    expect(onboardRef('3f9a21c4-1b2c-4d5e-8f90-abcdef123456')).toBe('VN-3F9A21C4')
+    expect(onboardRef('3f9a21c4-1b2c-4d5e-8f90-abcdef123456')).toBe(onboardRef('3f9a21c4-1b2c-4d5e-8f90-abcdef123456'))
   })
 })

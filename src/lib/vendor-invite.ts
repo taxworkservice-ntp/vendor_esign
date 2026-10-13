@@ -74,6 +74,14 @@ export interface VendorInvitePublic {
   clientName?: string
   /** Server path for the client logo shown in the link header. */
   logoUrl?: string | null
+  /** Short human reference (`VN-…`) printed on the submission evidence. */
+  ref?: string
+  /** When the vendor submitted (drives the evidence card). */
+  submittedAt?: string
+  /** Consent version the vendor accepted. */
+  consentVersion?: string
+  /** Which documents the vendor attached (ID card is always present once submitted). */
+  docs?: { id: boolean; bank: boolean }
   /** Prefill when resuming a partially/incorrectly completed form. */
   draft?: VendorInviteDraft
   reviewNote?: string

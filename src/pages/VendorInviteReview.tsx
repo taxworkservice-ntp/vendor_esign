@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { useVendorInvites, useReviewVendorInvite } from '../hooks/useVendorInvites'
 import { INVITE_STATUS_LABEL } from '../lib/vendor-invite'
+import { onboardRef } from '../lib/vendor-onboard'
 import { maskTaxId } from '../lib/taxid'
 import { Card, CardBody } from '../components/ui/card'
 import { Breadcrumb, PageHeader } from '../components/ui/page-header'
@@ -70,7 +71,7 @@ export function VendorInviteReview() {
     <div className="mx-auto max-w-2xl space-y-5">
       <PageHeader
         title="ตรวจสอบข้อมูลผู้ขาย"
-        sub={INVITE_STATUS_LABEL[inv.status]}
+        sub={`${INVITE_STATUS_LABEL[inv.status]} · เลขที่อ้างอิง ${onboardRef(inv.id)}`}
         breadcrumb={[
           { to: '/vendors', label: 'ผู้ขาย' },
           { to: '/vendors/invites', label: 'คำเชิญผู้ขาย' },
