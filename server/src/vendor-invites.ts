@@ -8,6 +8,7 @@ import { saveBytesDurable, readStoredDurable } from './storage'
 import { getTenantSettings } from './settings'
 import { decryptId, decryptToken, encryptId, encryptToken } from './crypto'
 import { INVITE_TTL_DAYS, CONSENT_VERSION } from '../../src/lib/vendor-invite'
+import { onboardRef } from '../../src/lib/vendor-onboard'
 
 // Vendor self-onboarding: a client mints an invite link; the vendor submits
 // identity/tax/bank + documents; the client reviews and approves, creating a
@@ -242,9 +243,10 @@ invitePublicRoutes.get('/:token', async (c) => {
   if (await rateLimited(`invite-get:${ip}`, 60)) return c.json({ error: 'too-many-requests' }, 429)
   const token = c.req.param('token')
   const db = sql()
-  const rows = (await db`select id, user_id, status, expires_at, review_note, submitted_at,
+  const rows = (await db`select id, user_id, status, expires_at, review_note, submitted_at, consent_version,
       prefix, name, address, phone, email, line_user_id, tax_id_encrypted,
-      bank_name, bank_account_encrypted, account_holder
+      bank_name, bank_account_encrypted, account_holder,
+      id_doc_path, bank_doc_path
     from vendor_invites where token_hash = ${sha256hex(token)}`) as unknown as Row[]
   const r = one<Row>(rows)
   if (!r) return c.json({ error: 'invalid' }, 404)
@@ -272,7 +274,19 @@ invitePublicRoutes.get('/:token', async (c) => {
           accountHolder: r.account_holder ?? '',
         }
       : undefined
-  return c.json({ status, tenantId, clientName: settings.displayName, logoUrl, reviewNote: r.review_note ?? undefined, expiresAt: r.expires_at, draft })
+  return c.json({
+    status,
+    tenantId,
+    clientName: settings.displayName,
+    logoUrl,
+    ref: onboardRef(String(r.id)),
+    submittedAt: r.submitted_at ?? undefined,
+    consentVersion: r.consent_version ?? undefined,
+    docs: { id: !!r.id_doc_path, bank: !!r.bank_doc_path },
+    reviewNote: r.review_note ?? undefined,
+    expiresAt: r.expires_at,
+    draft,
+  })
 })
 
 invitePublicRoutes.post('/:token/submit', async (c) => {

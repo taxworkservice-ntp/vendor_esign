@@ -227,6 +227,14 @@ scroll-to-first-error; a failed fetch offers a retry (vs. a dead link); inputs a
 16px on mobile (no iOS focus-zoom); and a sticky progress bar + safe-area action bar
 keep the primary action reachable on both links.
 
+**Submission evidence.** After submitting, the vendor gets a printable acknowledgment
+card ("หลักฐานการส่งข้อมูลผู้ขาย"): reference `VN-…`, submitted time, consent version,
+the submitted details, and attachment status — downloadable as a PDF
+(`elementToA4PdfBytes`) or kept as a screenshot. It is rebuilt from the public payload
+(`ref` / `submittedAt` / `consentVersion` / `docs`), so reopening the link shows it
+again, and the same reference appears in the client review. Deliberately no
+server-side artifact or verification code yet.
+
 **Void propagates.** Voiding marks the receipt row `void`, revokes live links, voids
 an unfiled / supersedes a filed WHT certificate, and writes `receipt.voided`
 (migration 026 widened `wht_records.status`).

@@ -67,3 +67,13 @@ export function validateOnboard(v: OnboardInput): OnboardErrors {
 export function firstInvalidField(errors: OnboardErrors): OnboardField | null {
   return ONBOARD_FIELD_ORDER.find((f) => errors[f]) ?? null
 }
+
+/**
+ * Short, stable human reference for an invite, derived from its id — printed on
+ * the submission evidence and shown to the client so both sides can quote the
+ * same number without storing an extra code.
+ */
+export function onboardRef(id: string): string {
+  const clean = id.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+  return `VN-${clean.slice(0, 8)}`
+}
