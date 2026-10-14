@@ -167,10 +167,20 @@ export function TxnRow({
               'inline-flex items-center gap-1 text-label font-semibold tabular-nums',
               attention.tone === 'danger' ? 'text-danger' : 'text-warning',
             )}
-            title={attention.label}
+            title={
+              attention.kind === 'expired-link' && attention.days > 0
+                ? `${attention.label}เมื่อ ${attention.days} วันที่แล้ว`
+                : attention.label
+            }
           >
             <AlertTriangle size={12} aria-hidden />
-            {attention.days > 0 ? `${attention.days} วัน` : attention.label}
+            {attention.kind === 'expired-link'
+              ? attention.days > 0
+                ? `หมดอายุ ${attention.days} วันแล้ว`
+                : attention.label
+              : attention.days > 0
+                ? `${attention.days} วัน`
+                : attention.label}
           </span>
         ) : (
           <span className="text-label text-ink-300">—</span>
