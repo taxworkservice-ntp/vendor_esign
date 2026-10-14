@@ -4,7 +4,7 @@ import { requireClient } from './client-auth'
 import { impersonationFromCookie, type ImpersonationMode } from './impersonation'
 import { decryptId, encryptId } from './crypto'
 import { sha256hex } from './auth'
-import { readStoredDurable } from './storage'
+import { readStoredDurable, saveBytesDurable } from './storage'
 import { audit } from './shared'
 import type { SessionUser } from './auth'
 import { isVendorPrefix, prefixRequired } from '../../src/lib/vendor-name'
@@ -92,8 +92,17 @@ function decryptFull(enc: string | null | undefined): string | undefined {
   }
 }
 
-function toVendor(r: Record<string, unknown>) {
-  const enc = r.id_number_encrypted as string | null
+// Validate an image data URL for a vendor document upload. Same envelope as the
+// onboarding submit route (jpeg/png/webp, non-empty, ≤ 5 MB); exported for tests.
+export function parseDocDataUrl(dataUrl: string): { mime: string; bytes: Uint8Array } | null {
+  const m = /^data:(image\/(png|jpe?g|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl)
+  if (!m) return null
+  const buf = Buffer.from(m[3], 'base64')
+  if (buf.length === 0 || buf.length > 5 * 1024 * 1024) return null
+  return { mime: m[1].toLowerCase() === 'image/jpg' ? 'image/jpeg' : m[1].toLowerCase(), bytes: new Uint8Array(buf) }
+}
+
+function toVendor(r: Record<string, unknown>) {  const enc = r.id_number_encrypted as string | null
   const last4 = decryptLast4(enc)
   return {
     id: String(r.id),
@@ -226,7 +235,58 @@ dataRoutes.get('/vendors/:id/document/:kind', async (c) => {
   if (!bytes) return c.json({ error: 'not-found' }, 404)
   await withTenant(g.ws, 'owner', async () =>
     audit(g.ws, 'vendor_payees', c.req.param('id'), 'vendor.doc-viewed', g.actor, { kind }, 'server'))
-  return c.body(bytes as unknown as ArrayBuffer, 200, { 'Content-Type': 'image/png' })
+  const ext = String(path ?? '').split('.').pop()?.toLowerCase()
+  const type = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : 'image/png'
+  return c.body(bytes as unknown as ArrayBuffer, 200, { 'Content-Type': type })
+})
+
+// Client upload of a vendor document (ID card / bank-book page). Owner-only and
+// audit-logged, mirroring the read route above: the client may attach or replace
+// a document the vendor never sent (walk-in vendors, rescans). Accepts the same
+// image data URLs the onboarding submit route takes, stored under vendor-docs.
+dataRoutes.post('/vendors/:id/document/:kind', async (c) => {
+  const g = await guard(c)
+  if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  const kind = c.req.param('kind')
+  if (kind !== 'id' && kind !== 'bank') return c.json({ error: 'invalid-kind' }, 400)
+  const body = (await c.req.json().catch(() => null)) as { dataUrl?: string } | null
+  const parsed = parseDocDataUrl(String(body?.dataUrl ?? ''))
+  if (!parsed) return c.json({ error: 'invalid-document' }, 400)
+  const ext = parsed.mime === 'image/png' ? 'png' : parsed.mime === 'image/webp' ? 'webp' : 'jpg'
+  const path = await saveBytesDurable('vendor-docs', `${c.req.param('id')}-${kind}.${ext}`, parsed.bytes, g.ws)
+  const column = kind === 'id' ? 'id_doc_path' : 'bank_doc_path'
+  const updated = await withTenant(g.ws, 'owner', async () => {
+    const db = sql()
+    return (await db.query(
+      `update vendor_payees set ${column} = $1 where id = $2 and user_id = $3 returning id`,
+      [path, c.req.param('id'), g.ws],
+    )) as unknown as { id: string }[]
+  })
+  if (!updated[0]) return c.json({ error: 'not-found' }, 404)
+  await withTenant(g.ws, 'owner', async () =>
+    audit(g.ws, 'vendor_payees', c.req.param('id'), 'vendor.doc-uploaded', g.actor, { kind }, 'server'))
+  return c.json({ ok: true })
+})
+
+// Client removal of a vendor document. Owner-only and audit-logged. Clears the
+// reference; the bytes stay in storage (same as every other soft removal here).
+dataRoutes.delete('/vendors/:id/document/:kind', async (c) => {
+  const g = await guard(c)
+  if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  const kind = c.req.param('kind')
+  if (kind !== 'id' && kind !== 'bank') return c.json({ error: 'invalid-kind' }, 400)
+  const column = kind === 'id' ? 'id_doc_path' : 'bank_doc_path'
+  const updated = await withTenant(g.ws, 'owner', async () => {
+    const db = sql()
+    return (await db.query(
+      `update vendor_payees set ${column} = null where id = $1 and user_id = $2 returning id`,
+      [c.req.param('id'), g.ws],
+    )) as unknown as { id: string }[]
+  })
+  if (!updated[0]) return c.json({ error: 'not-found' }, 404)
+  await withTenant(g.ws, 'owner', async () =>
+    audit(g.ws, 'vendor_payees', c.req.param('id'), 'vendor.doc-removed', g.actor, { kind }, 'server'))
+  return c.json({ ok: true })
 })
 
 // Remembered defaults for a vendor, derived from this tenant's history — used

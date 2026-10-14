@@ -99,6 +99,8 @@ interface ServerVendor {
   vendorAddress?: string
   vendorPhone?: string | null
   vendorEmail?: string | null
+  receiptNumber?: string | null
+  verificationCode?: string | null
   unlocked?: boolean
 }
 
@@ -109,7 +111,8 @@ function maskFromLast4(last4: string | null | undefined): string {
 
 async function fetchServerVendor(token: string): Promise<PaymentTransaction | undefined> {
   const r = await fetch(`${API}/api/vendor/${encodeURIComponent(token)}`, { credentials: 'include' })
-  // 404 (unknown) and 410 (used/revoked/expired) are the "invalid link" states.
+  // 404 (unknown) and 410 (revoked/lapsed) are the "invalid link" states. A
+  // signed link stays open until its expiry so the vendor can return.
   if (r.status === 404 || r.status === 410) return undefined
   if (!r.ok) throw new Error('vendor-fetch-failed')
   const j = (await r.json()) as ServerVendor
@@ -147,7 +150,8 @@ async function fetchServerVendor(token: string): Promise<PaymentTransaction | un
     slipReference: j.slipReference ?? '',
     slipName: '',
     status: (j.status as TxnStatus) ?? 'sent',
-    receiptNumber: undefined,
+    receiptNumber: j.receiptNumber ?? undefined,
+    verificationCode: j.verificationCode ?? undefined,
     createdAt: '',
     timeline: [],
     inviteToken: token,

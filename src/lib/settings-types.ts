@@ -174,7 +174,8 @@ export function validateSettings(s: TenantSettings): string | null {
   if (s.paymentTypes.length === 0) return 'ต้องมีประเภทการจ่ายอย่างน้อย 1 รายการ'
   if (s.whtRates.some((r) => r.value < 0)) return 'อัตรา WHT ต้องไม่ติดลบ'
   if (!Number.isFinite(s.whtMinThreshold) || s.whtMinThreshold < 0) return 'ยอดขั้นต่ำหักภาษีต้องเป็นตัวเลข ≥ 0'
-  if (!(s.linkExpiryDays > 0)) return 'อายุลิงก์ต้องมากกว่า 0 วัน'
+  if (!Number.isInteger(s.linkExpiryDays) || s.linkExpiryDays < 1 || s.linkExpiryDays > 365)
+    return 'อายุลิงก์ต้องเป็นจำนวนเต็ม 1–365 วัน'
   if (!(s.inviteMessageTemplate ?? '').trim()) return 'กรุณากรอกข้อความเชิญผู้ขาย'
   if (!(s.vendorInviteMessageTemplate ?? '').trim()) return 'กรุณากรอกข้อความเชิญผู้ขายกรอกข้อมูล'
   if (!(s.consentTextV1 ?? '').trim()) return 'กรุณากรอกข้อความให้ความยินยอม'

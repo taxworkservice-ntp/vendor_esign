@@ -1,31 +1,96 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { FileImage, X } from 'lucide-react'
-import { fetchVendorDoc, type DocKind, type DocOwner } from '../../lib/vendor-doc-source'
+import { useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { FileImage, Trash2, Upload, X } from 'lucide-react'
+import {
+  fetchVendorDoc,
+  removeVendorDoc,
+  uploadVendorDoc,
+  type DocKind,
+  type DocOwner,
+} from '../../lib/vendor-doc-source'
+import { prepareUpload } from '../../lib/image-upload'
 import { Spinner } from '../ui/spinner'
+import { FieldError } from '../ui/input'
 
 // One vendor document thumbnail, loaded on demand (never in a list payload),
 // owner-only on the server, click to enlarge. Used by both the invite review and
 // the vendor detail page.
-
+//
+// `editable` (vendor detail only) lets the client attach, replace, or remove a
+// document the vendor never sent — e.g. a walk-in vendor's ID photo taken at
+// the counter. Uploads go through the same downscale/transcode as onboarding.
 export function VendorDocument({
   owner,
   doc,
   label,
   hasDoc = true,
+  editable = false,
+  onChanged,
 }: {
   owner: DocOwner
   doc: DocKind
   label: string
   hasDoc?: boolean
+  editable?: boolean
+  onChanged?: () => void
 }) {
   const [zoom, setZoom] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const qc = useQueryClient()
+  const key = ['vendor-doc', owner.kind, owner.id, doc]
   const { data: src, isLoading } = useQuery({
-    queryKey: ['vendor-doc', owner.kind, owner.id, doc],
+    queryKey: key,
     enabled: hasDoc,
     staleTime: 5 * 60_000,
     queryFn: () => fetchVendorDoc(owner, doc),
   })
+
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: key })
+    onChanged?.()
+  }
+
+  const onPick = async (file: File | undefined) => {
+    if (!file || owner.kind !== 'vendor') return
+    setErr('')
+    setBusy(true)
+    try {
+      const prepared = await prepareUpload(file, { name: `${doc}.jpg` })
+      await uploadVendorDoc({ kind: 'vendor', id: owner.id }, doc, prepared.dataUrl)
+      setConfirmingDelete(false)
+      refresh()
+    } catch (e) {
+      setErr(
+        e instanceof Error && e.message === 'unsupported-image'
+          ? 'ไม่รองรับไฟล์นี้ กรุณาใช้รูป JPG/PNG'
+          : 'อัปโหลดไม่สำเร็จ — กรุณาลองใหม่อีกครั้ง',
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const onDelete = async () => {
+    if (!confirmingDelete) {
+      setConfirmingDelete(true)
+      return
+    }
+    if (owner.kind !== 'vendor') return
+    setErr('')
+    setBusy(true)
+    try {
+      await removeVendorDoc({ kind: 'vendor', id: owner.id }, doc)
+      setConfirmingDelete(false)
+      refresh()
+    } catch {
+      setErr('ลบเอกสารไม่สำเร็จ — กรุณาลองใหม่อีกครั้ง')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
     <div>
@@ -43,6 +108,47 @@ export function VendorDocument({
           <img src={src} alt={label} className="h-40 w-full rounded-control border border-card-border object-cover" />
         </button>
       )}
+
+      {editable && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => fileRef.current?.click()}
+            className="flex h-9 items-center gap-1.5 rounded-control border border-card-border bg-white px-3 text-label font-medium text-ink-700 transition hover:border-ink-300 disabled:opacity-50"
+          >
+            {busy ? <Spinner /> : <Upload size={14} aria-hidden />}
+            {hasDoc && src ? 'เปลี่ยนรูป' : 'อัปโหลด'}
+          </button>
+          {hasDoc && src && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void onDelete()}
+              onBlur={() => setConfirmingDelete(false)}
+              className={
+                confirmingDelete
+                  ? 'flex h-9 items-center gap-1.5 rounded-control bg-danger px-3 text-label font-medium text-white transition disabled:opacity-50'
+                  : 'flex h-9 items-center gap-1.5 rounded-control px-3 text-label font-medium text-ink-400 transition hover:bg-danger-soft hover:text-danger disabled:opacity-50'
+              }
+            >
+              <Trash2 size={14} aria-hidden />
+              {confirmingDelete ? 'ยืนยันลบ?' : 'ลบ'}
+            </button>
+          )}
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            onChange={(e) => {
+              void onPick(e.target.files?.[0])
+              e.target.value = ''
+            }}
+          />
+        </div>
+      )}
+      {err && <FieldError msg={err} />}
 
       {zoom && src && (
         <div

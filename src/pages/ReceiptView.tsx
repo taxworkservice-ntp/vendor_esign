@@ -7,7 +7,7 @@ import { useSettings } from '../hooks/useSettings'
 import { defaultSettings } from '../lib/settings'
 import { mockReceiptNumber } from '../lib/receipt'
 import { signatureState, isSigned } from '../lib/signature-state'
-import { apiDownload, hasServer, saveBlob } from '../lib/api-client'
+import { apiDownload, hasServer, saveFile } from '../lib/api-client'
 import { documentFileName } from '../lib/download-name'
 import { receiptSheetToA4PdfBytes, sha256Hex } from '../lib/receipt-to-a4-pdf'
 import { normalizeLineItem } from '../lib/line-items'
@@ -124,7 +124,7 @@ export function ReceiptView() {
     setBusy(true)
     try {
       const { blob, filename } = await apiDownload(`/api/client/transactions/${t.id}/receipt.pdf`)
-      saveBlob(blob, filename || `${number}.pdf`)
+      await saveFile(blob, filename || `${number}.pdf`)
     } catch {
       setErr('ดาวน์โหลดใบเสร็จฉบับออกจริงไม่สำเร็จ — กรุณาลองใหม่อีกครั้ง')
     } finally {
@@ -149,7 +149,7 @@ export function ReceiptView() {
     try {
       const bytes = await receiptSheetToA4PdfBytes(sheetRef.current)
       const name = documentFileName({ number, vendorName: t.vendor.name, amount: t.grossAmount })
-      saveBlob(new Blob([bytes.slice().buffer], { type: 'application/pdf' }), name)
+      await saveFile(new Blob([bytes.slice().buffer], { type: 'application/pdf' }), name)
       // The digest shown is of the file just downloaded, not the server artifact.
       if (t.status === 'issued') {
         setIssuedFile({ sha: await sha256Hex(bytes), code: t.verificationCode ?? '' })

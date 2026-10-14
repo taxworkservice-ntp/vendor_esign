@@ -249,6 +249,21 @@ rate limits and gate attempts are persisted (`rate_hits`, `gate_attempts`, migra
 invites registry with follow-up ("ต้องติดตาม") plus manual resend/cancel; and preview
 deployments forced to demo (mock) mode (`src/lib/api-base.ts`, `__VERCEL_ENV__`).
 
+**Sign-link expiry + return download.** The send route honors Settings
+`linkExpiryDays` (1–365, clamped server-side). A signed link stays open until its
+expiry: the payload carries `receiptNumber`/`verificationCode` and
+`GET /api/vendor/:token/receipt.pdf` streams the archived issued PDF (gate still
+applies pre-unlock), so the vendor can return and re-download.
+
+**iOS downloads.** All PDF/ZIP downloads go through `saveFile` (`api-client.ts`):
+native share sheet on mobile, viewer tab on iOS (where `<a download>` over a blob
+URL degrades to a preview), classic download on desktop.
+
+**Client-managed vendor documents.** The vendor detail page lets the owner attach,
+replace, or remove the ID/bank-book images (`POST`/`DELETE
+/api/client/vendors/:id/document/:kind`, audited; `parseDocDataUrl` validates).
+Uploads reuse the onboarding downscale/transcode.
+
 **Still deferred.** LINE Login/LIFF verification (vendor signs via versioned consent +
 signature for now); automated reminders (email/LINE OA); invite funnel analytics;
 gross-up re-enable (with a corrected receipt presentation); credit notes (plain

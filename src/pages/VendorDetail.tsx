@@ -324,10 +324,10 @@ export function VendorDetail() {
                   <FileImage size={16} className="text-ink-500" aria-hidden /> เอกสารผู้ขาย
                 </h2>
               </div>
-              <p className="text-body text-ink-500">เอกสารที่ผู้ขายแนบตอนกรอกข้อมูล (เห็นเฉพาะเจ้าของเวิร์กสเปซ)</p>
+              <p className="text-body text-ink-500">เอกสารที่ผู้ขายแนบตอนกรอกข้อมูล หรือที่ท่านอัปโหลดเอง (เห็นเฉพาะเจ้าของเวิร์กสเปซ)</p>
               <div className="grid grid-cols-2 gap-3">
-                <VendorDocument owner={{ kind: 'vendor', id: v.id }} doc="id" label="บัตรประชาชน" hasDoc={!!v.hasIdDoc} />
-                <VendorDocument owner={{ kind: 'vendor', id: v.id }} doc="bank" label="หน้าสมุดบัญชี" hasDoc={!!v.hasBankDoc} />
+                <VendorDocument owner={{ kind: 'vendor', id: v.id }} doc="id" label="บัตรประชาชน" hasDoc={!!v.hasIdDoc} editable onChanged={() => void refetch()} />
+                <VendorDocument owner={{ kind: 'vendor', id: v.id }} doc="bank" label="หน้าสมุดบัญชี" hasDoc={!!v.hasBankDoc} editable onChanged={() => void refetch()} />
               </div>
             </CardBody>
           </Card>

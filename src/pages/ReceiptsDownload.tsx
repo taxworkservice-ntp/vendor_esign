@@ -9,7 +9,7 @@ import { signatureState } from '../lib/signature-state'
 import { normalizeLineItem } from '../lib/line-items'
 import { receiptSheetToA4PdfBytes } from '../lib/receipt-to-a4-pdf'
 import { ReceiptSheet, type ReceiptSheetData } from '../components/receipt/receipt-sheet'
-import { apiDownload, apiGet, hasServer, saveBlob } from '../lib/api-client'
+import { apiDownload, apiGet, hasServer, saveFile } from '../lib/api-client'
 import { documentFileName, stamp } from '../lib/download-name'
 import { chunk, EXPORT_CHUNK_SIZE } from '../lib/export-chunk'
 import { loadTxns } from '../lib/mock'
@@ -189,9 +189,10 @@ export function ReceiptsDownload() {
       }
       const { zipSync } = await import('fflate')
       const zipped = zipSync(files, { level: 0 })
-      saveBlob(
+      await saveFile(
         new Blob([zipped.slice().buffer], { type: 'application/zip' }),
         `receipts-${month || 'all'}-${prepared.length}-docs-${stamp()}.zip`,
+        'application/zip',
       )
       setFallbacks(fell)
       setFailed(failedList)

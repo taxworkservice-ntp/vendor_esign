@@ -3,7 +3,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { sql, withTenant } from '../../src/server/db'
 import { isVendorPrefix, prefixRequired } from '../../src/lib/vendor-name'
 import { isoDay } from './dates'
-import { saveBytesDurable, readTenantAsset } from './storage'
+import { saveBytesDurable, readStoredDurable, readTenantAsset } from './storage'
 import { sha256hex } from './auth'
 import { authRoutes } from './client-auth'
 import { corsMw } from './cors'
@@ -16,6 +16,7 @@ import { txnRoutes } from './transactions'
 import { whtRoutes } from './wht'
 import { receiptRoutes } from './receipts-register'
 import { finalizeReceipt } from './receipts'
+import { contentDisposition, documentFileName } from '../../src/lib/download-name'
 import { inviteClientRoutes, invitePublicRoutes } from './vendor-invites'
 import { PILOT_TENANT, audit, one, rateLimited, gateBlocked, gateFail, gateClear } from './shared'
 
@@ -132,14 +133,21 @@ app.get('/api/vendor/:token', async (c) => {
       t.tax_id_hash, t.tax_id_last4,
       v.prefix as vendor_prefix, v.name as vendor_name, v.address as vendor_address,
       v.phone as vendor_phone, v.email as vendor_email,
-      (select client_code from client_profiles where id = vr.user_id) as client_code
+      (select client_code from client_profiles where id = vr.user_id) as client_code,
+      (select row_to_json(x) from (
+         select number, verification_code from vendor_receipts rr
+         where rr.transaction_id = t.id and rr.user_id = vr.user_id
+         order by rr.issue_date desc limit 1) x) as receipt
     from vendor_requests vr
     join vendor_payables t on t.id = vr.transaction_id
     join vendor_payees v on v.id = t.vendor_id
     where vr.token_hash = ${sha256hex(token)}`
   const r = one<Record<string, unknown>>(rows)
   if (!r) return c.json({ error: 'invalid-or-expired' }, 404)
-  if (r.used_at || r.revoked_at || new Date(String(r.expires_at)) < new Date())
+  // A signed link stays open until its expiry so the vendor can return and
+  // re-download the receipt (used_at no longer closes it); revoked or lapsed
+  // links still 410. The tax-ID gate still applies pre-unlock.
+  if (r.revoked_at || new Date(String(r.expires_at)) < new Date())
     return c.json({ error: 'invalid-or-expired' }, 410)
   const rowTenant = String(r.user_id)
   if (r.status === 'sent') {
@@ -181,7 +189,54 @@ app.get('/api/vendor/:token', async (c) => {
     vendorPrefix: r.vendor_prefix, vendorName: r.vendor_name, vendorAddress: r.vendor_address,
     vendorPhone: (r as Record<string, unknown>).vendor_phone ?? null,
     vendorEmail: (r as Record<string, unknown>).vendor_email ?? null,
+    receiptNumber: ((r as Record<string, unknown>).receipt as { number?: string } | null)?.number ?? null,
+    verificationCode: ((r as Record<string, unknown>).receipt as { verification_code?: string } | null)?.verification_code ?? null,
     unlocked: true,
+  })
+})
+
+// Vendor return-download: the archived issued PDF for a signed link, so the
+// vendor can come back within the link's expiry and download the receipt again.
+// Same guards as the payload route (revoked/lapsed 410, gate 403); the token
+// being consumed (used_at) does not close this.
+app.get('/api/vendor/:token/receipt.pdf', async (c) => {
+  const ip = c.req.header('x-forwarded-for') ?? 'local'
+  if (await rateLimited(`receipt-pdf:${ip}`, 30)) return c.json({ error: 'too-many-requests' }, 429)
+  const token = c.req.param('token')
+  const db = sql()
+  const rows = await db`
+    select vr.user_id, vr.expires_at, vr.revoked_at, vr.unlocked_at,
+      t.id, t.status, t.tax_id_hash, t.gross_amount,
+      v.name as vendor_name,
+      r.number, r.verification_code, r.pdf_path, r.pdf_sha256
+    from vendor_requests vr
+    join vendor_payables t on t.id = vr.transaction_id
+    join vendor_payees v on v.id = t.vendor_id
+    left join vendor_receipts r on r.transaction_id = t.id and r.user_id = vr.user_id
+    where vr.token_hash = ${sha256hex(token)}`
+  const r = one<Record<string, unknown>>(rows)
+  if (!r) return c.json({ error: 'invalid-or-expired' }, 404)
+  if (r.revoked_at || new Date(String(r.expires_at)) < new Date())
+    return c.json({ error: 'invalid-or-expired' }, 410)
+  if (r.tax_id_hash && !r.unlocked_at) return c.json({ error: 'not-unlocked' }, 403)
+  if (!r.pdf_path) return c.json({ error: 'not-issued' }, 404)
+  const bytes = await readStoredDurable(String(r.user_id), String(r.pdf_path))
+  if (!bytes) return c.json({ error: 'pdf-unavailable' }, 404)
+
+  const filename = documentFileName({
+    number: String(r.number ?? 'receipt'),
+    vendorName: String(r.vendor_name ?? ''),
+    amount: Number(r.gross_amount ?? 0),
+  })
+  return new Response(new Uint8Array(bytes), {
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': contentDisposition(filename),
+      'Content-Length': String(bytes.byteLength),
+      'X-Pdf-Sha256': String(r.pdf_sha256 ?? ''),
+      'X-Verification-Code': String(r.verification_code ?? ''),
+      'Cache-Control': 'private, no-store',
+    },
   })
 })
 

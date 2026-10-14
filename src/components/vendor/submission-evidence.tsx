@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { Download } from 'lucide-react'
 import type { VendorInviteDraft } from '../../lib/vendor-invite'
 import { fmtDateTimeTHLong } from '../../lib/format'
-import { saveBlob } from '../../lib/api-client'
+import { saveFile } from '../../lib/api-client'
 import { Button } from '../ui/button'
 
 // Vendor-facing proof of what was submitted: a clean, printable card that is
@@ -46,7 +46,7 @@ export function SubmissionEvidence({ data }: { data: SubmissionEvidenceData }) {
       // load when the vendor actually downloads).
       const { elementToA4PdfBytes } = await import('../../lib/receipt-to-a4-pdf')
       const bytes = await elementToA4PdfBytes(el)
-      saveBlob(new Blob([bytes.slice().buffer], { type: 'application/pdf' }), `vendor-onboard-${data.inviteRef}.pdf`)
+      await saveFile(new Blob([bytes.slice().buffer], { type: 'application/pdf' }), `vendor-onboard-${data.inviteRef}.pdf`)
     } finally {
       setDownloading(false)
     }

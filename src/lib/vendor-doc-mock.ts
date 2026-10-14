@@ -30,6 +30,14 @@ export function saveVendorDoc(vendorId: string, kind: 'id' | 'bank', dataUrl: st
   write(all)
 }
 
+export function removeVendorDoc(vendorId: string, kind: 'id' | 'bank') {
+  const all = read()
+  if (all[vendorId]) {
+    delete all[vendorId][kind]
+    write(all)
+  }
+}
+
 export function getVendorDoc(vendorId: string, kind: 'id' | 'bank'): string | undefined {
   return read()[vendorId]?.[kind]
 }

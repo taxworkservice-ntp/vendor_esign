@@ -7,7 +7,7 @@ import { documentFileName, stamp } from '../lib/download-name'
 import { chunk, EXPORT_CHUNK_SIZE } from '../lib/export-chunk'
 import { composeSheetToA4Pdf, loadBgImage } from '../lib/sheet-to-a4-pdf'
 import type { OverlayImage } from '../lib/raster-image'
-import { saveBlob } from '../lib/api-client'
+import { saveFile } from '../lib/api-client'
 import { useClientAuth } from '../lib/client-auth'
 import { defaultSettings, type TenantSettings } from '../lib/settings'
 import { useSettings, useUpdateSettings } from '../hooks/useSettings'
@@ -409,13 +409,13 @@ export function WhtPrint() {
 
       if (records.length === 1) {
         const [name] = Object.keys(files)
-        saveBlob(new Blob([files[name].slice().buffer], { type: 'application/pdf' }), name)
+        await saveFile(new Blob([files[name].slice().buffer], { type: 'application/pdf' }), name)
       } else {
         const { zipSync } = await import('fflate')
         // PDFs are already compressed; store without re-deflating.
         const zipped = zipSync(files, { level: 0 })
         const period = scope.get('month') || 'all'
-        saveBlob(new Blob([zipped.slice().buffer], { type: 'application/zip' }), `wht-certificates-${period}-${records.length}-docs-${stamp()}.zip`)
+        await saveFile(new Blob([zipped.slice().buffer], { type: 'application/zip' }), `wht-certificates-${period}-${records.length}-docs-${stamp()}.zip`, 'application/zip')
       }
     } catch {
       setErr('สร้าง PDF ไม่สำเร็จ — โปรดลองใหม่อีกครั้ง')

@@ -73,3 +73,80 @@ export function saveBlob(blob: Blob, filename: string): void {
   a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 0)
 }
+
+/**
+ * True on iOS/iPadOS. Takes its inputs as arguments (defaulting to the live
+ * navigator) so the detection is unit-testable in Node.
+ */
+export function isIOSDevice(
+  ua: string = typeof navigator === 'undefined' ? '' : (navigator.userAgent ?? ''),
+  platform: string = typeof navigator === 'undefined' ? '' : (navigator.platform ?? ''),
+  maxTouchPoints: number =
+    typeof navigator === 'undefined' ? 0 : ((navigator as Navigator & { maxTouchPoints?: number }).maxTouchPoints ?? 0),
+): boolean {
+  if (/iPad|iPhone|iPod/.test(ua)) return true
+  // iPadOS 13+ reports a desktop "Macintosh" UA; touch points give it away.
+  return /Macintosh/.test(ua) && /Mac/.test(platform) && maxTouchPoints > 1
+}
+
+function canNativeShare(file: File): boolean {
+  try {
+    return typeof navigator !== 'undefined' && typeof navigator.canShare === 'function' &&
+      navigator.canShare({ files: [file] })
+  } catch {
+    return false
+  }
+}
+
+export type SaveOutcome = 'shared' | 'downloaded' | 'opened' | 'dismissed'
+
+/**
+ * Hand a generated file to the user on any platform.
+ *
+ * A plain `<a download>` over a blob URL is silently downgraded by iOS Safari
+ * to an in-place preview (the reported "cannot download" bug), so on mobile we
+ * prefer the native share sheet ("Save to Files" / AirDrop / LINE…), and on iOS
+ * fall back to a new tab whose viewer offers its own Share/Save. Desktop keeps
+ * the classic anchor download. `'dismissed'` means the user cancelled the share
+ * sheet — not an error, so callers must not toast it.
+ */
+export async function saveFile(blob: Blob, filename: string, mime = 'application/pdf'): Promise<SaveOutcome> {
+  let file: File | null = null
+  try {
+    file = new File([blob], filename, { type: mime || blob.type })
+  } catch {
+    file = null
+  }
+
+  const coarse =
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function' &&
+    window.matchMedia('(pointer: coarse)').matches
+  if (file && (coarse || isIOSDevice()) && canNativeShare(file)) {
+    try {
+      await navigator.share({ files: [file], title: filename })
+      return 'shared'
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return 'dismissed'
+      // A real failure (e.g. activation lapsed after a slow render) — continue
+      // to the platform fallback instead of surfacing a scary error.
+    }
+  }
+
+  const url = URL.createObjectURL(blob)
+  if (isIOSDevice()) {
+    // The viewer tab carries Share/Save; keep the URL alive for it.
+    const w = window.open(url, '_blank', 'noopener')
+    if (w) {
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+      return 'opened'
+    }
+  }
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 0)
+  return 'downloaded'
+}

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { CheckCircle2, Download, Eraser, Lock, ShieldAlert } from 'lucide-react'
 import { GATE_MAX_TRIES, gateRemaining, isGateUnlocked, tryGateUnlock, useVendorActions, useVendorTxn, type VendorAuth } from '../hooks/useVendor'
-import { saveBlob } from '../lib/api-client'
+import { apiDownload, hasServer, saveFile } from '../lib/api-client'
 import { receiptSheetToA4PdfBytes } from '../lib/receipt-to-a4-pdf'
 import { normalizeLineItem } from '../lib/line-items'
 import { renderTypedSignature, SIGNATURE_FONT, signMethodLabel } from '../lib/typed-signature'
@@ -164,12 +164,28 @@ export function VendorSign() {
   }, [t?.id, t?.status])
 
   const downloadReceipt = async () => {
+    // Just signed on this device: rasterise the on-screen sheet so the PDF is
+    // identical to the preview. Returning on the same link later: the archived
+    // server PDF (the client-side sheet no longer exists on a fresh load).
     const el = vendorSheetRef.current
-    if (!el || !vendorData) return
+    setSubmitErr('')
+    if (el && vendorData) {
+      setDownloading(true)
+      try {
+        const bytes = await receiptSheetToA4PdfBytes(el)
+        await saveFile(new Blob([bytes.slice().buffer], { type: 'application/pdf' }), `${vendorData.number}.pdf`)
+      } finally {
+        setDownloading(false)
+      }
+      return
+    }
+    if (!token || !hasServer) return
     setDownloading(true)
     try {
-      const bytes = await receiptSheetToA4PdfBytes(el)
-      saveBlob(new Blob([bytes.slice().buffer], { type: 'application/pdf' }), `${vendorData.number}.pdf`)
+      const { blob, filename } = await apiDownload(`/api/vendor/${encodeURIComponent(token)}/receipt.pdf`)
+      await saveFile(blob, filename || `${receipt?.number ?? t?.receiptNumber ?? 'receipt'}.pdf`)
+    } catch {
+      setSubmitErr('ดาวน์โหลดใบเสร็จไม่สำเร็จ — กรุณาลองใหม่อีกครั้ง')
     } finally {
       setDownloading(false)
     }
@@ -180,8 +196,9 @@ export function VendorSign() {
     return <StateCard title="ลิงก์ถูกเพิกถอนแล้ว" body="ลูกค้าผู้จ่ายได้เพิกถอนลิงก์นี้ โปรดติดต่อลูกค้าผู้จ่ายเพื่อขอลิงก์ใหม่" brand={brand} />
   if (t?.status === 'void')
     return <StateCard title="เอกสารนี้ถูกยกเลิกแล้ว" body="ไม่จำเป็นต้องดำเนินการใด ๆ โปรดติดต่อลูกค้าผู้จ่ายหากมีข้อสงสัย" brand={brand} />
-  // The invite token is consumed on signing, so the lookup can return empty
-  // afterwards — keep a snapshot id so the success state still renders.
+  // The invite token stays valid until its expiry even after signing, so the
+  // lookup can return the receipt state on a return visit — keep a snapshot id
+  // so the success state still renders if the lookup lags.
   if (done || t?.status === 'signed' || t?.status === 'issued') {
     const receiptId = t?.id ?? signedId
     const number = receipt?.number ?? t?.receiptNumber
@@ -220,7 +237,7 @@ export function VendorSign() {
               </p>
             )}
             <div className="flex flex-wrap justify-center gap-2">
-              {vendorData && (
+              {(vendorData || (hasServer && (receipt?.number || t?.receiptNumber))) && (
                 <Button onClick={downloadReceipt} loading={downloading}>
                   <Download size={15} aria-hidden /> {downloading ? 'กำลังดาวน์โหลด…' : 'ดาวน์โหลดใบเสร็จ (PDF)'}
                 </Button>
@@ -231,11 +248,12 @@ export function VendorSign() {
                 </Link>
               )}
             </div>
+            {submitErr && <FieldError msg={submitErr} />}
             <p className="mx-auto max-w-sm text-label leading-relaxed text-ink-400">
               ลายมือชื่ออิเล็กทรอนิกส์ตาม พ.ร.บ.ว่าด้วยธุรกรรมทางอิเล็กทรอนิกส์ พ.ศ. 2544 · ข้อตกลง v1
             </p>
             <p className="mx-auto max-w-sm text-label leading-relaxed text-ink-400">
-              ลิงก์นี้ใช้ได้ครั้งเดียวและถูกปิดแล้ว หากท่านไม่ได้เป็นผู้ลงนาม โปรดติดต่อลูกค้าผู้จ่ายทันที
+              เก็บลิงก์นี้ไว้ใช้อ้างอิง — ท่านกลับมาดาวน์โหลดใบเสร็จซ้ำได้ภายในอายุของลิงก์
             </p>
           </div>
         }
@@ -253,7 +271,7 @@ export function VendorSign() {
     return (
       <StateCard
         title="ลิงก์ไม่ถูกต้องหรือหมดอายุ"
-        body={`ลิงก์นี้อาจหมดอายุ (เกิน ${loadSettings().linkExpiryDays} วัน) ถูกเพิกถอน หรือถูกใช้ไปแล้ว โปรดติดต่อลูกค้าผู้จ่ายเพื่อขอลิงก์ใหม่`}
+        body={`ลิงก์นี้อาจหมดอายุ (เกิน ${loadSettings().linkExpiryDays} วัน) หรือถูกเพิกถอน โปรดติดต่อลูกค้าผู้จ่ายเพื่อขอลิงก์ใหม่`}
         brand={brand}
       />
     )

@@ -148,14 +148,17 @@ export function Settings() {
       <Section step="3" title="เอกสาร" desc="ลิงก์ผู้ขาย · ข้อความเชิญผู้ขาย · บันทึกท้ายใบเสร็จ · ข้อความให้ความยินยอม">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <Label hint="วัน">อายุลิงก์ผู้ขาย</Label>
+            <Label hint="วัน">อายุลิงก์ลงนามผู้ขาย</Label>
             <Input
               value={String(form.linkExpiryDays)}
-              onChange={(e) => set({ linkExpiryDays: Number(e.target.value.replace(/\D/g, '')) || 0 })}
+              onChange={(e) => set({ linkExpiryDays: Math.min(365, Number(e.target.value.replace(/\D/g, '')) || 0) })}
               disabled={readOnly}
               inputMode="numeric"
               className="text-right tabular-nums"
             />
+            <p className="mt-1.5 text-label text-ink-500">
+              นานเท่านี้ที่ผู้ขายเปิดลิงก์ ลงนาม และกลับมาดาวน์โหลดใบเสร็จซ้ำได้ (1–365 วัน · มีผลกับลิงก์ที่ส่งใหม่)
+            </p>
           </div>
           <label className="flex items-center gap-3 self-end pb-2.5 text-body">
             <input type="checkbox" checked={form.showVerifyQr} onChange={(e) => set({ showVerifyQr: e.target.checked })} disabled={readOnly} className="h-4 w-4" />

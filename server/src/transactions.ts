@@ -452,8 +452,12 @@ txnRoutes.post('/transactions/:id/send', async (c) => {
     let tok = existing[0]?.token ? decryptToken(existing[0].token) : undefined
     if (!tok) {
       tok = randomBytes(32).toString('base64url')
+      // The sign link lives as long as the owner allows in Settings
+      // (link_expiry_days), clamped server-side so a bad value cannot mint an
+      // immortal or instantly-dead link.
+      const days = Math.max(1, Math.min(365, Math.trunc((await getTenantSettings(g.ws)).linkExpiryDays) || 7))
       await db`insert into vendor_requests (user_id, transaction_id, token_hash, token, expires_at)
-        values (${g.ws}, ${id}, ${sha256hex(tok)}, ${encryptToken(tok)}, now() + interval '7 days')`
+        values (${g.ws}, ${id}, ${sha256hex(tok)}, ${encryptToken(tok)}, now() + make_interval(days => ${days}))`
     }
     // Re-activate anything not yet signed (draft, expired, cancelled) so a
     // re-sent link can be opened again; sent/opened keep their status (resend).

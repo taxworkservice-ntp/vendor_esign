@@ -68792,6 +68792,13 @@ function decryptFull(enc2) {
     return void 0;
   }
 }
+function parseDocDataUrl(dataUrl) {
+  const m2 = /^data:(image\/(png|jpe?g|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
+  if (!m2) return null;
+  const buf = Buffer.from(m2[3], "base64");
+  if (buf.length === 0 || buf.length > 5 * 1024 * 1024) return null;
+  return { mime: m2[1].toLowerCase() === "image/jpg" ? "image/jpeg" : m2[1].toLowerCase(), bytes: new Uint8Array(buf) };
+}
 function toVendor(r) {
   const enc2 = r.id_number_encrypted;
   const last4 = decryptLast4(enc2);
@@ -68908,7 +68915,48 @@ dataRoutes.get("/vendors/:id/document/:kind", async (c) => {
   const bytes = await readStoredDurable(g.ws, path ? String(path) : null);
   if (!bytes) return c.json({ error: "not-found" }, 404);
   await withTenant(g.ws, "owner", async () => audit(g.ws, "vendor_payees", c.req.param("id"), "vendor.doc-viewed", g.actor, { kind }, "server"));
-  return c.body(bytes, 200, { "Content-Type": "image/png" });
+  const ext = String(path ?? "").split(".").pop()?.toLowerCase();
+  const type = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : ext === "webp" ? "image/webp" : "image/png";
+  return c.body(bytes, 200, { "Content-Type": type });
+});
+dataRoutes.post("/vendors/:id/document/:kind", async (c) => {
+  const g = await guard(c);
+  if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  const kind = c.req.param("kind");
+  if (kind !== "id" && kind !== "bank") return c.json({ error: "invalid-kind" }, 400);
+  const body = await c.req.json().catch(() => null);
+  const parsed = parseDocDataUrl(String(body?.dataUrl ?? ""));
+  if (!parsed) return c.json({ error: "invalid-document" }, 400);
+  const ext = parsed.mime === "image/png" ? "png" : parsed.mime === "image/webp" ? "webp" : "jpg";
+  const path = await saveBytesDurable("vendor-docs", `${c.req.param("id")}-${kind}.${ext}`, parsed.bytes, g.ws);
+  const column = kind === "id" ? "id_doc_path" : "bank_doc_path";
+  const updated = await withTenant(g.ws, "owner", async () => {
+    const db = sql();
+    return await db.query(
+      `update vendor_payees set ${column} = $1 where id = $2 and user_id = $3 returning id`,
+      [path, c.req.param("id"), g.ws]
+    );
+  });
+  if (!updated[0]) return c.json({ error: "not-found" }, 404);
+  await withTenant(g.ws, "owner", async () => audit(g.ws, "vendor_payees", c.req.param("id"), "vendor.doc-uploaded", g.actor, { kind }, "server"));
+  return c.json({ ok: true });
+});
+dataRoutes.delete("/vendors/:id/document/:kind", async (c) => {
+  const g = await guard(c);
+  if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  const kind = c.req.param("kind");
+  if (kind !== "id" && kind !== "bank") return c.json({ error: "invalid-kind" }, 400);
+  const column = kind === "id" ? "id_doc_path" : "bank_doc_path";
+  const updated = await withTenant(g.ws, "owner", async () => {
+    const db = sql();
+    return await db.query(
+      `update vendor_payees set ${column} = null where id = $1 and user_id = $2 returning id`,
+      [c.req.param("id"), g.ws]
+    );
+  });
+  if (!updated[0]) return c.json({ error: "not-found" }, 404);
+  await withTenant(g.ws, "owner", async () => audit(g.ws, "vendor_payees", c.req.param("id"), "vendor.doc-removed", g.actor, { kind }, "server"));
+  return c.json({ ok: true });
 });
 dataRoutes.get("/vendors/:id/memory", async (c) => {
   const g = await guard(c);
@@ -69778,8 +69826,9 @@ txnRoutes.post("/transactions/:id/send", async (c) => {
     let tok = existing[0]?.token ? decryptToken(existing[0].token) : void 0;
     if (!tok) {
       tok = randomBytes3(32).toString("base64url");
+      const days = Math.max(1, Math.min(365, Math.trunc((await getTenantSettings(g.ws)).linkExpiryDays) || 7));
       await db`insert into vendor_requests (user_id, transaction_id, token_hash, token, expires_at)
-        values (${g.ws}, ${id}, ${sha256hex(tok)}, ${encryptToken(tok)}, now() + interval '7 days')`;
+        values (${g.ws}, ${id}, ${sha256hex(tok)}, ${encryptToken(tok)}, now() + make_interval(days => ${days}))`;
     }
     await db`update vendor_payables set status = 'sent'
       where id = ${id} and user_id = ${g.ws} and status in ('draft', 'expired', 'cancelled')`;
@@ -71123,14 +71172,18 @@ app.get("/api/vendor/:token", async (c) => {
       t.tax_id_hash, t.tax_id_last4,
       v.prefix as vendor_prefix, v.name as vendor_name, v.address as vendor_address,
       v.phone as vendor_phone, v.email as vendor_email,
-      (select client_code from client_profiles where id = vr.user_id) as client_code
+      (select client_code from client_profiles where id = vr.user_id) as client_code,
+      (select row_to_json(x) from (
+         select number, verification_code from vendor_receipts rr
+         where rr.transaction_id = t.id and rr.user_id = vr.user_id
+         order by rr.issue_date desc limit 1) x) as receipt
     from vendor_requests vr
     join vendor_payables t on t.id = vr.transaction_id
     join vendor_payees v on v.id = t.vendor_id
     where vr.token_hash = ${sha256hex(token)}`;
   const r = one(rows);
   if (!r) return c.json({ error: "invalid-or-expired" }, 404);
-  if (r.used_at || r.revoked_at || new Date(String(r.expires_at)) < /* @__PURE__ */ new Date())
+  if (r.revoked_at || new Date(String(r.expires_at)) < /* @__PURE__ */ new Date())
     return c.json({ error: "invalid-or-expired" }, 410);
   const rowTenant = String(r.user_id);
   if (r.status === "sent") {
@@ -71183,7 +71236,48 @@ app.get("/api/vendor/:token", async (c) => {
     vendorAddress: r.vendor_address,
     vendorPhone: r.vendor_phone ?? null,
     vendorEmail: r.vendor_email ?? null,
+    receiptNumber: r.receipt?.number ?? null,
+    verificationCode: r.receipt?.verification_code ?? null,
     unlocked: true
+  });
+});
+app.get("/api/vendor/:token/receipt.pdf", async (c) => {
+  const ip = c.req.header("x-forwarded-for") ?? "local";
+  if (await rateLimited(`receipt-pdf:${ip}`, 30)) return c.json({ error: "too-many-requests" }, 429);
+  const token = c.req.param("token");
+  const db = sql();
+  const rows = await db`
+    select vr.user_id, vr.expires_at, vr.revoked_at, vr.unlocked_at,
+      t.id, t.status, t.tax_id_hash, t.gross_amount,
+      v.name as vendor_name,
+      r.number, r.verification_code, r.pdf_path, r.pdf_sha256
+    from vendor_requests vr
+    join vendor_payables t on t.id = vr.transaction_id
+    join vendor_payees v on v.id = t.vendor_id
+    left join vendor_receipts r on r.transaction_id = t.id and r.user_id = vr.user_id
+    where vr.token_hash = ${sha256hex(token)}`;
+  const r = one(rows);
+  if (!r) return c.json({ error: "invalid-or-expired" }, 404);
+  if (r.revoked_at || new Date(String(r.expires_at)) < /* @__PURE__ */ new Date())
+    return c.json({ error: "invalid-or-expired" }, 410);
+  if (r.tax_id_hash && !r.unlocked_at) return c.json({ error: "not-unlocked" }, 403);
+  if (!r.pdf_path) return c.json({ error: "not-issued" }, 404);
+  const bytes = await readStoredDurable(String(r.user_id), String(r.pdf_path));
+  if (!bytes) return c.json({ error: "pdf-unavailable" }, 404);
+  const filename = documentFileName({
+    number: String(r.number ?? "receipt"),
+    vendorName: String(r.vendor_name ?? ""),
+    amount: Number(r.gross_amount ?? 0)
+  });
+  return new Response(new Uint8Array(bytes), {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": contentDisposition(filename),
+      "Content-Length": String(bytes.byteLength),
+      "X-Pdf-Sha256": String(r.pdf_sha256 ?? ""),
+      "X-Verification-Code": String(r.verification_code ?? ""),
+      "Cache-Control": "private, no-store"
+    }
   });
 });
 app.post("/api/vendor/:token/unlock", async (c) => {
