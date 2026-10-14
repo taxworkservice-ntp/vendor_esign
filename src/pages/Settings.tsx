@@ -315,7 +315,12 @@ function AssetUpload({
 
   return (
     <div>
-      <Label hint={hint}>{label}</Label>
+      {/* Header reserves two hint lines: the three cards sit in a narrow grid
+          where a side-by-side hint wraps unevenly (1 vs 2 lines) and pushes
+          each upload box to a different height. Stacked + min-h keeps every
+          box level. `2lh` degrades to no reservation where unsupported. */}
+      <Label>{label}</Label>
+      {hint && <p className="mt-0.5 min-h-[2lh] text-label text-ink-500">{hint}</p>}
       {storagePath
         ? (
           <div className="mt-1 flex items-start gap-3">
