@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { getObject, putObject, r2Configured } from './r2-storage'
+import { deleteObject, getObject, putObject, r2Configured } from './r2-storage'
 
 // Storage seam for private artifacts (slips/, signatures/, pdfs/).
 //
@@ -167,6 +167,61 @@ export async function readTenantAsset(
   } catch {
     return undefined
   }
+}
+
+/** The artifact areas a reset wipes. Branding assets (logo/signature/stamp)
+ *  live at `<tenant>/<file>` — two segments, outside these areas — so they
+ *  survive a data reset by design. */
+const ARTIFACT_AREAS: StorageArea[] = ['slips', 'signatures', 'pdfs', 'vendor-docs']
+
+/**
+ * Best-effort removal of a tenant's private artifacts, used by the operator
+ * "reset workspace" flow. Deletes the exact keys recorded in the database (so
+ * R2 objects go too), then sweeps the four artifact directories on local disk
+ * to catch orphans. Never throws: a reset must not fail because a file was
+ * already gone. Returns how many local paths/directories were removed.
+ *
+ * Keys are validated against the caller's own tenant before any delete, so a
+ * poisoned row can never reach another workspace's objects.
+ */
+export async function deleteTenantArtifacts(
+  tenantId: string,
+  relPaths: (string | null | undefined)[],
+): Promise<number> {
+  if (!tenantId) return 0
+  let removed = 0
+  for (const rel of relPaths) {
+    if (!rel) continue
+    if (isAbsolute(rel) || rel.includes('\0')) continue
+    const segments = rel.split(/[\\/]/)
+    if (segments[0] !== tenantId || segments.some((s) => s === '..' || s === '')) continue
+    if (r2Configured()) await deleteObject(rel)
+    // Local mirror: only unlink a real file that still resolves inside the tenant.
+    const full = resolveStored(tenantId, rel)
+    if (full) {
+      try {
+        unlinkSync(full)
+        removed++
+      } catch {
+        /* already gone */
+      }
+    }
+  }
+  // Sweep the artifact directories themselves to catch anything the DB no
+  // longer references. Kept synchronous and guarded so one failure (e.g. a
+  // permission error) cannot abort the rest.
+  for (const area of ARTIFACT_AREAS) {
+    const dir = join(storageRoot(), tenantId, area)
+    try {
+      if (existsSync(dir)) {
+        rmSync(dir, { recursive: true, force: true })
+        removed++
+      }
+    } catch {
+      /* best-effort */
+    }
+  }
+  return removed
 }
 
 /** The tenant's own directory, for assertions and tests. */

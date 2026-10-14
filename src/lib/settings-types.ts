@@ -114,6 +114,21 @@ export function renderConsent(template: string, vars: ConsentVars): string {
     .replace(/\{\{version\}\}/g, vars.version)
 }
 
+// Every variable the renderer fills. A consent text that drops one silently
+// degrades the evidence (an agreement without the amount is worth little),
+// so a changed text must keep all five.
+export const CONSENT_VARS = ['{{client}}', '{{amount}}', '{{date}}', '{{ref}}', '{{version}}'] as const
+
+/** Variables missing from a consent template. */
+export function consentVarsMissing(text: string): string[] {
+  return CONSENT_VARS.filter((v) => !(text ?? '').includes(v))
+}
+
+export const CONSENT_VERSION_REQUIRED_ERROR =
+  'แก้ไขข้อความยินยอมต้องเปลี่ยนเวอร์ชันด้วย (เช่น 2 → 3) — เพื่อให้หลักฐานการลงนามอ้างอิงถูกฉบับ'
+export const CONSENT_VARS_MISSING_ERROR =
+  'ข้อความยินยอมต้องมีตัวแปรให้ครบ: {{client}} {{amount}} {{date}} {{ref}} {{version}}'
+
 // The receipt-year is never user-set: it is always the current Thai (BE) year,
 // derived from today. Used by the receipt-number series {CODE}-R-{BE}-{NNN}.
 export function currentBeYear(today: Date = new Date()): number {
@@ -167,7 +182,7 @@ export function renderVendorInviteMessage(template: string, vars: VendorInviteMe
   return template.replace(/\{\{client\}\}/g, vars.client).replace(/\{\{link\}\}/g, vars.link)
 }
 
-export function validateSettings(s: TenantSettings): string | null {
+export function validateSettings(s: TenantSettings, prev?: TenantSettings): string | null {
   if (!/^[A-Z0-9-]{2,12}$/.test(s.clientCode)) return 'รหัสลูกค้าใช้ A-Z 0-9 ยาว 2–12 ตัว (ใช้เป็นคำนำหน้าเลขที่ใบเสร็จ)'
   if (!s.displayName.trim()) return 'กรุณากรอกชื่อบริษัท'
   if (s.taxId && !/^\d{13}$/.test(s.taxId)) return 'เลขประจำตัวผู้เสียภาษีต้องเป็นเลข 13 หลัก'
@@ -180,6 +195,14 @@ export function validateSettings(s: TenantSettings): string | null {
   if (!(s.vendorInviteMessageTemplate ?? '').trim()) return 'กรุณากรอกข้อความเชิญผู้ขายกรอกข้อมูล'
   if (!(s.consentTextV1 ?? '').trim()) return 'กรุณากรอกข้อความให้ความยินยอม'
   if (!(s.consentVersion ?? '').trim()) return 'กรุณากรอกเวอร์ชันความยินยอม'
+  // Version discipline: past signatures point at a version string, so editing
+  // the wording without bumping it silently voids the evidence chain. Only
+  // enforced when the text actually changed — existing custom texts are
+  // grandfathered until their next edit.
+  if (prev && (s.consentTextV1 ?? '') !== (prev.consentTextV1 ?? '')) {
+    if ((s.consentVersion ?? '') === (prev.consentVersion ?? '')) return CONSENT_VERSION_REQUIRED_ERROR
+    if (consentVarsMissing(s.consentTextV1 ?? '').length) return CONSENT_VARS_MISSING_ERROR
+  }
   return null
 }
 

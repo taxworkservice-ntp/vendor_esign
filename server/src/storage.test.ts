@@ -1,8 +1,8 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { readStored, readTenantAsset, resolveStored, saveBytes, storageRoot } from './storage'
+import { deleteTenantArtifacts, readStored, readTenantAsset, resolveStored, saveBytes, storageRoot } from './storage'
 
 // resolveStored turns a path that came out of the database into a real file
 // path. That makes it the boundary between "a column value" and "a byte on
@@ -117,5 +117,52 @@ describe('saveBytes', () => {
 describe('storageRoot', () => {
   it('honours STORAGE_DIR', () => {
     expect(storageRoot()).toBe(root)
+  })
+})
+
+// The reset-workspace flow wipes a tenant's private artifacts. It is
+// destructive and reaches objects by a key that came out of the database, so it
+// has to be scoped to the caller's own workspace and leave branding assets
+// (which live outside the artifact areas) alone.
+describe('deleteTenantArtifacts', () => {
+  let resetRoot: string
+  beforeAll(() => {
+    resetRoot = mkdtempSync(join(tmpdir(), 'vs-reset-'))
+    process.env.STORAGE_DIR = resetRoot
+    mkdirSync(join(resetRoot, WS, 'pdfs'), { recursive: true })
+    mkdirSync(join(resetRoot, WS, 'signatures'), { recursive: true })
+    mkdirSync(join(resetRoot, OTHER, 'pdfs'), { recursive: true })
+    writeFileSync(join(resetRoot, WS, 'pdfs', 'r1.pdf'), 'PDF-A')
+    writeFileSync(join(resetRoot, WS, 'signatures', 's1.png'), 'PNG-A')
+    writeFileSync(join(resetRoot, WS, '9999-logo.png'), 'LOGO-A') // two-segment tenant asset
+    writeFileSync(join(resetRoot, OTHER, 'pdfs', 'secret.pdf'), 'PDF-OTHER')
+  })
+
+  afterAll(() => {
+    rmSync(resetRoot, { recursive: true, force: true })
+    delete process.env.STORAGE_DIR
+  })
+
+  it('removes the tenant artifact areas and named keys', async () => {
+    const removed = await deleteTenantArtifacts(WS, ['ABC/pdfs/r1.pdf', 'ABC/signatures/s1.png'])
+    expect(removed).toBeGreaterThan(0)
+    expect(existsSync(join(resetRoot, WS, 'pdfs'))).toBe(false)
+    expect(existsSync(join(resetRoot, WS, 'signatures'))).toBe(false)
+  })
+
+  it('keeps two-segment tenant assets (branding logo)', () => {
+    expect(existsSync(join(resetRoot, WS, '9999-logo.png'))).toBe(true)
+  })
+
+  it('never touches another workspace', () => {
+    expect(existsSync(join(resetRoot, OTHER, 'pdfs', 'secret.pdf'))).toBe(true)
+  })
+
+  it('is safe with hostile keys and empty input', async () => {
+    await expect(
+      deleteTenantArtifacts(WS, ['ZZZ/pdfs/secret.pdf', '../escape.pdf', null, undefined]),
+    ).resolves.toBeTypeOf('number')
+    expect(existsSync(join(resetRoot, OTHER, 'pdfs', 'secret.pdf'))).toBe(true)
+    await expect(deleteTenantArtifacts('', ['ABC/pdfs/r1.pdf'])).resolves.toBe(0)
   })
 })

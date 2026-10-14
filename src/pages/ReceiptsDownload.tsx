@@ -343,6 +343,8 @@ function build(
       sig,
       signedAt: auth?.signedAt,
       sigMethod: auth?.verificationMethod,
+      authRef: auth?.authRef ?? undefined,
+      consentVersion: auth?.consentVersion,
       verificationCode: row.verificationCode,
       verifyUrl: row.verificationCode ? `${window.location.origin}/verify/${row.verificationCode}` : undefined,
     },

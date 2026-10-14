@@ -66,5 +66,6 @@ export function impersonationCookie(token: string): string {
 }
 
 export function clearImpersonationCookie(): string {
-  return `${IMPERSONATION_COOKIE}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : ''
+  return `${IMPERSONATION_COOKIE}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${secure}`
 }

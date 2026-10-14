@@ -160,6 +160,7 @@ export async function finalizeReceipt(txnId: string, ip: string): Promise<Finali
     verificationMethod: d.verification_method,
     consentVersion: d.consent_text_version,
     signedAt: d.signed_at,
+    authRef: d.auth_ref ?? undefined,
     client: { code: prof.code, display: prof.display },
     vendor: {
       prefix: d.vendor_prefix, name: d.vendor_name, address: d.vendor_address, maskedId: d.vendor_masked_id,

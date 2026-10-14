@@ -130,7 +130,9 @@ export function sessionCookie(token: string, expiresAt: Date, name: string = SES
 }
 
 export function clearSessionCookie(name: string = SESSION_COOKIE): string {
-  return `${name}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`
+  // Mirrors sessionCookie's flags: a Secure cookie must be cleared with Secure,
+  // or some browsers ignore the deletion and keep showing a stale cookie.
+  return `${name}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`
 }
 
 export function isSuperAdmin(u: SessionUser | null): boolean {

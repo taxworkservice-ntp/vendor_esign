@@ -67616,6 +67616,79 @@ function vendorDisplayName(prefix, name) {
   return p2 ? `${p2} ${n}` : n;
 }
 
+// src/lib/vendor-contact.ts
+function normalizePhone(v2) {
+  return (v2 ?? "").replace(/\D/g, "");
+}
+function isValidPhone(v2) {
+  const d2 = normalizePhone(v2);
+  return /^\d{9,10}$/.test(d2) && d2.startsWith("0");
+}
+function isValidEmail(v2) {
+  const s = (v2 ?? "").trim();
+  return s.length <= 200 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
+
+// src/lib/settings-types.ts
+var DEFAULT_WHT_RATES = [
+  { value: 3, label: "\u0E04\u0E48\u0E32\u0E08\u0E49\u0E32\u0E07\u0E17\u0E33\u0E02\u0E2D\u0E07", paymentType: "\u0E04\u0E48\u0E32\u0E08\u0E49\u0E32\u0E07\u0E17\u0E33\u0E02\u0E2D\u0E07" },
+  { value: 3, label: "\u0E04\u0E48\u0E32\u0E27\u0E34\u0E0A\u0E32\u0E0A\u0E35\u0E1E\u0E2D\u0E34\u0E2A\u0E23\u0E30", paymentType: "\u0E04\u0E48\u0E32\u0E27\u0E34\u0E0A\u0E32\u0E0A\u0E35\u0E1E\u0E2D\u0E34\u0E2A\u0E23\u0E30" },
+  { value: 3, label: "\u0E04\u0E48\u0E32\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23", paymentType: "\u0E04\u0E48\u0E32\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23" },
+  { value: 5, label: "\u0E04\u0E48\u0E32\u0E40\u0E0A\u0E48\u0E32\u0E17\u0E23\u0E31\u0E1E\u0E22\u0E4C\u0E2A\u0E34\u0E19", paymentType: "\u0E04\u0E48\u0E32\u0E40\u0E0A\u0E48\u0E32\u0E17\u0E23\u0E31\u0E1E\u0E22\u0E4C\u0E2A\u0E34\u0E19" },
+  { value: 3, label: "\u0E04\u0E48\u0E32\u0E19\u0E32\u0E22\u0E2B\u0E19\u0E49\u0E32", paymentType: "\u0E04\u0E48\u0E32\u0E19\u0E32\u0E22\u0E2B\u0E19\u0E49\u0E32" },
+  { value: 1, label: "\u0E04\u0E48\u0E32\u0E02\u0E19\u0E2A\u0E48\u0E07", paymentType: "\u0E04\u0E48\u0E32\u0E02\u0E19\u0E2A\u0E48\u0E07" },
+  { value: 0, label: "\u0E44\u0E21\u0E48\u0E2B\u0E31\u0E01\u0E20\u0E32\u0E29\u0E35 \u0E13 \u0E17\u0E35\u0E48\u0E08\u0E48\u0E32\u0E22", paymentType: "\u0E44\u0E21\u0E48\u0E2B\u0E31\u0E01\u0E20\u0E32\u0E29\u0E35 \u0E13 \u0E17\u0E35\u0E48\u0E08\u0E48\u0E32\u0E22" }
+];
+var DEFAULT_WHT_MIN_THRESHOLD = 1e3;
+var DEFAULT_CONSENT_VERSION = "2";
+var DEFAULT_CONSENT = `\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E02\u0E2D\u0E23\u0E31\u0E1A\u0E23\u0E2D\u0E07\u0E41\u0E25\u0E30\u0E43\u0E2B\u0E49\u0E04\u0E27\u0E32\u0E21\u0E22\u0E34\u0E19\u0E22\u0E2D\u0E21\u0E14\u0E31\u0E07\u0E15\u0E48\u0E2D\u0E44\u0E1B\u0E19\u0E35\u0E49
+(1) \u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E02\u0E2D\u0E23\u0E31\u0E1A\u0E23\u0E2D\u0E07\u0E27\u0E48\u0E32\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E17\u0E35\u0E48\u0E43\u0E2B\u0E49\u0E44\u0E27\u0E49\u0E43\u0E19\u0E40\u0E2D\u0E01\u0E2A\u0E32\u0E23\u0E19\u0E35\u0E49 (\u0E0A\u0E37\u0E48\u0E2D \u0E17\u0E35\u0E48\u0E2D\u0E22\u0E39\u0E48 \u0E40\u0E25\u0E02\u0E1B\u0E23\u0E30\u0E08\u0E33\u0E15\u0E31\u0E27\u0E1B\u0E23\u0E30\u0E0A\u0E32\u0E0A\u0E19 \u0E41\u0E25\u0E30\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E01\u0E32\u0E23\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19) \u0E40\u0E1B\u0E47\u0E19\u0E04\u0E27\u0E32\u0E21\u0E08\u0E23\u0E34\u0E07\u0E41\u0E25\u0E30\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07\u0E17\u0E38\u0E01\u0E1B\u0E23\u0E30\u0E01\u0E32\u0E23 \u0E41\u0E25\u0E30\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E40\u0E1B\u0E47\u0E19\u0E1C\u0E39\u0E49\u0E21\u0E35\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E15\u0E32\u0E21\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E19\u0E35\u0E49
+(2) \u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E44\u0E14\u0E49\u0E23\u0E31\u0E1A\u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19\u0E04\u0E48\u0E32\u0E08\u0E49\u0E32\u0E07/\u0E04\u0E48\u0E32\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23\u0E15\u0E32\u0E21\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E02\u0E49\u0E32\u0E07\u0E15\u0E49\u0E19\u0E04\u0E23\u0E1A\u0E16\u0E49\u0E27\u0E19\u0E41\u0E25\u0E49\u0E27 \u2014 \u0E22\u0E2D\u0E14\u0E23\u0E31\u0E1A\u0E2A\u0E38\u0E17\u0E18\u0E34 {{amount}} \u0E1A\u0E32\u0E17 \u0E27\u0E31\u0E19\u0E17\u0E35\u0E48 {{date}} \u0E2D\u0E49\u0E32\u0E07\u0E2D\u0E34\u0E07 {{ref}}
+(3) \u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E02\u0E2D\u0E21\u0E2D\u0E1A\u0E2D\u0E33\u0E19\u0E32\u0E08\u0E41\u0E25\u0E30\u0E43\u0E2B\u0E49\u0E04\u0E27\u0E32\u0E21\u0E22\u0E34\u0E19\u0E22\u0E2D\u0E21\u0E41\u0E01\u0E48 {{client}} \u0E43\u0E19\u0E01\u0E32\u0E23\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E43\u0E19\u0E19\u0E32\u0E21\u0E02\u0E2D\u0E07\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32 \u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E18\u0E38\u0E23\u0E01\u0E23\u0E23\u0E21\u0E19\u0E35\u0E49\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19
+(4) \u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E22\u0E34\u0E19\u0E22\u0E2D\u0E21\u0E43\u0E2B\u0E49\u0E25\u0E32\u0E22\u0E21\u0E37\u0E2D\u0E0A\u0E37\u0E48\u0E2D\u0E2D\u0E34\u0E40\u0E25\u0E47\u0E01\u0E17\u0E23\u0E2D\u0E19\u0E34\u0E01\u0E2A\u0E4C\u0E17\u0E35\u0E48\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E25\u0E07\u0E43\u0E19\u0E40\u0E2D\u0E01\u0E2A\u0E32\u0E23\u0E19\u0E35\u0E49\u0E21\u0E35\u0E1C\u0E25\u0E1C\u0E39\u0E01\u0E1E\u0E31\u0E19\u0E17\u0E32\u0E07\u0E01\u0E0E\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E2A\u0E21\u0E37\u0E2D\u0E19\u0E01\u0E32\u0E23\u0E25\u0E07\u0E25\u0E32\u0E22\u0E21\u0E37\u0E2D\u0E0A\u0E37\u0E48\u0E2D\u0E14\u0E49\u0E27\u0E22\u0E21\u0E37\u0E2D \u0E15\u0E32\u0E21\u0E1E\u0E23\u0E30\u0E23\u0E32\u0E0A\u0E1A\u0E31\u0E0D\u0E0D\u0E31\u0E15\u0E34\u0E27\u0E48\u0E32\u0E14\u0E49\u0E27\u0E22\u0E18\u0E38\u0E23\u0E01\u0E23\u0E23\u0E21\u0E17\u0E32\u0E07\u0E2D\u0E34\u0E40\u0E25\u0E47\u0E01\u0E17\u0E23\u0E2D\u0E19\u0E34\u0E01\u0E2A\u0E4C \u0E1E.\u0E28. 2544
+(5) \u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E44\u0E14\u0E49\u0E2D\u0E48\u0E32\u0E19\u0E41\u0E25\u0E30\u0E40\u0E02\u0E49\u0E32\u0E43\u0E08\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E02\u0E49\u0E32\u0E07\u0E15\u0E49\u0E19\u0E41\u0E25\u0E49\u0E27 \u0E08\u0E36\u0E07\u0E25\u0E07\u0E19\u0E32\u0E21\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E22\u0E37\u0E19\u0E22\u0E31\u0E19`;
+var LEGACY_DEFAULT_CONSENT = "\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E44\u0E14\u0E49\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E08\u0E33\u0E19\u0E27\u0E19\u0E14\u0E31\u0E07\u0E01\u0E25\u0E48\u0E32\u0E27\u0E41\u0E25\u0E49\u0E27 \u0E41\u0E25\u0E30\u0E21\u0E2D\u0E1A\u0E2D\u0E33\u0E19\u0E32\u0E08\u0E43\u0E2B\u0E49\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E43\u0E19\u0E19\u0E32\u0E21\u0E02\u0E2D\u0E07\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E18\u0E38\u0E23\u0E01\u0E23\u0E23\u0E21\u0E19\u0E35\u0E49\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19";
+function renderConsent(template, vars) {
+  return template.replace(/\{\{client\}\}/g, vars.client).replace(/\{\{amount\}\}/g, vars.amount).replace(/\{\{date\}\}/g, vars.date).replace(/\{\{ref\}\}/g, vars.ref).replace(/\{\{version\}\}/g, vars.version);
+}
+var CONSENT_VARS = ["{{client}}", "{{amount}}", "{{date}}", "{{ref}}", "{{version}}"];
+function currentBeYear(today = /* @__PURE__ */ new Date()) {
+  return today.getFullYear() + 543;
+}
+var DEFAULT_INVITE_TEMPLATE = `\u0E40\u0E23\u0E35\u0E22\u0E19 \u0E04\u0E38\u0E13{{vendor}}
+
+\u0E41\u0E08\u0E49\u0E07\u0E22\u0E2D\u0E14\u0E42\u0E2D\u0E19\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E27\u0E31\u0E19\u0E17\u0E35\u0E48 {{date}}
+\u0E22\u0E2D\u0E14\u0E23\u0E31\u0E1A\u0E2A\u0E38\u0E17\u0E18\u0E34 {{amount}} \u0E1A\u0E32\u0E17
+
+\u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E1B\u0E34\u0E14\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E25\u0E07\u0E19\u0E32\u0E21\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E41\u0E25\u0E30\u0E21\u0E2D\u0E1A\u0E2D\u0E33\u0E19\u0E32\u0E08\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08 (\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E43\u0E0A\u0E49\u0E44\u0E14\u0E49\u0E08\u0E19\u0E01\u0E27\u0E48\u0E32\u0E08\u0E30\u0E25\u0E07\u0E19\u0E32\u0E21)
+{{link}}`;
+var DEFAULT_VENDOR_INVITE_TEMPLATE = `\u0E40\u0E23\u0E35\u0E22\u0E19 \u0E1C\u0E39\u0E49\u0E02\u0E32\u0E22/\u0E1C\u0E39\u0E49\u0E23\u0E31\u0E1A\u0E08\u0E49\u0E32\u0E07
+
+{{client}} \u0E02\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E23\u0E48\u0E27\u0E21\u0E21\u0E37\u0E2D\u0E01\u0E23\u0E2D\u0E01\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E1C\u0E39\u0E49\u0E02\u0E32\u0E22 \u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E43\u0E0A\u0E49\u0E43\u0E19\u0E01\u0E32\u0E23\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E41\u0E25\u0E30\u0E42\u0E2D\u0E19\u0E40\u0E07\u0E34\u0E19\u0E43\u0E2B\u0E49\u0E17\u0E48\u0E32\u0E19\u0E2D\u0E22\u0E48\u0E32\u0E07\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07
+\u0E01\u0E23\u0E38\u0E13\u0E32\u0E01\u0E23\u0E2D\u0E01\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E41\u0E25\u0E30\u0E41\u0E19\u0E1A\u0E40\u0E2D\u0E01\u0E2A\u0E32\u0E23\u0E1C\u0E48\u0E32\u0E19\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E19\u0E35\u0E49 (\u0E43\u0E0A\u0E49\u0E40\u0E27\u0E25\u0E32\u0E1B\u0E23\u0E30\u0E21\u0E32\u0E13 2\u20133 \u0E19\u0E32\u0E17\u0E35)
+{{link}}`;
+
+// src/lib/format.ts
+var fmtTHB = (n) => n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+var fmtDateTH = (iso2) => {
+  try {
+    return new Date(iso2).toLocaleDateString("th-TH", {
+      year: "numeric",
+      month: "short",
+      day: "numeric"
+    });
+  } catch {
+    return iso2;
+  }
+};
+var fmtDateTimeTHLong = (iso2) => {
+  try {
+    return new Date(iso2).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
+  } catch {
+    return iso2;
+  }
+};
+
 // server/src/dates.ts
 function isoDay(v2) {
   if (v2 == null) return "";
@@ -67631,7 +67704,7 @@ function isoDay(v2) {
 }
 
 // server/src/storage.ts
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 // node_modules/aws4fetch/dist/aws4fetch.esm.mjs
@@ -67979,6 +68052,14 @@ async function getObject(path) {
     return null;
   }
 }
+async function deleteObject(path) {
+  const c = getClient();
+  if (!c) return;
+  try {
+    await c.fetch(objectUrl(path), { method: "DELETE" });
+  } catch {
+  }
+}
 
 // server/src/storage.ts
 function storageRoot() {
@@ -68068,6 +68149,37 @@ async function readTenantAsset(tenantId, relPath) {
   } catch {
     return void 0;
   }
+}
+var ARTIFACT_AREAS = ["slips", "signatures", "pdfs", "vendor-docs"];
+async function deleteTenantArtifacts(tenantId, relPaths) {
+  if (!tenantId) return 0;
+  let removed = 0;
+  for (const rel of relPaths) {
+    if (!rel) continue;
+    if (isAbsolute(rel) || rel.includes("\0")) continue;
+    const segments = rel.split(/[\\/]/);
+    if (segments[0] !== tenantId || segments.some((s) => s === ".." || s === "")) continue;
+    if (r2Configured()) await deleteObject(rel);
+    const full = resolveStored(tenantId, rel);
+    if (full) {
+      try {
+        unlinkSync(full);
+        removed++;
+      } catch {
+      }
+    }
+  }
+  for (const area of ARTIFACT_AREAS) {
+    const dir = join(storageRoot(), tenantId, area);
+    try {
+      if (existsSync(dir)) {
+        rmSync(dir, { recursive: true, force: true });
+        removed++;
+      }
+    } catch {
+    }
+  }
+  return removed;
 }
 
 // server/src/auth.ts
@@ -68159,7 +68271,7 @@ function sessionCookie(token, expiresAt, name = SESSION_COOKIE) {
   )}${process.env.NODE_ENV === "production" ? "; Secure" : ""}`;
 }
 function clearSessionCookie(name = SESSION_COOKIE) {
-  return `${name}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`;
+  return `${name}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${process.env.NODE_ENV === "production" ? "; Secure" : ""}`;
 }
 
 // server/src/shared.ts
@@ -68194,6 +68306,63 @@ async function rateLimited(key2, max = 30) {
   } catch {
     return memoryLimited(key2, max);
   }
+}
+var LOGIN_MAX_FAILS = 5;
+var LOGIN_LOCK_MS = 15 * 60 * 1e3;
+var MAX_PASSWORD_LEN = 128;
+function lockoutUntil(rec, now) {
+  if (!rec) return 0;
+  if (now > rec.until) return 0;
+  return rec.n >= LOGIN_MAX_FAILS ? rec.until : 0;
+}
+function nextLockout(rec, now) {
+  const base = rec && now <= rec.until ? rec.n : 0;
+  return { n: base + 1, until: now + LOGIN_LOCK_MS };
+}
+var lockMemory = /* @__PURE__ */ new Map();
+async function loginLocked(email) {
+  const now = Date.now();
+  try {
+    const rows = await sql()`select fails, until from login_lockouts where email = ${email}`;
+    const r = rows[0];
+    if (!r) return 0;
+    return lockoutUntil({ n: Number(r.fails), until: new Date(String(r.until)).getTime() }, now);
+  } catch {
+    return lockoutUntil(lockMemory.get(email), now);
+  }
+}
+async function noteLoginFailure(email) {
+  const now = Date.now();
+  try {
+    const db = sql();
+    const rows = await db`select fails, until from login_lockouts where email = ${email}`;
+    const prev = rows[0] ? { n: Number(rows[0].fails), until: new Date(String(rows[0].until)).getTime() } : void 0;
+    const wasLocked = lockoutUntil(prev, now) > 0;
+    const rec = nextLockout(prev, now);
+    await db`insert into login_lockouts (email, fails, until) values (${email}, ${rec.n}, ${new Date(rec.until).toISOString()})
+      on conflict (email) do update set fails = excluded.fails, until = excluded.until`;
+    const locked = rec.n >= LOGIN_MAX_FAILS;
+    return { locked, triggered: locked && !wasLocked };
+  } catch {
+    const prev = lockMemory.get(email);
+    const wasLocked = lockoutUntil(prev, now) > 0;
+    const rec = nextLockout(prev, now);
+    lockMemory.set(email, rec);
+    const locked = rec.n >= LOGIN_MAX_FAILS;
+    return { locked, triggered: locked && !wasLocked };
+  }
+}
+async function clearLoginFailures(email) {
+  lockMemory.delete(email);
+  try {
+    await sql()`delete from login_lockouts where email = ${email}`;
+  } catch {
+  }
+}
+var dummy = null;
+async function dummyPasswordHash() {
+  if (!dummy) dummy = await hashPassword("taxwork-dummy-password");
+  return dummy;
 }
 var GATE_WINDOW_MS = 10 * 60 * 1e3;
 var gateMemory = /* @__PURE__ */ new Map();
@@ -68235,8 +68404,10 @@ async function gateClear(tokenHash) {
 }
 async function audit(tenantId, entityType, entityId, eventType, actor, metadata, ip) {
   const db = sql();
-  await db`insert into audit_events (user_id, entity_type, entity_id, event_type, actor, metadata, ip)
-    values (${tenantId}, ${entityType}, ${entityId}, ${eventType}, ${actor}, ${JSON.stringify(metadata ?? {})}, ${ip})`;
+  const rows = await db`insert into audit_events (user_id, entity_type, entity_id, event_type, actor, metadata, ip)
+    values (${tenantId}, ${entityType}, ${entityId}, ${eventType}, ${actor}, ${JSON.stringify(metadata ?? {})}, ${ip})
+    returning id`;
+  return rows[0] ? String(rows[0].id) : null;
 }
 async function tenantProfile(tenantId) {
   const db = sql();
@@ -68296,32 +68467,11 @@ function impersonationCookie(token) {
   return `${IMPERSONATION_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${TTL_MS / 1e3}${secure}`;
 }
 function clearImpersonationCookie() {
-  return `${IMPERSONATION_COOKIE}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`;
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  return `${IMPERSONATION_COOKIE}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${secure}`;
 }
 
 // server/src/client-auth.ts
-var MAX_FAILS = 5;
-var LOCK_MS = 15 * 60 * 1e3;
-var fails = /* @__PURE__ */ new Map();
-function lockedUntil(email) {
-  const f = fails.get(email);
-  if (!f) return 0;
-  if (Date.now() > f.until) {
-    fails.delete(email);
-    return 0;
-  }
-  return f.n >= MAX_FAILS ? f.until : 0;
-}
-function noteFailure(email) {
-  const f = fails.get(email);
-  const n = (f?.n ?? 0) + 1;
-  fails.set(email, { n, until: Date.now() + LOCK_MS });
-}
-var dummy = null;
-async function dummyHash() {
-  if (!dummy) dummy = await hashPassword("taxwork-dummy-password");
-  return dummy;
-}
 function isClient(u) {
   return u.memberships.some(
     (m2) => m2.role === "client_user" || m2.role === "client_admin" || m2.role === "owner" || m2.role === "manager" || m2.role === "officer"
@@ -68338,21 +68488,22 @@ authRoutes.post("/login", async (c) => {
   const body = await c.req.json().catch(() => null);
   const email = (body?.email ?? "").trim().toLowerCase();
   if (!email || !body?.password) return c.json({ error: "invalid-body" }, 400);
-  if (lockedUntil(email)) return c.json({ error: "locked" }, 429);
+  if (await loginLocked(email)) return c.json({ error: "locked" }, 429);
   const db = sql();
   const rows = await db`select u.id, u.email, c.password_hash, c.must_change_pw, u.status, c.temp_expires_at, u.is_platform_admin
     from profiles u join auth_credentials c on c.user_id = u.id
     where lower(u.email) = ${email}`;
   const u = one(rows);
-  const ok = u ? await verifyPassword(body.password, String(u.password_hash)) : await verifyPassword(body.password, await dummyHash());
+  const ok = u ? await verifyPassword(body.password, String(u.password_hash)) : await verifyPassword(body.password, await dummyPasswordHash());
   if (!u || u.status !== "active" || !ok) {
-    noteFailure(email);
+    const { triggered } = await noteLoginFailure(email);
+    if (triggered) await audit("PLATFORM", "profiles", email, "user.login.locked", null, {}, ip);
     return c.json({ error: "invalid-credentials" }, 401);
   }
   if (u.temp_expires_at && new Date(String(u.temp_expires_at)) < /* @__PURE__ */ new Date() && u.must_change_pw)
     return c.json({ error: "temp-expired" }, 403);
   if (u.is_platform_admin) {
-    fails.delete(email);
+    await clearLoginFailures(email);
     const { token: token2, expiresAt: expiresAt2 } = await createSession(String(u.id), ip, c.req.header("user-agent") ?? "", { admin: true });
     await audit("PLATFORM", "profiles", String(u.id), "admin.login", u.email, {}, ip);
     return new Response(
@@ -68364,7 +68515,7 @@ authRoutes.post("/login", async (c) => {
   const memberships = mems.map((m2) => ({ tenantId: String(m2.workspace_user_id), role: String(m2.role) }));
   if (!memberships.some((m2) => m2.role === "client_user" || m2.role === "client_admin" || m2.role === "owner" || m2.role === "manager" || m2.role === "officer"))
     return c.json({ error: "not-a-client-user" }, 403);
-  fails.delete(email);
+  await clearLoginFailures(email);
   const { token, expiresAt } = await createSession(String(u.id), ip, c.req.header("user-agent") ?? "");
   const tenantId = memberships[0]?.tenantId ?? PILOT_TENANT;
   await withTenant(tenantId, "client_user", async () => audit(tenantId, "profiles", String(u.id), "user.login", "user", { channel: "client" }, ip));
@@ -68400,11 +68551,12 @@ authRoutes.get("/me", async (c) => {
   }
   return c.json({ error: "unauthorized" }, 401);
 });
+var MIN_PASSWORD_LEN = 8;
 authRoutes.post("/change-password", async (c) => {
   const u = await requireClient(c);
   if (!u) return c.json({ error: "unauthorized" }, 401);
   const body = await c.req.json().catch(() => null);
-  if (!body?.oldPassword || !body?.newPassword || body.newPassword.length < 8)
+  if (!body?.oldPassword || !body?.newPassword || body.newPassword.length < MIN_PASSWORD_LEN || body.newPassword.length > MAX_PASSWORD_LEN)
     return c.json({ error: "invalid-body" }, 400);
   const db = sql();
   const rows = await db`select password_hash from auth_credentials where user_id = ${u.userId}`;
@@ -68412,6 +68564,12 @@ authRoutes.post("/change-password", async (c) => {
     return c.json({ error: "invalid-credentials" }, 401);
   await db`update auth_credentials set password_hash = ${await hashPassword(body.newPassword)},
     must_change_pw = false, temp_expires_at = null, updated_at = now() where user_id = ${u.userId}`;
+  const current = (c.req.header("cookie") ?? "").match(new RegExp(`${SESSION_COOKIE}=([^;]+)`))?.[1];
+  if (current) {
+    await db`delete from sessions where user_id = ${u.userId} and token_hash != ${sha256hex(decodeURIComponent(current))}`;
+  } else {
+    await db`delete from sessions where user_id = ${u.userId}`;
+  }
   const tenantId = u.memberships[0]?.tenantId ?? PILOT_TENANT;
   await withTenant(tenantId, "client_user", async () => audit(tenantId, "profiles", u.userId, "user.password-changed", "user", {}, "local"));
   return c.json({ ok: true });
@@ -68518,41 +68676,6 @@ function corsMw() {
   });
 }
 
-// src/lib/settings-types.ts
-var DEFAULT_WHT_RATES = [
-  { value: 3, label: "\u0E04\u0E48\u0E32\u0E08\u0E49\u0E32\u0E07\u0E17\u0E33\u0E02\u0E2D\u0E07", paymentType: "\u0E04\u0E48\u0E32\u0E08\u0E49\u0E32\u0E07\u0E17\u0E33\u0E02\u0E2D\u0E07" },
-  { value: 3, label: "\u0E04\u0E48\u0E32\u0E27\u0E34\u0E0A\u0E32\u0E0A\u0E35\u0E1E\u0E2D\u0E34\u0E2A\u0E23\u0E30", paymentType: "\u0E04\u0E48\u0E32\u0E27\u0E34\u0E0A\u0E32\u0E0A\u0E35\u0E1E\u0E2D\u0E34\u0E2A\u0E23\u0E30" },
-  { value: 3, label: "\u0E04\u0E48\u0E32\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23", paymentType: "\u0E04\u0E48\u0E32\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23" },
-  { value: 5, label: "\u0E04\u0E48\u0E32\u0E40\u0E0A\u0E48\u0E32\u0E17\u0E23\u0E31\u0E1E\u0E22\u0E4C\u0E2A\u0E34\u0E19", paymentType: "\u0E04\u0E48\u0E32\u0E40\u0E0A\u0E48\u0E32\u0E17\u0E23\u0E31\u0E1E\u0E22\u0E4C\u0E2A\u0E34\u0E19" },
-  { value: 3, label: "\u0E04\u0E48\u0E32\u0E19\u0E32\u0E22\u0E2B\u0E19\u0E49\u0E32", paymentType: "\u0E04\u0E48\u0E32\u0E19\u0E32\u0E22\u0E2B\u0E19\u0E49\u0E32" },
-  { value: 1, label: "\u0E04\u0E48\u0E32\u0E02\u0E19\u0E2A\u0E48\u0E07", paymentType: "\u0E04\u0E48\u0E32\u0E02\u0E19\u0E2A\u0E48\u0E07" },
-  { value: 0, label: "\u0E44\u0E21\u0E48\u0E2B\u0E31\u0E01\u0E20\u0E32\u0E29\u0E35 \u0E13 \u0E17\u0E35\u0E48\u0E08\u0E48\u0E32\u0E22", paymentType: "\u0E44\u0E21\u0E48\u0E2B\u0E31\u0E01\u0E20\u0E32\u0E29\u0E35 \u0E13 \u0E17\u0E35\u0E48\u0E08\u0E48\u0E32\u0E22" }
-];
-var DEFAULT_WHT_MIN_THRESHOLD = 1e3;
-var DEFAULT_CONSENT_VERSION = "2";
-var DEFAULT_CONSENT = `\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E02\u0E2D\u0E23\u0E31\u0E1A\u0E23\u0E2D\u0E07\u0E41\u0E25\u0E30\u0E43\u0E2B\u0E49\u0E04\u0E27\u0E32\u0E21\u0E22\u0E34\u0E19\u0E22\u0E2D\u0E21\u0E14\u0E31\u0E07\u0E15\u0E48\u0E2D\u0E44\u0E1B\u0E19\u0E35\u0E49
-(1) \u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E02\u0E2D\u0E23\u0E31\u0E1A\u0E23\u0E2D\u0E07\u0E27\u0E48\u0E32\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E17\u0E35\u0E48\u0E43\u0E2B\u0E49\u0E44\u0E27\u0E49\u0E43\u0E19\u0E40\u0E2D\u0E01\u0E2A\u0E32\u0E23\u0E19\u0E35\u0E49 (\u0E0A\u0E37\u0E48\u0E2D \u0E17\u0E35\u0E48\u0E2D\u0E22\u0E39\u0E48 \u0E40\u0E25\u0E02\u0E1B\u0E23\u0E30\u0E08\u0E33\u0E15\u0E31\u0E27\u0E1B\u0E23\u0E30\u0E0A\u0E32\u0E0A\u0E19 \u0E41\u0E25\u0E30\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E01\u0E32\u0E23\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19) \u0E40\u0E1B\u0E47\u0E19\u0E04\u0E27\u0E32\u0E21\u0E08\u0E23\u0E34\u0E07\u0E41\u0E25\u0E30\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07\u0E17\u0E38\u0E01\u0E1B\u0E23\u0E30\u0E01\u0E32\u0E23 \u0E41\u0E25\u0E30\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E40\u0E1B\u0E47\u0E19\u0E1C\u0E39\u0E49\u0E21\u0E35\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E15\u0E32\u0E21\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E19\u0E35\u0E49
-(2) \u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E44\u0E14\u0E49\u0E23\u0E31\u0E1A\u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19\u0E04\u0E48\u0E32\u0E08\u0E49\u0E32\u0E07/\u0E04\u0E48\u0E32\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23\u0E15\u0E32\u0E21\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E02\u0E49\u0E32\u0E07\u0E15\u0E49\u0E19\u0E04\u0E23\u0E1A\u0E16\u0E49\u0E27\u0E19\u0E41\u0E25\u0E49\u0E27 \u2014 \u0E22\u0E2D\u0E14\u0E23\u0E31\u0E1A\u0E2A\u0E38\u0E17\u0E18\u0E34 {{amount}} \u0E1A\u0E32\u0E17 \u0E27\u0E31\u0E19\u0E17\u0E35\u0E48 {{date}} \u0E2D\u0E49\u0E32\u0E07\u0E2D\u0E34\u0E07 {{ref}}
-(3) \u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E02\u0E2D\u0E21\u0E2D\u0E1A\u0E2D\u0E33\u0E19\u0E32\u0E08\u0E41\u0E25\u0E30\u0E43\u0E2B\u0E49\u0E04\u0E27\u0E32\u0E21\u0E22\u0E34\u0E19\u0E22\u0E2D\u0E21\u0E41\u0E01\u0E48 {{client}} \u0E43\u0E19\u0E01\u0E32\u0E23\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E43\u0E19\u0E19\u0E32\u0E21\u0E02\u0E2D\u0E07\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32 \u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E18\u0E38\u0E23\u0E01\u0E23\u0E23\u0E21\u0E19\u0E35\u0E49\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19
-(4) \u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E22\u0E34\u0E19\u0E22\u0E2D\u0E21\u0E43\u0E2B\u0E49\u0E25\u0E32\u0E22\u0E21\u0E37\u0E2D\u0E0A\u0E37\u0E48\u0E2D\u0E2D\u0E34\u0E40\u0E25\u0E47\u0E01\u0E17\u0E23\u0E2D\u0E19\u0E34\u0E01\u0E2A\u0E4C\u0E17\u0E35\u0E48\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E25\u0E07\u0E43\u0E19\u0E40\u0E2D\u0E01\u0E2A\u0E32\u0E23\u0E19\u0E35\u0E49\u0E21\u0E35\u0E1C\u0E25\u0E1C\u0E39\u0E01\u0E1E\u0E31\u0E19\u0E17\u0E32\u0E07\u0E01\u0E0E\u0E2B\u0E21\u0E32\u0E22\u0E40\u0E2A\u0E21\u0E37\u0E2D\u0E19\u0E01\u0E32\u0E23\u0E25\u0E07\u0E25\u0E32\u0E22\u0E21\u0E37\u0E2D\u0E0A\u0E37\u0E48\u0E2D\u0E14\u0E49\u0E27\u0E22\u0E21\u0E37\u0E2D \u0E15\u0E32\u0E21\u0E1E\u0E23\u0E30\u0E23\u0E32\u0E0A\u0E1A\u0E31\u0E0D\u0E0D\u0E31\u0E15\u0E34\u0E27\u0E48\u0E32\u0E14\u0E49\u0E27\u0E22\u0E18\u0E38\u0E23\u0E01\u0E23\u0E23\u0E21\u0E17\u0E32\u0E07\u0E2D\u0E34\u0E40\u0E25\u0E47\u0E01\u0E17\u0E23\u0E2D\u0E19\u0E34\u0E01\u0E2A\u0E4C \u0E1E.\u0E28. 2544
-(5) \u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E44\u0E14\u0E49\u0E2D\u0E48\u0E32\u0E19\u0E41\u0E25\u0E30\u0E40\u0E02\u0E49\u0E32\u0E43\u0E08\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E02\u0E49\u0E32\u0E07\u0E15\u0E49\u0E19\u0E41\u0E25\u0E49\u0E27 \u0E08\u0E36\u0E07\u0E25\u0E07\u0E19\u0E32\u0E21\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E22\u0E37\u0E19\u0E22\u0E31\u0E19`;
-var LEGACY_DEFAULT_CONSENT = "\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E44\u0E14\u0E49\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E08\u0E33\u0E19\u0E27\u0E19\u0E14\u0E31\u0E07\u0E01\u0E25\u0E48\u0E32\u0E27\u0E41\u0E25\u0E49\u0E27 \u0E41\u0E25\u0E30\u0E21\u0E2D\u0E1A\u0E2D\u0E33\u0E19\u0E32\u0E08\u0E43\u0E2B\u0E49\u0E25\u0E39\u0E01\u0E04\u0E49\u0E32\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E43\u0E19\u0E19\u0E32\u0E21\u0E02\u0E2D\u0E07\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E18\u0E38\u0E23\u0E01\u0E23\u0E23\u0E21\u0E19\u0E35\u0E49\u0E40\u0E17\u0E48\u0E32\u0E19\u0E31\u0E49\u0E19";
-function currentBeYear(today = /* @__PURE__ */ new Date()) {
-  return today.getFullYear() + 543;
-}
-var DEFAULT_INVITE_TEMPLATE = `\u0E40\u0E23\u0E35\u0E22\u0E19 \u0E04\u0E38\u0E13{{vendor}}
-
-\u0E41\u0E08\u0E49\u0E07\u0E22\u0E2D\u0E14\u0E42\u0E2D\u0E19\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E27\u0E31\u0E19\u0E17\u0E35\u0E48 {{date}}
-\u0E22\u0E2D\u0E14\u0E23\u0E31\u0E1A\u0E2A\u0E38\u0E17\u0E18\u0E34 {{amount}} \u0E1A\u0E32\u0E17
-
-\u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E1B\u0E34\u0E14\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E25\u0E07\u0E19\u0E32\u0E21\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E41\u0E25\u0E30\u0E21\u0E2D\u0E1A\u0E2D\u0E33\u0E19\u0E32\u0E08\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08 (\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E43\u0E0A\u0E49\u0E44\u0E14\u0E49\u0E08\u0E19\u0E01\u0E27\u0E48\u0E32\u0E08\u0E30\u0E25\u0E07\u0E19\u0E32\u0E21)
-{{link}}`;
-var DEFAULT_VENDOR_INVITE_TEMPLATE = `\u0E40\u0E23\u0E35\u0E22\u0E19 \u0E1C\u0E39\u0E49\u0E02\u0E32\u0E22/\u0E1C\u0E39\u0E49\u0E23\u0E31\u0E1A\u0E08\u0E49\u0E32\u0E07
-
-{{client}} \u0E02\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E23\u0E48\u0E27\u0E21\u0E21\u0E37\u0E2D\u0E01\u0E23\u0E2D\u0E01\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E1C\u0E39\u0E49\u0E02\u0E32\u0E22 \u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E43\u0E0A\u0E49\u0E43\u0E19\u0E01\u0E32\u0E23\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E41\u0E25\u0E30\u0E42\u0E2D\u0E19\u0E40\u0E07\u0E34\u0E19\u0E43\u0E2B\u0E49\u0E17\u0E48\u0E32\u0E19\u0E2D\u0E22\u0E48\u0E32\u0E07\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07
-\u0E01\u0E23\u0E38\u0E13\u0E32\u0E01\u0E23\u0E2D\u0E01\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E41\u0E25\u0E30\u0E41\u0E19\u0E1A\u0E40\u0E2D\u0E01\u0E2A\u0E32\u0E23\u0E1C\u0E48\u0E32\u0E19\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E19\u0E35\u0E49 (\u0E43\u0E0A\u0E49\u0E40\u0E27\u0E25\u0E32\u0E1B\u0E23\u0E30\u0E21\u0E32\u0E13 2\u20133 \u0E19\u0E32\u0E17\u0E35)
-{{link}}`;
-
 // server/src/settings.ts
 async function getTenantSettings(tenantId) {
   return withTenant(tenantId, "client", async () => {
@@ -68596,6 +68719,11 @@ async function getTenantSettings(tenantId) {
   });
 }
 async function saveTenantSettings(tenantId, s) {
+  const current = await getTenantSettings(tenantId);
+  if ((s.consentTextV1 ?? "") !== (current.consentTextV1 ?? "")) {
+    if ((s.consentVersion ?? "") === (current.consentVersion ?? "")) throw new Error("consent-version-required");
+    if (CONSENT_VARS.some((v2) => !(s.consentTextV1 ?? "").includes(v2))) throw new Error("consent-vars-missing");
+  }
   await withTenant(tenantId, "client_admin", async () => {
     const db = sql();
     await db`update client_profiles set display_name = ${s.displayName}, name = ${s.displayName},
@@ -70417,17 +70545,6 @@ var import_qrcode_generator = __toESM(require_qrcode(), 1);
 import { createHash as createHash3 } from "node:crypto";
 import { readFileSync as readFs } from "node:fs";
 import { join as join2 } from "node:path";
-
-// src/lib/format.ts
-var fmtDateTimeTHLong = (iso2) => {
-  try {
-    return new Date(iso2).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
-  } catch {
-    return iso2;
-  }
-};
-
-// server/src/pdf.ts
 var INK = (0, import_pdf_lib.rgb)(0.102, 0.137, 0.196);
 var MUTED = (0, import_pdf_lib.rgb)(0.392, 0.451, 0.549);
 var FAINT = (0, import_pdf_lib.rgb)(0.62, 0.671, 0.741);
@@ -70654,7 +70771,10 @@ async function buildReceiptPdf(input) {
     regular,
     FAINT
   );
-  centerText(`\u0E23\u0E2B\u0E31\u0E2A\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A ${input.verificationCode} \xB7 ${input.verifyUrl}`, 30, 8, regular, FAINT);
+  const footerBits = [`\u0E23\u0E2B\u0E31\u0E2A\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A ${input.verificationCode} \xB7 ${input.verifyUrl}`];
+  if (input.authRef) footerBits.push(`\u0E40\u0E25\u0E02\u0E2D\u0E49\u0E32\u0E07\u0E2D\u0E34\u0E07 ${input.authRef}`);
+  if (input.consentVersion) footerBits.push(`\u0E02\u0E49\u0E2D\u0E15\u0E01\u0E25\u0E07 v${input.consentVersion}`);
+  centerText(footerBits.join(" \xB7 "), 30, 8, regular, FAINT);
   if (input.showVerification) {
     const qrSize = 64;
     drawQr(page, input.verifyUrl, right - qrSize, M - 6, qrSize, INK);
@@ -70776,6 +70896,7 @@ async function finalizeReceipt(txnId, ip) {
     verificationMethod: d2.verification_method,
     consentVersion: d2.consent_text_version,
     signedAt: d2.signed_at,
+    authRef: d2.auth_ref ?? void 0,
     client: { code: prof.code, display: prof.display },
     vendor: {
       prefix: d2.vendor_prefix,
@@ -71328,6 +71449,8 @@ app.post("/api/vendor/:token/sign", async (c) => {
   const body = await c.req.json().catch(() => null);
   if (!body?.vendorName || !body?.vendorAddress || !body?.signaturePng || body.consentVersion !== "v1")
     return c.json({ error: "invalid-body" }, 400);
+  if (!isValidPhone(String(body.vendorPhone ?? ""))) return c.json({ error: "invalid-phone" }, 400);
+  if (!isValidEmail(String(body.vendorEmail ?? ""))) return c.json({ error: "invalid-email" }, 400);
   const subPrefix = (body.vendorPrefix ?? "").trim();
   if (prefixRequired(String(body.vendorName)) && !isVendorPrefix(subPrefix))
     return c.json({ error: "invalid-prefix" }, 400);
@@ -71342,8 +71465,9 @@ app.post("/api/vendor/:token/sign", async (c) => {
     return c.json({ error: "invalid-signature" }, 400);
   const rows = await db`
     select vr.id as req_id, vr.user_id, vr.expires_at, vr.used_at, vr.revoked_at, vr.unlocked_at,
-      t.id, t.status, t.net_amount, t.tax_id_hash,
-      v.prefix as record_prefix, v.name as record_name, v.address as record_address
+      t.id, t.status, t.net_amount, t.transfer_date, t.ref, t.tax_id_hash,
+      v.prefix as record_prefix, v.name as record_name, v.address as record_address,
+      v.phone as record_phone, v.email as record_email
     from vendor_requests vr
     join vendor_payables t on t.id = vr.transaction_id
     join vendor_payees v on v.id = t.vendor_id
@@ -71361,26 +71485,39 @@ app.post("/api/vendor/:token/sign", async (c) => {
   const corrections = [];
   const subName = String(body.vendorName).slice(0, 200);
   const subAddr = String(body.vendorAddress).slice(0, 500);
+  const subPhone = String(body.vendorPhone ?? "").trim().slice(0, 50);
+  const subEmail = String(body.vendorEmail ?? "").trim().slice(0, 200);
   if (subPrefix !== String(r.record_prefix ?? ""))
     corrections.push({ field: "prefix", from: String(r.record_prefix ?? ""), to: subPrefix });
   if (subName !== String(r.record_name))
     corrections.push({ field: "name", from: String(r.record_name), to: subName });
   if (subAddr !== String(r.record_address))
     corrections.push({ field: "address", from: String(r.record_address), to: subAddr });
+  if (subPhone !== String(r.record_phone ?? ""))
+    corrections.push({ field: "phone", from: String(r.record_phone ?? ""), to: subPhone });
+  if (subEmail !== String(r.record_email ?? ""))
+    corrections.push({ field: "email", from: String(r.record_email ?? ""), to: subEmail });
   const sigPath = await saveBytesDurable("signatures", `${txnId}.png`, png, rowTenant);
-  const subPhone = String(body.vendorPhone ?? "").trim().slice(0, 50);
-  const subEmail = String(body.vendorEmail ?? "").trim().slice(0, 200);
   const authRef = `AUTH-${randomBytes6(4).toString("hex").toUpperCase()}`;
-  const consentVersion = (await getTenantSettings(rowTenant)).consentVersion;
+  const settings = await getTenantSettings(rowTenant);
+  const consentVersion = settings.consentVersion;
+  const consentText = renderConsent(settings.consentTextV1, {
+    client: settings.displayName,
+    amount: fmtTHB(Number(r.net_amount)),
+    date: fmtDateTH(isoDay(r.transfer_date)),
+    ref: String(r.ref),
+    version: consentVersion
+  });
+  const consentSha256 = sha256hex(consentText);
   await db`insert into vendor_authorizations
     (user_id, transaction_id, vendor_prefix, vendor_name, vendor_address, vendor_masked_id,
      vendor_phone, vendor_email, auth_ref, signature_image_path, verification_method, line_user_id, ip, user_agent,
-     consent_text_version, corrections)
+     consent_text_version, consent_text, consent_sha256, corrections)
     values (${rowTenant}, ${txnId}, ${subPrefix}, ${subName}, ${subAddr},
       ${`x-xxxx-xxxxx-${last4.slice(0, 2)}-${last4.slice(2)}`},
       ${subPhone}, ${subEmail}, ${authRef},
       ${sigPath}, ${verificationMethod}, ${body.lineUserId ?? null}, ${ip},
-      ${(c.req.header("user-agent") ?? "").slice(0, 500)}, ${consentVersion},
+      ${(c.req.header("user-agent") ?? "").slice(0, 500)}, ${consentVersion}, ${consentText}, ${consentSha256},
       ${JSON.stringify(corrections)})`;
   await db`update vendor_requests set used_at = now() where id = ${String(r.req_id)}`;
   await db`update vendor_payables set status = 'signed' where id = ${txnId}`;
@@ -71390,7 +71527,7 @@ app.post("/api/vendor/:token/sign", async (c) => {
     txnId,
     "vendor.signed",
     "vendor",
-    { verificationMethod, signMethod, consentVersion, corrections, authRef },
+    { verificationMethod, signMethod, consentVersion, consentSha256, corrections, authRef },
     ip
   ));
   let issued;
@@ -71456,7 +71593,10 @@ app.put("/api/settings", async (c) => {
   try {
     await saveTenantSettings(g.ws, body);
     return c.json({ ok: true });
-  } catch {
+  } catch (e) {
+    const code = e instanceof Error ? e.message : "";
+    if (code === "consent-version-required" || code === "consent-vars-missing")
+      return c.json({ error: code }, 400);
     return c.json({ error: "invalid-body" }, 400);
   }
 });
@@ -71602,7 +71742,7 @@ adminApp.use("*", async (c, next) => {
 });
 adminApp.get("/api/health", (c) => c.json({ ok: true, operation: "admin" }));
 async function writeAudit(tenantId, entityType, entityId, eventType, actor, metadata, ip) {
-  await audit(tenantId, entityType, entityId, eventType, actor, metadata, ip);
+  return audit(tenantId, entityType, entityId, eventType, actor, metadata, ip);
 }
 adminApp.post("/api/login", async (c) => {
   const ip = c.req.header("x-forwarded-for") ?? "local";
@@ -71610,16 +71750,22 @@ adminApp.post("/api/login", async (c) => {
   const body = await c.req.json().catch(() => null);
   const email = (body?.email ?? "").trim().toLowerCase();
   if (!email || !body?.password) return c.json({ error: "invalid-body" }, 400);
+  if (await loginLocked(email)) return c.json({ error: "locked" }, 429);
   const db = sql();
   const rows = await db`select u.id, u.email, c.password_hash, c.must_change_pw, u.status, c.temp_expires_at, u.is_platform_admin
     from profiles u join auth_credentials c on c.user_id = u.id
     where lower(u.email) = ${email}`;
   const u = one(rows);
-  if (!u || u.status !== "active" || !u.is_platform_admin) return c.json({ error: "invalid-credentials" }, 401);
+  const hash2 = u && u.status === "active" && u.is_platform_admin ? String(u.password_hash) : await dummyPasswordHash();
+  const ok = await verifyPassword(body.password, hash2);
+  if (!u || u.status !== "active" || !u.is_platform_admin || !ok) {
+    const { triggered } = await noteLoginFailure(email);
+    if (triggered) await writeAudit("PLATFORM", "profiles", email, "admin.login.locked", null, {}, ip);
+    return c.json({ error: "invalid-credentials" }, 401);
+  }
   if (u.temp_expires_at && new Date(String(u.temp_expires_at)) < /* @__PURE__ */ new Date() && u.must_change_pw)
     return c.json({ error: "temp-expired" }, 403);
-  if (!await verifyPassword(body.password, String(u.password_hash)))
-    return c.json({ error: "invalid-credentials" }, 401);
+  await clearLoginFailures(email);
   const { token, expiresAt } = await createSession(String(u.id), ip, c.req.header("user-agent") ?? "", { admin: true });
   await writeAudit("PLATFORM", "profiles", String(u.id), "admin.login", u.email, {}, ip);
   return new Response(
@@ -71648,7 +71794,7 @@ adminApp.post("/api/change-password", async (c) => {
   const u = await requireAdminSession(c);
   if (!u || !u.isPlatformAdmin) return c.json({ error: "unauthorized" }, 401);
   const body = await c.req.json().catch(() => null);
-  if (!body?.oldPassword || !body?.newPassword || body.newPassword.length < 10)
+  if (!body?.oldPassword || !body?.newPassword || body.newPassword.length < 10 || body.newPassword.length > MAX_PASSWORD_LEN)
     return c.json({ error: "invalid-body" }, 400);
   const db = sql();
   const rows = await db`select password_hash from auth_credentials where user_id = ${u.userId}`;
@@ -71656,6 +71802,12 @@ adminApp.post("/api/change-password", async (c) => {
     return c.json({ error: "invalid-credentials" }, 401);
   await db`update auth_credentials set password_hash = ${await hashPassword(body.newPassword)},
     must_change_pw = false, temp_expires_at = null, updated_at = now() where user_id = ${u.userId}`;
+  const current = (c.req.header("cookie") ?? "").match(new RegExp(`${ADMIN_COOKIE}=([^;]+)`))?.[1];
+  if (current) {
+    await db`delete from sessions where user_id = ${u.userId} and token_hash != ${sha256hex(decodeURIComponent(current))}`;
+  } else {
+    await db`delete from sessions where user_id = ${u.userId}`;
+  }
   await writeAudit("PLATFORM", "profiles", u.userId, "admin.password.changed", u.email, {}, c.req.header("x-forwarded-for") ?? "local");
   return c.json({ ok: true });
 });
@@ -71753,7 +71905,7 @@ adminApp.post("/api/admin/tenants", async (c) => {
     (${id}, 'wht_rates', '[{"paymentType":"ค่าจ้างทำของ","rate":3,"label":"ค่าจ้างทำของ"},{"paymentType":"ค่าวิชาชีพอิสระ","rate":3,"label":"ค่าวิชาชีพอิสระ"},{"paymentType":"ค่าบริการ","rate":3,"label":"ค่าบริการ"},{"paymentType":"ค่าเช่าทรัพย์สิน","rate":5,"label":"ค่าเช่าทรัพย์สิน"},{"paymentType":"ค่านายหน้า","rate":3,"label":"ค่านายหน้า"},{"paymentType":"ค่าขนส่ง","rate":1,"label":"ค่าขนส่ง"},{"paymentType":"ไม่หักภาษี ณ ที่จ่าย","rate":0,"label":"ไม่หักภาษี ณ ที่จ่าย"}]'),
     (${id}, 'wht_min_threshold', '1000'),
     (${id}, 'link_expiry_days', '7'),
-    (${id}, 'consent_text_v1', '{"th": "ข้าพเจ้าได้รับเงินจำนวนดังกล่าวแล้ว และมอบอำนาจให้ลูกค้าออกใบเสร็จรับเงินในนามของข้าพเจ้าเฉพาะธุรกรรมนี้เท่านั้น"}')
+    (${id}, 'consent_text_v1', ${JSON.stringify({ th: DEFAULT_CONSENT })}::jsonb)
     on conflict (user_id, key) do nothing`;
   await db`insert into doc_number_sequences (user_id, doc_type, be_year, vendor_no, last_number) values (${id}, 'vendor_receipt', ${beYear}, 0, ${start - 1})
     on conflict (user_id, doc_type, be_year, vendor_no) do nothing`;
@@ -71818,6 +71970,127 @@ adminApp.delete("/api/admin/tenants/:id", async (c) => {
   await db`delete from client_profiles where id = ${id}`;
   await writeAudit("PLATFORM", "client_profiles", id, "tenant.deleted", g.u.email, {}, c.req.header("x-forwarded-for") ?? "local");
   return c.json({ ok: true });
+});
+async function tenantResetCounts(db, id) {
+  const rows = await db`select
+    (select count(*) from vendor_payables where user_id = ${id})::int as txns,
+    (select count(*) from vendor_receipts where user_id = ${id})::int as receipts,
+    (select count(*) from vendor_authorizations where user_id = ${id})::int as signings,
+    (select count(*) from vendor_requests where user_id = ${id})::int as requests,
+    (select count(*) from vendor_payees where user_id = ${id})::int as vendors,
+    (select count(*) from wht_records where user_id = ${id})::int as wht,
+    (select count(*) from wht_vendors where user_id = ${id})::int as wht_vendors,
+    (select count(*) from vendor_invites where user_id = ${id})::int as invites,
+    (select count(*) from items where user_id = ${id})::int as items,
+    (select count(*) from document_line_items where user_id = ${id})::int as line_items`;
+  const r = one(rows) ?? {};
+  const n = (k) => Number(r[k] ?? 0);
+  return {
+    txns: n("txns"),
+    receipts: n("receipts"),
+    signings: n("signings"),
+    requests: n("requests"),
+    vendors: n("vendors"),
+    wht: n("wht"),
+    whtVendors: n("wht_vendors"),
+    invites: n("invites"),
+    items: n("items"),
+    lineItems: n("line_items")
+  };
+}
+async function collectArtifactPaths(db, id) {
+  const rows = await db`select
+    (select array_agg(signature_image_path) from vendor_authorizations where user_id = ${id} and signature_image_path is not null) as sigs,
+    (select array_agg(pdf_path) from vendor_receipts where user_id = ${id} and pdf_path is not null) as pdfs,
+    (select array_agg(pdf_key) from vendor_receipts where user_id = ${id} and pdf_key is not null) as pdf_keys,
+    (select array_agg(slip_file_path) from vendor_payables where user_id = ${id} and slip_file_path is not null) as slips,
+    (select array_agg(id_doc_path) from vendor_invites where user_id = ${id} and id_doc_path is not null) as invite_ids,
+    (select array_agg(bank_doc_path) from vendor_invites where user_id = ${id} and bank_doc_path is not null) as invite_banks,
+    (select array_agg(id_doc_path) from vendor_payees where user_id = ${id} and id_doc_path is not null) as vendor_ids,
+    (select array_agg(bank_doc_path) from vendor_payees where user_id = ${id} and bank_doc_path is not null) as vendor_banks`;
+  const r = rows[0] ?? {};
+  const out = [];
+  for (const value of Object.values(r)) {
+    if (Array.isArray(value)) {
+      for (const p2 of value) if (typeof p2 === "string" && p2) out.push(p2);
+    }
+  }
+  return out;
+}
+adminApp.get("/api/admin/tenants/:id/reset-preview", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
+  const id = c.req.param("id");
+  const db = sql();
+  const t = one(await db`select id, client_code, display_name, name, status, be_year, start_number
+    from client_profiles where id = ${id}`);
+  if (!t) return c.json({ error: "not-found" }, 404);
+  const counts = await tenantResetCounts(db, id);
+  const users = one(await db`select count(*)::int as n from client_members where workspace_user_id = ${id}`);
+  return c.json({
+    tenantId: String(t.id),
+    clientCode: String(t.client_code ?? t.id),
+    displayName: String(t.display_name ?? t.name ?? ""),
+    status: String(t.status ?? "active"),
+    beYear: Number(t.be_year ?? PILOT_BE_YEAR),
+    startNumber: Math.max(1, Number(t.start_number ?? 1)),
+    users: Number(users?.n ?? 0),
+    counts
+  });
+});
+adminApp.post("/api/admin/tenants/:id/reset", async (c) => {
+  const g = await adminOnly(c);
+  if ("error" in g) return c.json({ error: g.error }, g.status);
+  const id = c.req.param("id");
+  const ip = c.req.header("x-forwarded-for") ?? "local";
+  if (await rateLimited(`admin-reset:${ip}`, 5)) return c.json({ error: "too-many-requests" }, 429);
+  const body = await c.req.json().catch(() => null);
+  const db = sql();
+  const t = one(await db`select id, client_code, be_year, start_number
+    from client_profiles where id = ${id}`);
+  if (!t) return c.json({ error: "not-found" }, 404);
+  const code = String(t.client_code ?? id);
+  const confirmation = (body?.confirmation ?? "").trim().toUpperCase();
+  if (confirmation !== id.toUpperCase() && confirmation !== code.toUpperCase()) {
+    return c.json({ error: "invalid-confirmation" }, 400);
+  }
+  const resetSequences = body?.resetSequences !== false;
+  const deleteFiles = body?.deleteFiles !== false;
+  const beYear = Number(t.be_year ?? PILOT_BE_YEAR);
+  const start = Math.max(1, Number(t.start_number ?? 1));
+  const counts = await tenantResetCounts(db, id);
+  const reason = typeof body?.reason === "string" ? body.reason.trim().slice(0, 280) : "";
+  const artifacts = deleteFiles ? await collectArtifactPaths(db, id) : [];
+  await db.transaction((txn) => {
+    const q = [
+      txn`delete from document_line_items where user_id = ${id}`,
+      txn`delete from vendor_receipts where user_id = ${id}`,
+      txn`delete from vendor_authorizations where user_id = ${id}`,
+      txn`delete from vendor_requests where user_id = ${id}`,
+      txn`delete from vendor_payables where user_id = ${id}`,
+      txn`delete from wht_records where user_id = ${id}`,
+      txn`delete from wht_vendors where user_id = ${id}`,
+      txn`delete from vendor_invites where user_id = ${id}`,
+      txn`delete from vendor_payees where user_id = ${id}`,
+      txn`delete from items where user_id = ${id}`,
+      txn`delete from sessions where user_id in (select member_user_id from client_members where workspace_user_id = ${id})`
+    ];
+    if (resetSequences) {
+      q.push(txn`insert into doc_number_sequences (user_id, doc_type, be_year, vendor_no, last_number)
+        values (${id}, 'vendor_receipt', ${beYear}, 0, ${start - 1})
+        on conflict (user_id, doc_type, be_year, vendor_no) do update set last_number = excluded.last_number`);
+    }
+    return q;
+  });
+  const filesDeleted = deleteFiles ? await deleteTenantArtifacts(id, artifacts) : 0;
+  const auditId = await writeAudit(id, "client_profiles", id, "tenant.reset", g.u.email, {
+    counts,
+    resetSequences,
+    deleteFiles,
+    filesDeleted,
+    reason: reason || void 0
+  }, ip);
+  return c.json({ ok: true, deleted: counts, resetSequences, deleteFiles, filesDeleted, auditId });
 });
 adminApp.get("/api/admin/tenants/:id/users", async (c) => {
   const g = await adminOnly(c);
@@ -72113,7 +72386,26 @@ adminApp.post("/api/admin/impersonate/stop", async (c) => {
 
 // server/entry.ts
 app.route("/api/admin-op", adminApp);
+var configChecked = null;
+function prodConfigOk() {
+  if (configChecked !== null) return configChecked;
+  configChecked = true;
+  if (process.env.NODE_ENV !== "production" && process.env.VERCEL_ENV !== "production") return true;
+  const origins = (process.env.ALLOWED_ORIGINS ?? "").split(",").some((s) => s.trim());
+  const secret2 = !!process.env.ID_ENCRYPTION_KEY || !!process.env.CRON_SECRET;
+  if (!origins || !secret2) {
+    console.error("refusing to serve: production requires ALLOWED_ORIGINS and ID_ENCRYPTION_KEY (or CRON_SECRET)");
+    configChecked = false;
+  }
+  return configChecked;
+}
 async function fetch2(request) {
+  if (!prodConfigOk()) {
+    return new Response(JSON.stringify({ error: "server-misconfigured" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
   const url = new URL(request.url);
   const route = url.searchParams.get("__route");
   if (route === null) return app.fetch(request);

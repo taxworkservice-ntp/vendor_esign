@@ -12,9 +12,10 @@ import {
   verifyPassword,
   type SessionUser,
 } from './auth'
-import { PILOT_BE_YEAR, audit, one, rateLimited } from './shared'
+import { MAX_PASSWORD_LEN, PILOT_BE_YEAR, audit, clearLoginFailures, dummyPasswordHash, loginLocked, noteLoginFailure, one, rateLimited } from './shared'
 import { corsMw } from './cors'
 import { getPlatformSettings, savePlatformSetting } from './platform'
+import { deleteTenantArtifacts } from './storage'
 import {
   clearImpersonationCookie,
   impersonationCookie,
@@ -22,6 +23,7 @@ import {
   type ImpersonationMode,
 } from './impersonation'
 import { normalizePermissions } from '../../src/lib/permissions'
+import { DEFAULT_CONSENT } from '../../src/lib/settings-types'
 
 // ── Provider / operator console ────────────────────────────────────────────
 // Isolated operation: separate Hono app, separate session cookie (tw_admin,
@@ -66,8 +68,8 @@ adminApp.use('*', async (c, next) => {
 
 adminApp.get('/api/health', (c) => c.json({ ok: true, operation: 'admin' }))
 
-async function writeAudit(tenantId: string, entityType: string, entityId: string, eventType: string, actor: string | null, metadata: unknown, ip: string) {
-  await audit(tenantId, entityType, entityId, eventType, actor, metadata, ip)
+async function writeAudit(tenantId: string, entityType: string, entityId: string, eventType: string, actor: string | null, metadata: unknown, ip: string): Promise<string | null> {
+  return audit(tenantId, entityType, entityId, eventType, actor, metadata, ip)
 }
 
 adminApp.post('/api/login', async (c) => {
@@ -76,6 +78,7 @@ adminApp.post('/api/login', async (c) => {
   const body = (await c.req.json().catch(() => null)) as { email?: string; password?: string } | null
   const email = (body?.email ?? '').trim().toLowerCase()
   if (!email || !body?.password) return c.json({ error: 'invalid-body' }, 400)
+  if (await loginLocked(email)) return c.json({ error: 'locked' }, 429)
   const db = sql()
   const rows = (await db`select u.id, u.email, c.password_hash, c.must_change_pw, u.status, c.temp_expires_at, u.is_platform_admin
     from profiles u join auth_credentials c on c.user_id = u.id
@@ -83,12 +86,18 @@ adminApp.post('/api/login', async (c) => {
     { id: string; email: string; password_hash: string; must_change_pw: boolean; status: string; temp_expires_at: string | null; is_platform_admin: boolean }[]
   const u = one<{ id: string; email: string; password_hash: string; must_change_pw: boolean; status: string; temp_expires_at: string | null; is_platform_admin: boolean }>(rows)
   // Same generic error for unknown, disabled, or non-operator accounts — the
-  // console does not reveal which emails exist.
-  if (!u || u.status !== 'active' || !u.is_platform_admin) return c.json({ error: 'invalid-credentials' }, 401)
+  // console does not reveal which emails exist. Non-operators still pay for a
+  // full verify (dummy hash) so timing does not leak account existence either.
+  const hash = u && u.status === 'active' && u.is_platform_admin ? String(u.password_hash) : await dummyPasswordHash()
+  const ok = await verifyPassword(body.password, hash)
+  if (!u || u.status !== 'active' || !u.is_platform_admin || !ok) {
+    const { triggered } = await noteLoginFailure(email)
+    if (triggered) await writeAudit('PLATFORM', 'profiles', email, 'admin.login.locked', null, {}, ip)
+    return c.json({ error: 'invalid-credentials' }, 401)
+  }
   if (u.temp_expires_at && new Date(String(u.temp_expires_at)) < new Date() && u.must_change_pw)
     return c.json({ error: 'temp-expired' }, 403)
-  if (!(await verifyPassword(body.password, String(u.password_hash))))
-    return c.json({ error: 'invalid-credentials' }, 401)
+  await clearLoginFailures(email)
   const { token, expiresAt } = await createSession(String(u.id), ip, c.req.header('user-agent') ?? '', { admin: true })
   await writeAudit('PLATFORM', 'profiles', String(u.id), 'admin.login', u.email, {}, ip)
   return new Response(
@@ -120,7 +129,7 @@ adminApp.post('/api/change-password', async (c) => {
   const u = await requireAdminSession(c)
   if (!u || !u.isPlatformAdmin) return c.json({ error: 'unauthorized' }, 401)
   const body = (await c.req.json().catch(() => null)) as { oldPassword?: string; newPassword?: string } | null
-  if (!body?.oldPassword || !body?.newPassword || body.newPassword.length < 10)
+  if (!body?.oldPassword || !body?.newPassword || body.newPassword.length < 10 || body.newPassword.length > MAX_PASSWORD_LEN)
     return c.json({ error: 'invalid-body' }, 400)
   const db = sql()
   const rows = (await db`select password_hash from auth_credentials where user_id = ${u.userId}`) as unknown as
@@ -129,6 +138,14 @@ adminApp.post('/api/change-password', async (c) => {
     return c.json({ error: 'invalid-credentials' }, 401)
   await db`update auth_credentials set password_hash = ${await hashPassword(body.newPassword)},
     must_change_pw = false, temp_expires_at = null, updated_at = now() where user_id = ${u.userId}`
+  // A password change ends every other session — a compromised credential dies
+  // the moment the real operator sets their own. The current session survives.
+  const current = (c.req.header('cookie') ?? '').match(new RegExp(`${ADMIN_COOKIE}=([^;]+)`))?.[1]
+  if (current) {
+    await db`delete from sessions where user_id = ${u.userId} and token_hash != ${sha256hex(decodeURIComponent(current))}`
+  } else {
+    await db`delete from sessions where user_id = ${u.userId}`
+  }
   await writeAudit('PLATFORM', 'profiles', u.userId, 'admin.password.changed', u.email, {}, c.req.header('x-forwarded-for') ?? 'local')
   return c.json({ ok: true })
 })
@@ -226,7 +243,7 @@ adminApp.post('/api/admin/tenants', async (c) => {
     (${id}, 'wht_rates', '[{"paymentType":"ค่าจ้างทำของ","rate":3,"label":"ค่าจ้างทำของ"},{"paymentType":"ค่าวิชาชีพอิสระ","rate":3,"label":"ค่าวิชาชีพอิสระ"},{"paymentType":"ค่าบริการ","rate":3,"label":"ค่าบริการ"},{"paymentType":"ค่าเช่าทรัพย์สิน","rate":5,"label":"ค่าเช่าทรัพย์สิน"},{"paymentType":"ค่านายหน้า","rate":3,"label":"ค่านายหน้า"},{"paymentType":"ค่าขนส่ง","rate":1,"label":"ค่าขนส่ง"},{"paymentType":"ไม่หักภาษี ณ ที่จ่าย","rate":0,"label":"ไม่หักภาษี ณ ที่จ่าย"}]'),
     (${id}, 'wht_min_threshold', '1000'),
     (${id}, 'link_expiry_days', '7'),
-    (${id}, 'consent_text_v1', '{"th": "ข้าพเจ้าได้รับเงินจำนวนดังกล่าวแล้ว และมอบอำนาจให้ลูกค้าออกใบเสร็จรับเงินในนามของข้าพเจ้าเฉพาะธุรกรรมนี้เท่านั้น"}')
+    (${id}, 'consent_text_v1', ${JSON.stringify({ th: DEFAULT_CONSENT })}::jsonb)
     on conflict (user_id, key) do nothing`
   await db`insert into doc_number_sequences (user_id, doc_type, be_year, vendor_no, last_number) values (${id}, 'vendor_receipt', ${beYear}, 0, ${start - 1})
     on conflict (user_id, doc_type, be_year, vendor_no) do nothing`
@@ -294,6 +311,146 @@ adminApp.delete('/api/admin/tenants/:id', async (c) => {
   await db`delete from client_profiles where id = ${id}`
   await writeAudit('PLATFORM', 'client_profiles', id, 'tenant.deleted', g.u.email, {}, c.req.header('x-forwarded-for') ?? 'local')
   return c.json({ ok: true })
+})
+
+// ── Reset workspace to fresh ("ล้างเริ่มใหม่") ─────────────────────────────────
+// For a client that finished a trial (pilot) and wants to start over. Unlike
+// delete, the workspace, its users, company profile, settings and audit trail
+// are kept; only the operational data is wiped and the document series is
+// restarted from the profile's start_number. This is an explicit operator
+// override of receipt immutability — production clients should void/suspend
+// instead. Destructive, so it is gated behind type-to-confirm + impact preview.
+
+type ResetCounts = {
+  txns: number; receipts: number; signings: number; requests: number
+  vendors: number; wht: number; whtVendors: number; invites: number
+  items: number; lineItems: number
+}
+
+async function tenantResetCounts(db: ReturnType<typeof sql>, id: string): Promise<ResetCounts> {
+  const rows = (await db`select
+    (select count(*) from vendor_payables where user_id = ${id})::int as txns,
+    (select count(*) from vendor_receipts where user_id = ${id})::int as receipts,
+    (select count(*) from vendor_authorizations where user_id = ${id})::int as signings,
+    (select count(*) from vendor_requests where user_id = ${id})::int as requests,
+    (select count(*) from vendor_payees where user_id = ${id})::int as vendors,
+    (select count(*) from wht_records where user_id = ${id})::int as wht,
+    (select count(*) from wht_vendors where user_id = ${id})::int as wht_vendors,
+    (select count(*) from vendor_invites where user_id = ${id})::int as invites,
+    (select count(*) from items where user_id = ${id})::int as items,
+    (select count(*) from document_line_items where user_id = ${id})::int as line_items`) as unknown as Record<string, unknown>[]
+  const r = one<Record<string, unknown>>(rows) ?? {}
+  const n = (k: string) => Number(r[k] ?? 0)
+  return {
+    txns: n('txns'), receipts: n('receipts'), signings: n('signings'), requests: n('requests'),
+    vendors: n('vendors'), wht: n('wht'), whtVendors: n('wht_vendors'), invites: n('invites'),
+    items: n('items'), lineItems: n('line_items'),
+  }
+}
+
+/** Every stored artifact path for the tenant, gathered before the rows that
+ *  reference them are deleted. Each array is aggregated in SQL so the reset
+ *  does not fan out into N queries. */
+async function collectArtifactPaths(db: ReturnType<typeof sql>, id: string): Promise<string[]> {
+  const rows = (await db`select
+    (select array_agg(signature_image_path) from vendor_authorizations where user_id = ${id} and signature_image_path is not null) as sigs,
+    (select array_agg(pdf_path) from vendor_receipts where user_id = ${id} and pdf_path is not null) as pdfs,
+    (select array_agg(pdf_key) from vendor_receipts where user_id = ${id} and pdf_key is not null) as pdf_keys,
+    (select array_agg(slip_file_path) from vendor_payables where user_id = ${id} and slip_file_path is not null) as slips,
+    (select array_agg(id_doc_path) from vendor_invites where user_id = ${id} and id_doc_path is not null) as invite_ids,
+    (select array_agg(bank_doc_path) from vendor_invites where user_id = ${id} and bank_doc_path is not null) as invite_banks,
+    (select array_agg(id_doc_path) from vendor_payees where user_id = ${id} and id_doc_path is not null) as vendor_ids,
+    (select array_agg(bank_doc_path) from vendor_payees where user_id = ${id} and bank_doc_path is not null) as vendor_banks`) as unknown as Record<string, unknown>[]
+  const r = rows[0] ?? {}
+  const out: string[] = []
+  for (const value of Object.values(r)) {
+    if (Array.isArray(value)) for (const p of value) if (typeof p === 'string' && p) out.push(p)
+  }
+  return out
+}
+
+adminApp.get('/api/admin/tenants/:id/reset-preview', async (c) => {
+  const g = await adminOnly(c)
+  if ('error' in g) return c.json({ error: g.error }, g.status)
+  const id = c.req.param('id')
+  const db = sql()
+  const t = one<Record<string, unknown>>(await db`select id, client_code, display_name, name, status, be_year, start_number
+    from client_profiles where id = ${id}`)
+  if (!t) return c.json({ error: 'not-found' }, 404)
+  const counts = await tenantResetCounts(db, id)
+  const users = one<{ n: number }>(await db`select count(*)::int as n from client_members where workspace_user_id = ${id}`)
+  return c.json({
+    tenantId: String(t.id),
+    clientCode: String(t.client_code ?? t.id),
+    displayName: String(t.display_name ?? t.name ?? ''),
+    status: String(t.status ?? 'active'),
+    beYear: Number(t.be_year ?? PILOT_BE_YEAR),
+    startNumber: Math.max(1, Number(t.start_number ?? 1)),
+    users: Number(users?.n ?? 0),
+    counts,
+  })
+})
+
+adminApp.post('/api/admin/tenants/:id/reset', async (c) => {
+  const g = await adminOnly(c)
+  if ('error' in g) return c.json({ error: g.error }, g.status)
+  const id = c.req.param('id')
+  const ip = c.req.header('x-forwarded-for') ?? 'local'
+  if (await rateLimited(`admin-reset:${ip}`, 5)) return c.json({ error: 'too-many-requests' }, 429)
+  const body = (await c.req.json().catch(() => null)) as {
+    confirmation?: string; resetSequences?: boolean; deleteFiles?: boolean; reason?: string
+  } | null
+  const db = sql()
+  const t = one<Record<string, unknown>>(await db`select id, client_code, be_year, start_number
+    from client_profiles where id = ${id}`)
+  if (!t) return c.json({ error: 'not-found' }, 404)
+
+  // Type-to-confirm: the operator must retype the workspace id or client code.
+  const code = String(t.client_code ?? id)
+  const confirmation = (body?.confirmation ?? '').trim().toUpperCase()
+  if (confirmation !== id.toUpperCase() && confirmation !== code.toUpperCase()) {
+    return c.json({ error: 'invalid-confirmation' }, 400)
+  }
+
+  const resetSequences = body?.resetSequences !== false
+  const deleteFiles = body?.deleteFiles !== false
+  const beYear = Number(t.be_year ?? PILOT_BE_YEAR)
+  const start = Math.max(1, Number(t.start_number ?? 1))
+  const counts = await tenantResetCounts(db, id)
+  const reason = typeof body?.reason === 'string' ? body.reason.trim().slice(0, 280) : ''
+  const artifacts = deleteFiles ? await collectArtifactPaths(db, id) : []
+
+  // Wipe order respects FKs: WHT records before their vendors (ON DELETE
+  // RESTRICT); line items before receipts; requests/authorizations before
+  // payables. Sessions are revoked so trial logins cannot act on a fresh
+  // workspace. Kept: client_profiles, users, config, audit, permission audit.
+  await db.transaction((txn) => {
+    const q = [
+      txn`delete from document_line_items where user_id = ${id}`,
+      txn`delete from vendor_receipts where user_id = ${id}`,
+      txn`delete from vendor_authorizations where user_id = ${id}`,
+      txn`delete from vendor_requests where user_id = ${id}`,
+      txn`delete from vendor_payables where user_id = ${id}`,
+      txn`delete from wht_records where user_id = ${id}`,
+      txn`delete from wht_vendors where user_id = ${id}`,
+      txn`delete from vendor_invites where user_id = ${id}`,
+      txn`delete from vendor_payees where user_id = ${id}`,
+      txn`delete from items where user_id = ${id}`,
+      txn`delete from sessions where user_id in (select member_user_id from client_members where workspace_user_id = ${id})`,
+    ]
+    if (resetSequences) {
+      q.push(txn`insert into doc_number_sequences (user_id, doc_type, be_year, vendor_no, last_number)
+        values (${id}, 'vendor_receipt', ${beYear}, 0, ${start - 1})
+        on conflict (user_id, doc_type, be_year, vendor_no) do update set last_number = excluded.last_number`)
+    }
+    return q
+  })
+
+  const filesDeleted = deleteFiles ? await deleteTenantArtifacts(id, artifacts) : 0
+  const auditId = await writeAudit(id, 'client_profiles', id, 'tenant.reset', g.u.email, {
+    counts, resetSequences, deleteFiles, filesDeleted, reason: reason || undefined,
+  }, ip)
+  return c.json({ ok: true, deleted: counts, resetSequences, deleteFiles, filesDeleted, auditId })
 })
 
 adminApp.get('/api/admin/tenants/:id/users', async (c) => {

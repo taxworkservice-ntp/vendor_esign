@@ -12,7 +12,30 @@ import { adminApp } from './src/admin'
 // real path before handing off to Hono.
 app.route('/api/admin-op', adminApp)
 
+// Same fail-closed contract as server/src/index.ts, adapted to serverless: a
+// misconfigured production deployment answers 500 on every request instead of
+// serving traffic exposed. Checked once and cached; dev/preview unaffected.
+let configChecked: boolean | null = null
+function prodConfigOk(): boolean {
+  if (configChecked !== null) return configChecked
+  configChecked = true
+  if (process.env.NODE_ENV !== 'production' && process.env.VERCEL_ENV !== 'production') return true
+  const origins = (process.env.ALLOWED_ORIGINS ?? '').split(',').some((s) => s.trim())
+  const secret = !!process.env.ID_ENCRYPTION_KEY || !!process.env.CRON_SECRET
+  if (!origins || !secret) {
+    console.error('refusing to serve: production requires ALLOWED_ORIGINS and ID_ENCRYPTION_KEY (or CRON_SECRET)')
+    configChecked = false
+  }
+  return configChecked
+}
+
 async function fetch(request: Request): Promise<Response> {
+  if (!prodConfigOk()) {
+    return new Response(JSON.stringify({ error: 'server-misconfigured' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
   const url = new URL(request.url)
   const route = url.searchParams.get('__route')
   if (route === null) return app.fetch(request)

@@ -11,9 +11,21 @@ import { hasServer } from '../lib/api-client'
 import { API_BASE } from '../lib/api-base'
 
 export interface VendorCorrection {
-  field: 'prefix' | 'name' | 'address'
+  field: 'prefix' | 'name' | 'address' | 'phone' | 'email'
   from: string
   to: string
+}
+
+/** Thai label for a corrected field, shared by the mock timeline and the
+ *  client evidence panel. */
+export function correctionFieldLabel(field: VendorCorrection['field']): string {
+  switch (field) {
+    case 'name': return 'ชื่อ'
+    case 'address': return 'ที่อยู่'
+    case 'phone': return 'โทรศัพท์'
+    case 'email': return 'อีเมล'
+    default: return 'คำนำหน้า'
+  }
 }
 
 /** The non-image half of a vendor authorization — safe for localStorage. */
@@ -336,6 +348,10 @@ export function useVendorActions() {
           corrections.push({ field: 'name', from: t.vendor.name, to: auth.vendorName })
         if (auth.vendorAddress !== t.vendor.address)
           corrections.push({ field: 'address', from: t.vendor.address, to: auth.vendorAddress })
+        if ((auth.vendorPhone ?? '') !== (t.vendor.phone ?? ''))
+          corrections.push({ field: 'phone', from: t.vendor.phone ?? '', to: auth.vendorPhone ?? '' })
+        if ((auth.vendorEmail ?? '') !== (t.vendor.email ?? ''))
+          corrections.push({ field: 'email', from: t.vendor.email ?? '', to: auth.vendorEmail ?? '' })
         const stored = readAuth()[id]
         if (stored) writeAuth({ ...readAuth(), [id]: { ...stored, corrections } })
         number =
@@ -360,8 +376,8 @@ export function useVendorActions() {
             ...(corrections.length
               ? [{
                   at: auth.signedAt,
-                  label: 'ผู้ขายแก้ไขข้อมูล',
-                  detail: corrections.map((x) => `${x.field === 'name' ? 'ชื่อ' : x.field === 'address' ? 'ที่อยู่' : 'คำนำหน้า'}: ${x.from || '—'} → ${x.to || '—'}`).join(' · '),
+                   label: 'ผู้ขายแก้ไขข้อมูล',
+                   detail: corrections.map((x) => `${correctionFieldLabel(x.field)}: ${x.from || '—'} → ${x.to || '—'}`).join(' · '),
                 }]
               : []),
           ],

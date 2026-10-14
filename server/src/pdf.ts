@@ -38,6 +38,8 @@ export interface ReceiptPdfInput {
   verificationMethod: string
   consentVersion: string
   signedAt: string // ISO datetime
+  /** The authorization's own reference (evidence line in the footer). */
+  authRef?: string
   client: { code: string; display: string } // display = name/addr/taxid line [VERIFY]
   vendor: { prefix: string; name: string; address: string; maskedId: string; phone?: string; email?: string }
   // Line items are the source; a legacy single line is expressed as one item.
@@ -341,8 +343,12 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
     FAINT,
   )
   // Document footer — the public verification record sits at the page bottom,
-  // out of the signature block, on every receipt.
-  centerText(`รหัสตรวจสอบ ${input.verificationCode} · ${input.verifyUrl}`, 30, 8, regular, FAINT)
+  // out of the signature block, on every receipt. The signing reference and
+  // consent version ride along so the paper itself points at its evidence.
+  const footerBits = [`รหัสตรวจสอบ ${input.verificationCode} · ${input.verifyUrl}`]
+  if (input.authRef) footerBits.push(`เลขอ้างอิง ${input.authRef}`)
+  if (input.consentVersion) footerBits.push(`ข้อตกลง v${input.consentVersion}`)
+  centerText(footerBits.join(' · '), 30, 8, regular, FAINT)
 
   // ── Verification QR (audit copy only) ──
   if (input.showVerification) {

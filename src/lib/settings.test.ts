@@ -29,4 +29,21 @@ describe('settings', () => {
     expect(whtRateFor('ค่าบริการ', s)).toBe(3)
     expect(whtRateFor('ไม่รู้จัก', s)).toBe(0)
   })
+
+  it('consent version discipline: text change without a version bump is rejected', () => {
+    const base = defaultSettings('ABC')
+    // Untouched text passes even with the same version (grandfathered).
+    expect(validateSettings(base, base)).toBeNull()
+    // Edited wording with the same version is rejected.
+    expect(validateSettings({ ...base, consentTextV1: 'ข้อความใหม่ {{client}} {{amount}} {{date}} {{ref}} {{version}}' }, base))
+      .toMatch(/เวอร์ชัน/)
+    // Bumped version but dropped variables is rejected too.
+    expect(validateSettings({ ...base, consentTextV1: 'ข้อความใหม่', consentVersion: '3' }, base))
+      .toMatch(/ตัวแปร/)
+    // Bumped version with all variables passes.
+    expect(validateSettings(
+      { ...base, consentTextV1: 'ข้อความใหม่ {{client}} {{amount}} {{date}} {{ref}} {{version}}', consentVersion: '3' },
+      base,
+    )).toBeNull()
+  })
 })

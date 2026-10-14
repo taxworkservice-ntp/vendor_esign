@@ -10,6 +10,7 @@ const base = {
   verificationMethod: 'stub-deferred',
   consentVersion: 'v1',
   signedAt: '2026-09-28T10:00:00+07:00',
+  authRef: 'AUTH-TESTREF',
   client: { code: 'ABC', display: 'ABC (pilot test)' },
   vendor: { prefix: 'นาย', name: 'สมชาย ใจดี', address: '12 ม.4 ขอนแก่น 40000', maskedId: 'x-xxxx-xxxxx-12-4' },
   description: 'ค่าจ้างทำความสะอาดสำนักงาน ก.ย.',

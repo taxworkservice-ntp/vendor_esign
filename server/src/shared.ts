@@ -1,4 +1,5 @@
 import { sql, withTenant } from '../../src/server/db'
+import { hashPassword } from './auth'
 
 // Shared helpers for the two isolated operations:
 // - public client/vendor operation (server/src/api.ts)
@@ -47,6 +48,105 @@ export async function rateLimited(key: string, max = 30): Promise<boolean> {
   } catch {
     return memoryLimited(key, max)
   }
+}
+
+// ── Login lockout (per-email, Postgres-backed) ───────────────────────────────
+// 5 failed attempts → 15 minutes locked. Shared by the client and admin logins
+// so both operations enforce the same account-level backstop behind their
+// per-IP rate limits. Postgres-backed (login_lockouts, migration 030) so it
+// holds on serverless/multi-instance, where a per-instance Map would silently
+// stop working; falls back to a per-instance in-memory window when the table is
+// absent — never throws, never blocks the flow. Moderate by design: the window
+// is fixed (failures during a lock do not extend it further than one fresh
+// window) and unknown emails count too, so the lock itself cannot be used to
+// probe which accounts exist.
+
+export const LOGIN_MAX_FAILS = 5
+export const LOGIN_LOCK_MS = 15 * 60 * 1000
+
+// Bounds scrypt's work factor: the floor is the product minimum, the ceiling
+// keeps a megabyte-long input from burning CPU on every attempt.
+export const MAX_PASSWORD_LEN = 128
+
+export interface LockoutRecord {
+  n: number
+  until: number
+}
+
+/** Pure: is this record locking the account right now? Returns the lock expiry
+ *  (ms epoch) or 0. Expired records read as unlocked. */
+export function lockoutUntil(rec: LockoutRecord | undefined, now: number): number {
+  if (!rec) return 0
+  if (now > rec.until) return 0
+  return rec.n >= LOGIN_MAX_FAILS ? rec.until : 0
+}
+
+/** Pure: the counter after one more failure. An expired record restarts at 1. */
+export function nextLockout(rec: LockoutRecord | undefined, now: number): LockoutRecord {
+  const base = rec && now <= rec.until ? rec.n : 0
+  return { n: base + 1, until: now + LOGIN_LOCK_MS }
+}
+
+const lockMemory = new Map<string, LockoutRecord>()
+
+/** Returns the lock expiry (ms epoch) or 0 when the email may attempt login. */
+export async function loginLocked(email: string): Promise<number> {
+  const now = Date.now()
+  try {
+    const rows = (await sql()`select fails, until from login_lockouts where email = ${email}`) as unknown as
+      { fails: number; until: string }[]
+    const r = rows[0]
+    if (!r) return 0
+    return lockoutUntil({ n: Number(r.fails), until: new Date(String(r.until)).getTime() }, now)
+  } catch {
+    return lockoutUntil(lockMemory.get(email), now)
+  }
+}
+
+/**
+ * Record one failed attempt. Returns whether the account is now locked and
+ * whether this attempt crossed the threshold (`triggered` — callers audit
+ * exactly that transition so a spray shows up once per account, not per try).
+ */
+export async function noteLoginFailure(email: string): Promise<{ locked: boolean; triggered: boolean }> {
+  const now = Date.now()
+  try {
+    const db = sql()
+    const rows = (await db`select fails, until from login_lockouts where email = ${email}`) as unknown as
+      { fails: number; until: string }[]
+    const prev = rows[0] ? { n: Number(rows[0].fails), until: new Date(String(rows[0].until)).getTime() } : undefined
+    const wasLocked = lockoutUntil(prev, now) > 0
+    const rec = nextLockout(prev, now)
+    await db`insert into login_lockouts (email, fails, until) values (${email}, ${rec.n}, ${new Date(rec.until).toISOString()})
+      on conflict (email) do update set fails = excluded.fails, until = excluded.until`
+    const locked = rec.n >= LOGIN_MAX_FAILS
+    return { locked, triggered: locked && !wasLocked }
+  } catch {
+    const prev = lockMemory.get(email)
+    const wasLocked = lockoutUntil(prev, now) > 0
+    const rec = nextLockout(prev, now)
+    lockMemory.set(email, rec)
+    const locked = rec.n >= LOGIN_MAX_FAILS
+    return { locked, triggered: locked && !wasLocked }
+  }
+}
+
+/** A successful login clears the counter (same email, both operations). */
+export async function clearLoginFailures(email: string): Promise<void> {
+  lockMemory.delete(email)
+  try {
+    await sql()`delete from login_lockouts where email = ${email}`
+  } catch {
+    /* memory already cleared */
+  }
+}
+
+// Constant-work verify when the email is unknown — avoids leaking account
+// existence through login timing. The hash is computed once and reused.
+let dummy: string | null = null
+export async function dummyPasswordHash(): Promise<string> {
+  if (!dummy) dummy = await hashPassword('taxwork-dummy-password')
+  return dummy
 }
 
 // Vendor gate: N wrong ID attempts per token per 10 minutes.
@@ -102,10 +202,12 @@ export async function audit(
   actor: string | null,
   metadata: unknown,
   ip: string,
-) {
+): Promise<string | null> {
   const db = sql()
-  await db`insert into audit_events (user_id, entity_type, entity_id, event_type, actor, metadata, ip)
-    values (${tenantId}, ${entityType}, ${entityId}, ${eventType}, ${actor}, ${JSON.stringify(metadata ?? {})}, ${ip})`
+  const rows = (await db`insert into audit_events (user_id, entity_type, entity_id, event_type, actor, metadata, ip)
+    values (${tenantId}, ${entityType}, ${entityId}, ${eventType}, ${actor}, ${JSON.stringify(metadata ?? {})}, ${ip})
+    returning id`) as unknown as { id: string }[]
+  return rows[0] ? String(rows[0].id) : null
 }
 
 export async function withAuditTenant<T>(

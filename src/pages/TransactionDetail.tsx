@@ -4,6 +4,7 @@ import { CheckCircle2, Copy, ExternalLink, FileSearch, Link2, RotateCcw, ShieldA
 import { useTransaction, useTransactionActions } from '../hooks/useTransactions'
 import { useSettings } from '../hooks/useSettings'
 import { useReceiptAuthorization } from '../hooks/useReceiptAuthorization'
+import { correctionFieldLabel } from '../hooks/useVendor'
 import { Card, CardBody } from '../components/ui/card'
 import { StatusBadge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
@@ -223,7 +224,7 @@ export function TransactionDetail() {
                   <p className="font-semibold text-warning">ผู้ขายแก้ไขข้อมูลที่บันทึกไว้:</p>
                   <ul className="mt-1 list-disc pl-5 text-warning">
                     {corrections.map((x, i) => (
-                      <li key={i}>{x.field === 'name' ? 'ชื่อ' : x.field === 'address' ? 'ที่อยู่' : 'คำนำหน้า'}: {x.from || '—'} → <b>{x.to || '—'}</b></li>
+                      <li key={i}>{correctionFieldLabel(x.field)}: {x.from || '—'} → <b>{x.to || '—'}</b></li>
                     ))}
                   </ul>
                 </div>

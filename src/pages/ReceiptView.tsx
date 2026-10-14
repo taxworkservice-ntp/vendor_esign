@@ -113,6 +113,8 @@ export function ReceiptView() {
     sig,
     signedAt: auth?.signedAt,
     sigMethod: auth?.verificationMethod,
+    authRef: auth?.authRef,
+    consentVersion: auth?.consentVersion,
     verificationCode: t.verificationCode,
     verifyUrl: t.verificationCode ? `${window.location.origin}/verify/${t.verificationCode}` : undefined,
   }

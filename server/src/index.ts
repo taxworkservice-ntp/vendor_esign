@@ -6,6 +6,23 @@ import { adminApp } from './admin'
 dotenv({ path: '.env.local' })
 dotenv()
 
+// Fail closed in production: an empty ALLOWED_ORIGINS makes the API reflect
+// any origin with credentials, and an unset impersonation secret makes tw_imp
+// forgeable with the dev key. Dev (empty env) is unaffected by design.
+if (process.env.NODE_ENV === 'production') {
+  const problems: string[] = []
+  if (!(process.env.ALLOWED_ORIGINS ?? '').split(',').some((s) => s.trim())) {
+    problems.push('ALLOWED_ORIGINS is empty — the API would reflect any origin with credentials')
+  }
+  if (!process.env.ID_ENCRYPTION_KEY && !process.env.CRON_SECRET) {
+    problems.push('neither ID_ENCRYPTION_KEY nor CRON_SECRET is set — impersonation cookies would use the dev key')
+  }
+  if (problems.length) {
+    for (const p of problems) console.error(`refusing to start: ${p}`)
+    process.exit(1)
+  }
+}
+
 // Two isolated operations, two ports, one codebase:
 // - public client/vendor operation (no login): PORT (default 8787)
 // - admin operation (login + tenants/users, tw_admin cookie, 12h sessions): ADMIN_PORT (default 8788)

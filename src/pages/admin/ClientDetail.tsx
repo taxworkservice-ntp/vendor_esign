@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Eye, KeyRound, PauseCircle, Pencil, PlayCircle, Power, PowerOff, ShieldOff, Trash2 } from 'lucide-react'
+import { Eye, KeyRound, PauseCircle, Pencil, PlayCircle, Power, PowerOff, RotateCcw, ShieldOff, Trash2 } from 'lucide-react'
 import {
   useAdminTenant,
   useCreateUser,
@@ -18,6 +18,7 @@ import { Select } from '../../components/ui/select'
 import { ConfirmDialog } from '../../components/ui/confirm-dialog'
 import { useToast } from '../../components/ui/toast'
 import { TempPasswordDialog } from '../../components/ui/temp-password-dialog'
+import { ResetWorkspaceDialog } from '../../components/admin/reset-workspace-dialog'
 
 type AdminConfirm =
   | { kind: 'suspend' }
@@ -42,6 +43,7 @@ export function ClientDetail() {
   const [err, setErr] = useState('')
   const [impErr, setImpErr] = useState('')
   const [confirm, setConfirm] = useState<AdminConfirm | null>(null)
+  const [resetOpen, setResetOpen] = useState(false)
 
   const runConfirm = async () => {
     if (!confirm) return
@@ -116,6 +118,9 @@ export function ClientDetail() {
                 <PlayCircle size={16} /> เปิดใช้งาน
               </Button>
             )}
+            <Button variant="secondary" onClick={() => setResetOpen(true)}>
+              <RotateCcw size={16} /> ล้างเริ่มใหม่
+            </Button>
             <Button variant="danger" onClick={() => setConfirm({ kind: 'delete' })}>
               <Trash2 size={16} /> ลบ
             </Button>
@@ -254,6 +259,8 @@ export function ClientDetail() {
         onConfirm={() => void runConfirm()}
         onCancel={() => setConfirm(null)}
       />
+
+      <ResetWorkspaceDialog open={resetOpen} tenantId={t.id} onClose={() => setResetOpen(false)} />
 
       <TempPasswordDialog
         open={invite !== null}

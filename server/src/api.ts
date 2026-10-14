@@ -2,6 +2,9 @@ import { Hono } from 'hono'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { sql, withTenant } from '../../src/server/db'
 import { isVendorPrefix, prefixRequired } from '../../src/lib/vendor-name'
+import { isValidEmail, isValidPhone } from '../../src/lib/vendor-contact'
+import { renderConsent } from '../../src/lib/settings-types'
+import { fmtDateTH, fmtTHB } from '../../src/lib/format'
 import { isoDay } from './dates'
 import { saveBytesDurable, readStoredDurable, readTenantAsset } from './storage'
 import { sha256hex } from './auth'
@@ -302,6 +305,10 @@ app.post('/api/vendor/:token/sign', async (c) => {
   } | null
   if (!body?.vendorName || !body?.vendorAddress || !body?.signaturePng || body.consentVersion !== 'v1')
     return c.json({ error: 'invalid-body' }, 400)
+  // Contacts are required at signing: the receipt prints them and the payer
+  // needs a real channel to the payee. Same rule as the form (shared helper).
+  if (!isValidPhone(String(body.vendorPhone ?? ''))) return c.json({ error: 'invalid-phone' }, 400)
+  if (!isValidEmail(String(body.vendorEmail ?? ''))) return c.json({ error: 'invalid-email' }, 400)
   const subPrefix = (body.vendorPrefix ?? '').trim()
   if (prefixRequired(String(body.vendorName)) && !isVendorPrefix(subPrefix))
     return c.json({ error: 'invalid-prefix' }, 400)
@@ -318,8 +325,9 @@ app.post('/api/vendor/:token/sign', async (c) => {
 
   const rows = await db`
     select vr.id as req_id, vr.user_id, vr.expires_at, vr.used_at, vr.revoked_at, vr.unlocked_at,
-      t.id, t.status, t.net_amount, t.tax_id_hash,
-      v.prefix as record_prefix, v.name as record_name, v.address as record_address
+      t.id, t.status, t.net_amount, t.transfer_date, t.ref, t.tax_id_hash,
+      v.prefix as record_prefix, v.name as record_name, v.address as record_address,
+      v.phone as record_phone, v.email as record_email
     from vendor_requests vr
     join vendor_payables t on t.id = vr.transaction_id
     join vendor_payees v on v.id = t.vendor_id
@@ -344,39 +352,55 @@ app.post('/api/vendor/:token/sign', async (c) => {
   const corrections: { field: string; from: string; to: string }[] = []
   const subName = String(body.vendorName).slice(0, 200)
   const subAddr = String(body.vendorAddress).slice(0, 500)
+  // Contact snapshot: what the vendor confirmed at signing (they may have edited
+  // the client's record). Validated above; sliced as belt-and-braces.
+  const subPhone = String(body.vendorPhone ?? '').trim().slice(0, 50)
+  const subEmail = String(body.vendorEmail ?? '').trim().slice(0, 200)
   if (subPrefix !== String(r.record_prefix ?? ''))
     corrections.push({ field: 'prefix', from: String(r.record_prefix ?? ''), to: subPrefix })
   if (subName !== String(r.record_name))
     corrections.push({ field: 'name', from: String(r.record_name), to: subName })
   if (subAddr !== String(r.record_address))
     corrections.push({ field: 'address', from: String(r.record_address), to: subAddr })
+  if (subPhone !== String(r.record_phone ?? ''))
+    corrections.push({ field: 'phone', from: String(r.record_phone ?? ''), to: subPhone })
+  if (subEmail !== String(r.record_email ?? ''))
+    corrections.push({ field: 'email', from: String(r.record_email ?? ''), to: subEmail })
   const sigPath = await saveBytesDurable('signatures', `${txnId}.png`, png, rowTenant)
-  // Contact snapshot: what the vendor confirmed at signing (they may have edited
-  // the client's record). Immutable from here — the issued PDF reads these.
-  const subPhone = String(body.vendorPhone ?? '').trim().slice(0, 50)
-  const subEmail = String(body.vendorEmail ?? '').trim().slice(0, 200)
   // Signing reference: the authorization's own identifier, shown to the vendor
   // right away. Distinct from the receipt number (assigned only at issuance, so
   // the statutory series never has gaps).
   const authRef = `AUTH-${randomBytes(4).toString('hex').toUpperCase()}`
-  // The exact consent version the vendor accepted (from tenant settings), stored
-  // as evidence — not a hardcoded label.
-  const consentVersion = (await getTenantSettings(rowTenant)).consentVersion
+  // The exact consent the vendor accepted, snapshotted as evidence: the tenant
+  // template rendered with this transaction's facts, plus its hash. Rendered
+  // here with the same shared helpers as the signing form, so the stored text
+  // is byte-identical to what the vendor read — not a version string that
+  // merely points at wording that may later change.
+  const settings = await getTenantSettings(rowTenant)
+  const consentVersion = settings.consentVersion
+  const consentText = renderConsent(settings.consentTextV1, {
+    client: settings.displayName,
+    amount: fmtTHB(Number(r.net_amount)),
+    date: fmtDateTH(isoDay(r.transfer_date)),
+    ref: String(r.ref),
+    version: consentVersion,
+  })
+  const consentSha256 = sha256hex(consentText)
   await db`insert into vendor_authorizations
     (user_id, transaction_id, vendor_prefix, vendor_name, vendor_address, vendor_masked_id,
      vendor_phone, vendor_email, auth_ref, signature_image_path, verification_method, line_user_id, ip, user_agent,
-     consent_text_version, corrections)
+     consent_text_version, consent_text, consent_sha256, corrections)
     values (${rowTenant}, ${txnId}, ${subPrefix}, ${subName}, ${subAddr},
       ${`x-xxxx-xxxxx-${last4.slice(0, 2)}-${last4.slice(2)}`},
       ${subPhone}, ${subEmail}, ${authRef},
       ${sigPath}, ${verificationMethod}, ${body.lineUserId ?? null}, ${ip},
-      ${(c.req.header('user-agent') ?? '').slice(0, 500)}, ${consentVersion},
+      ${(c.req.header('user-agent') ?? '').slice(0, 500)}, ${consentVersion}, ${consentText}, ${consentSha256},
       ${JSON.stringify(corrections)})`
   await db`update vendor_requests set used_at = now() where id = ${String(r.req_id)}`
   await db`update vendor_payables set status = 'signed' where id = ${txnId}`
   await withTenant(rowTenant, 'client', async () =>
     audit(rowTenant, 'vendor_payables', txnId, 'vendor.signed', 'vendor',
-      { verificationMethod, signMethod, consentVersion, corrections, authRef }, ip))
+      { verificationMethod, signMethod, consentVersion, consentSha256, corrections, authRef }, ip))
 
   // Issue the receipt now so the vendor gets the real series number and the PDF
   // immediately — no client round-trip. If issuance fails, the row stays
@@ -463,7 +487,10 @@ app.put('/api/settings', async (c) => {
   try {
     await saveTenantSettings(g.ws, body as never)
     return c.json({ ok: true })
-  } catch {
+  } catch (e) {
+    const code = e instanceof Error ? e.message : ''
+    if (code === 'consent-version-required' || code === 'consent-vars-missing')
+      return c.json({ error: code }, 400)
     return c.json({ error: 'invalid-body' }, 400)
   }
 })

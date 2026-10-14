@@ -14,6 +14,7 @@ import type { PaymentTransaction } from '../lib/types'
 import { fmtTHB, fmtDateTH, fmtDateTimeTHLong } from '../lib/format'
 import { amountToThaiWords } from '../lib/thai-words'
 import { VENDOR_PREFIXES, isVendorPrefix, prefixRequired } from '../lib/vendor-name'
+import { EMAIL_REQUIRED_ERROR, PHONE_REQUIRED_ERROR, isValidEmail, isValidPhone } from '../lib/vendor-contact'
 import { Card, CardBody } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { ConfirmDialog } from '../components/ui/confirm-dialog'
@@ -285,7 +286,9 @@ export function VendorSign() {
   const typedEmpty = signMode === 'type' && typedName.trim().length < 2
   const signatureOk = signMode === 'type' ? !typedEmpty : !drawnEmpty
   const prefixOk = !prefixRequired(name) || isVendorPrefix(prefix)
-  const valid = name.trim().length >= 2 && prefixOk && address.trim().length >= 6 && idOk && consent && signatureOk
+  const phoneOk = isValidPhone(phone)
+  const emailOk = isValidEmail(email)
+  const valid = name.trim().length >= 2 && prefixOk && address.trim().length >= 6 && phoneOk && emailOk && idOk && consent && signatureOk
 
   const needsGate = !!t.taxIdHash && !unlocked
 
@@ -393,7 +396,11 @@ export function VendorSign() {
             ? 'ยังไม่ได้ยืนยันตัวตน — โปรดยืนยันเลขบัตรประชาชนก่อนลงนาม'
             : res.error === 'already-signed'
               ? 'ลิงก์นี้ถูกลงนามไปแล้ว'
-              : 'ส่งข้อมูลไม่สำเร็จ โปรดลองอีกครั้งหรือติดต่อลูกค้าผู้จ่าย',
+              : res.error === 'invalid-phone'
+                ? PHONE_REQUIRED_ERROR
+                : res.error === 'invalid-email'
+                  ? EMAIL_REQUIRED_ERROR
+                  : 'ส่งข้อมูลไม่สำเร็จ โปรดลองอีกครั้งหรือติดต่อลูกค้าผู้จ่าย',
         )
         return
       }
@@ -427,6 +434,8 @@ export function VendorSign() {
         sig: { kind: 'ready', png: auth.signaturePng },
         signedAt: auth.signedAt,
         sigMethod: auth.verificationMethod,
+        authRef: res.authRef,
+        consentVersion: auth.consentVersion,
         verificationCode: res.verificationCode ?? undefined,
         verifyUrl: res.verificationCode ? `${window.location.origin}/verify/${res.verificationCode}` : undefined,
       })
@@ -524,12 +533,14 @@ export function VendorSign() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <Label hint="ไม่บังคับ">โทรศัพท์</Label>
+                <Label required>โทรศัพท์</Label>
                 <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="08x-xxx-xxxx" inputMode="tel" autoComplete="tel" />
+                {tried && !phoneOk && <FieldError msg={PHONE_REQUIRED_ERROR} />}
               </div>
               <div>
-                <Label hint="ไม่บังคับ">อีเมล</Label>
+                <Label required>อีเมล</Label>
                 <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" autoComplete="email" />
+                {tried && !emailOk && <FieldError msg={EMAIL_REQUIRED_ERROR} />}
               </div>
             </div>
             {gatePassed && t.taxIdLast4 ? (

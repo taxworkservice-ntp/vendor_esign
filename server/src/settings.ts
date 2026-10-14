@@ -1,5 +1,6 @@
 import { sql, withTenant } from '../../src/server/db'
 import {
+  CONSENT_VARS,
   DEFAULT_CONSENT,
   DEFAULT_CONSENT_VERSION,
   DEFAULT_INVITE_TEMPLATE,
@@ -60,6 +61,14 @@ export async function getTenantSettings(tenantId: string): Promise<TenantSetting
 }
 
 export async function saveTenantSettings(tenantId: string, s: TenantSettings): Promise<void> {
+  // Same version discipline as the client validator, enforced at the trust
+  // boundary so no writer can silently reword agreed consent. Thrown codes
+  // (not prose) cross the API; the client maps them for display.
+  const current = await getTenantSettings(tenantId)
+  if ((s.consentTextV1 ?? '') !== (current.consentTextV1 ?? '')) {
+    if ((s.consentVersion ?? '') === (current.consentVersion ?? '')) throw new Error('consent-version-required')
+    if (CONSENT_VARS.some((v) => !(s.consentTextV1 ?? '').includes(v))) throw new Error('consent-vars-missing')
+  }
   await withTenant(tenantId, 'client_admin', async () => {
     const db = sql()
     await db`update client_profiles set display_name = ${s.displayName}, name = ${s.displayName},

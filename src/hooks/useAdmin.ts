@@ -191,6 +191,97 @@ export function useDeleteTenant() {
   })
 }
 
+// ── Reset workspace to fresh ─────────────────────────────────────────────────
+export interface ResetCounts {
+  txns: number
+  receipts: number
+  signings: number
+  requests: number
+  vendors: number
+  wht: number
+  whtVendors: number
+  invites: number
+  items: number
+  lineItems: number
+}
+
+export interface ResetPreview {
+  tenantId: string
+  clientCode: string
+  displayName: string
+  status: 'active' | 'suspended'
+  beYear: number
+  startNumber: number
+  users: number
+  counts: ResetCounts
+}
+
+export interface ResetResult {
+  ok: boolean
+  deleted: ResetCounts
+  resetSequences: boolean
+  deleteFiles: boolean
+  filesDeleted: number
+  auditId: string | null
+}
+
+const EMPTY_COUNTS: ResetCounts = {
+  txns: 0, receipts: 0, signings: 0, requests: 0, vendors: 0,
+  wht: 0, whtVendors: 0, invites: 0, items: 0, lineItems: 0,
+}
+
+export function useResetPreview(id?: string, enabled = false) {
+  return useQuery({
+    queryKey: [...QK, id, 'reset-preview'],
+    enabled: !!id && enabled,
+    queryFn: async (): Promise<ResetPreview> => {
+      if (ADMIN_API && id) return api<ResetPreview>(`/api/admin/tenants/${id}/reset-preview`)
+      const t = loadTenants().find((x) => x.id === id)
+      return {
+        tenantId: id ?? '',
+        clientCode: t?.clientCode ?? id ?? '',
+        displayName: t?.displayName ?? '',
+        status: t?.status ?? 'active',
+        beYear: t?.beYear ?? 2569,
+        startNumber: t?.startNumber ?? 1,
+        users: loadTenantUsers()[id ?? '']?.length ?? t?.users ?? 0,
+        counts: { ...EMPTY_COUNTS, txns: t?.txns ?? 0, receipts: t?.receipts ?? 0 },
+      }
+    },
+  })
+}
+
+export function useResetTenant(id?: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      confirmation: string
+      resetSequences?: boolean
+      deleteFiles?: boolean
+      reason?: string
+    }): Promise<ResetResult> => {
+      if (ADMIN_API && id) {
+        return api<ResetResult>(`/api/admin/tenants/${id}/reset`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+        })
+      }
+      const before = loadTenants().find((t) => t.id === id)
+      saveTenants(loadTenants().map((t) => (t.id === id ? { ...t, txns: 0, receipts: 0 } : t)))
+      return {
+        ok: true,
+        deleted: { ...EMPTY_COUNTS, txns: before?.txns ?? 0, receipts: before?.receipts ?? 0 },
+        resetSequences: input.resetSequences !== false,
+        deleteFiles: input.deleteFiles !== false,
+        filesDeleted: 0,
+        auditId: null,
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: QK }),
+  })
+}
+
 // ── Tenant users ─────────────────────────────────────────────────────────────
 export function useTenantUsers(tenantId?: string) {
   return useQuery({

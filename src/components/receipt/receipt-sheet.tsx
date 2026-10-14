@@ -40,6 +40,10 @@ export interface ReceiptSheetData {
   signedAt?: string
   /** How the signature was captured (shown when not a drawn signature). */
   sigMethod?: string
+  /** The authorization's own reference (evidence line under the signature). */
+  authRef?: string
+  /** Consent version the vendor accepted (evidence line under the signature). */
+  consentVersion?: string
   /** Public verification code, printed so a detached copy stays checkable. */
   verificationCode?: string
   /** Full URL the code resolves to (the public /verify page). */
@@ -230,6 +234,12 @@ export const ReceiptSheet = forwardRef<
             {data.sigMethod && (
               <p className="mt-0.5 text-micro leading-tight text-ink-400">
                 ออกในนามผู้รับเงินโดยได้รับมอบอำนาจ · ลายมือชื่ออิเล็กทรอนิกส์ตาม พ.ร.บ.ว่าด้วยธุรกรรมทางอิเล็กทรอนิกส์ พ.ศ. 2544
+              </p>
+            )}
+            {data.authRef && (
+              <p className="mt-0.5 text-micro leading-tight text-ink-400">
+                เลขอ้างอิง <span className="font-mono">{data.authRef}</span>
+                {data.consentVersion && <span> · ข้อตกลง v{data.consentVersion}</span>}
               </p>
             )}
           </div>

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ImagePlus, Loader2, Save, X } from 'lucide-react'
 import { useSettings, useUpdateSettings } from '../hooks/useSettings'
 import { useClientAuth } from '../lib/client-auth'
-import { currentBeYear, type TenantSettings } from '../lib/settings'
+import { CONSENT_VARS_MISSING_ERROR, CONSENT_VERSION_REQUIRED_ERROR, currentBeYear, validateSettings, type TenantSettings } from '../lib/settings'
 import { signDownload, signUpload, uploadToR2 } from '../lib/r2-assets'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
@@ -46,11 +46,23 @@ export function Settings() {
 
   const submit = async () => {
     setMsg('')
+    // Immediate feedback against the loaded values; the server re-enforces the
+    // same rules at the trust boundary.
+    const prevErr = validateSettings(form, data ?? undefined)
+    if (prevErr) {
+      setMsg(prevErr)
+      return
+    }
     try {
       await save.mutateAsync(form)
       setMsg('บันทึกแล้ว')
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : 'บันทึกไม่สำเร็จ')
+      const code = e instanceof Error ? e.message : ''
+      setMsg(
+        code === 'consent-version-required' ? CONSENT_VERSION_REQUIRED_ERROR
+          : code === 'consent-vars-missing' ? CONSENT_VARS_MISSING_ERROR
+            : e instanceof Error ? e.message : 'บันทึกไม่สำเร็จ',
+      )
     }
   }
 
