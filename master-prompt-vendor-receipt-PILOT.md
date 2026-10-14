@@ -252,4 +252,6 @@ deployments forced to demo (mock) mode (`src/lib/api-base.ts`, `__VERCEL_ENV__`)
 **Still deferred.** LINE Login/LIFF verification (vendor signs via versioned consent +
 signature for now); automated reminders (email/LINE OA); invite funnel analytics;
 gross-up re-enable (with a corrected receipt presentation); credit notes (plain
-receipts only).
+receipts only); auto-emailing the vendor after signing — full plan in
+`docs/email-auto-send-plan.md` (Resend, platform domain + client name sender,
+receipt-on-sign v1).
