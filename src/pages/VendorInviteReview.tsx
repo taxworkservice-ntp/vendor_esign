@@ -100,9 +100,12 @@ export function VendorInviteReview() {
           </Card>
 
           <Card>
-            <CardBody className="grid grid-cols-2 gap-3">
+            <CardBody className="space-y-3">
               <VendorDocument owner={{ kind: 'invite', id: inv.id }} doc="id" label="บัตรประชาชน" hasDoc={!!inv.idDocName || !!inv.idDocData} />
-              <VendorDocument owner={{ kind: 'invite', id: inv.id }} doc="bank" label="หน้าสมุดบัญชี (ไม่บังคับ)" hasDoc={!!inv.bankDocName || !!inv.bankDocData} />
+              {/* Bank-book page is only collected when the workspace enables it. */}
+              {(!!inv.bankDocName || !!inv.bankDocData) && (
+                <VendorDocument owner={{ kind: 'invite', id: inv.id }} doc="bank" label="หน้าสมุดบัญชี" hasDoc />
+              )}
             </CardBody>
           </Card>
 

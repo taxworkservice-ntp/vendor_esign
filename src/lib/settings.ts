@@ -37,6 +37,7 @@ export function defaultSettings(tenantId?: string): TenantSettings {
     consentVersion: DEFAULT_CONSENT_VERSION,
     receiptNote: '',
     showVerifyQr: false,
+    onboardBankDoc: false,
     inviteMessageTemplate: DEFAULT_INVITE_TEMPLATE,
     vendorInviteMessageTemplate: DEFAULT_VENDOR_INVITE_TEMPLATE,
     signaturePlacement: DEFAULT_SIGNATURE_PLACEMENT,

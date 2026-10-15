@@ -55,6 +55,8 @@ export interface TenantSettings {
   consentVersion: string
   receiptNote: string
   showVerifyQr: boolean
+  /** Show the bank-book page upload on onboarding links (default off). */
+  onboardBankDoc: boolean
   inviteMessageTemplate: string
   /** Message sent with a vendor self-onboarding invite. Variables: {{link}} {{client}}. */
   vendorInviteMessageTemplate: string

@@ -26,9 +26,10 @@ function groupTaxId(id: string): string {
   return `${d[0]}-${d.slice(1, 5)}-${d.slice(5, 10)}-${d.slice(10, 12)}-${d[12]}`
 }
 
+// The bank-book page is optional (workspace toggle) — only mention it when the
+// vendor actually attached one.
 function attachments(docs?: { id: boolean; bank: boolean }): string {
-  const bank = docs?.bank ? 'แนบ' : 'ไม่ได้แนบ'
-  return `บัตรประชาชน (แนบ) · หน้าสมุดบัญชี (${bank})`
+  return docs?.bank ? 'บัตรประชาชน (แนบ) · หน้าสมุดบัญชี (แนบ)' : 'บัตรประชาชน (แนบ)'
 }
 
 export function SubmissionEvidence({ data }: { data: SubmissionEvidenceData }) {

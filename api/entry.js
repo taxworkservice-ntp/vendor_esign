@@ -68719,6 +68719,7 @@ async function getTenantSettings(tenantId) {
       consentVersion: String(m2.get("consent_version") ?? DEFAULT_CONSENT_VERSION),
       receiptNote: String(m2.get("receipt_note") ?? ""),
       showVerifyQr: Boolean(m2.get("show_verify_qr") ?? false),
+      onboardBankDoc: Boolean(m2.get("onboard_bank_doc") ?? false),
       inviteMessageTemplate: String(m2.get("invite_message_template") ?? DEFAULT_INVITE_TEMPLATE),
       vendorInviteMessageTemplate: String(m2.get("vendor_invite_message_template") ?? DEFAULT_VENDOR_INVITE_TEMPLATE),
       signatureStoragePath: m2.get("signature_storage_path") || void 0,
@@ -68753,6 +68754,7 @@ async function saveTenantSettings(tenantId, s) {
     await put("consent_version", s.consentVersion);
     await put("receipt_note", s.receiptNote);
     await put("show_verify_qr", s.showVerifyQr);
+    await put("onboard_bank_doc", s.onboardBankDoc);
     await put("invite_message_template", s.inviteMessageTemplate);
     await put("vendor_invite_message_template", s.vendorInviteMessageTemplate);
     if (s.signatureStoragePath !== void 0) await put("signature_storage_path", s.signatureStoragePath);
@@ -71378,6 +71380,7 @@ invitePublicRoutes.get("/:token", async (c) => {
     logoUrl,
     ref: onboardRef(String(r.id)),
     recipientLine: r.recipient_line ?? void 0,
+    bankDocEnabled: settings.onboardBankDoc,
     submittedAt: r.submitted_at ?? void 0,
     consentVersion: r.consent_version ?? void 0,
     docs: { id: !!r.id_doc_path, bank: !!r.bank_doc_path },

@@ -80,6 +80,8 @@ export interface VendorInvitePublic {
   ref?: string
   /** LINE id hint the client recorded when creating the link (prefills the form). */
   recipientLine?: string
+  /** Whether the client wants the bank-book page uploaded (workspace setting). */
+  bankDocEnabled?: boolean
   /** When the vendor submitted (drives the evidence card). */
   submittedAt?: string
   /** Consent version the vendor accepted. */

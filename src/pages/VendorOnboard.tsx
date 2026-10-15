@@ -144,6 +144,7 @@ export function VendorOnboard() {
         token={token as string}
         initial={data.draft}
         recipientLine={data.recipientLine}
+        bankDocEnabled={data.bankDocEnabled}
         reviewNote={data.reviewNote}
         onSubmitted={() => {
           setJustSubmitted(true)
@@ -205,6 +206,7 @@ function OnboardForm({
   token,
   initial,
   recipientLine,
+  bankDocEnabled,
   reviewNote,
   onSubmitted,
 }: {
@@ -212,6 +214,8 @@ function OnboardForm({
   initial?: VendorInviteDraft
   /** LINE id the client recorded when creating the link — a hint, not truth. */
   recipientLine?: string
+  /** Workspace toggle: show the bank-book upload (default off). */
+  bankDocEnabled?: boolean
   reviewNote?: string
   onSubmitted?: () => void
 }) {
@@ -484,17 +488,19 @@ function OnboardForm({
           onPick={(f) => void onPick('id', f)}
           onClear={() => setIdDoc(null)}
         />
-        <DocField
-          id="ob-bankdoc"
-          label={VENDOR_DOCS[1].label}
-          hint={VENDOR_DOCS[1].hint}
-          required={VENDOR_DOCS[1].required}
-          value={bankDoc}
-          busy={docBusy === 'bank'}
-          error={bankDocErr || undefined}
-          onPick={(f) => void onPick('bank', f)}
-          onClear={() => setBankDoc(null)}
-        />
+        {bankDocEnabled && (
+          <DocField
+            id="ob-bankdoc"
+            label={VENDOR_DOCS[1].label}
+            hint={VENDOR_DOCS[1].hint}
+            required={VENDOR_DOCS[1].required}
+            value={bankDoc}
+            busy={docBusy === 'bank'}
+            error={bankDocErr || undefined}
+            onPick={(f) => void onPick('bank', f)}
+            onClear={() => setBankDoc(null)}
+          />
+        )}
         <div>
           <Checkbox
             id="ob-consent"

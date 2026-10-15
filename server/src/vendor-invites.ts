@@ -290,6 +290,7 @@ invitePublicRoutes.get('/:token', async (c) => {
     logoUrl,
     ref: onboardRef(String(r.id)),
     recipientLine: r.recipient_line ?? undefined,
+    bankDocEnabled: settings.onboardBankDoc,
     submittedAt: r.submitted_at ?? undefined,
     consentVersion: r.consent_version ?? undefined,
     docs: { id: !!r.id_doc_path, bank: !!r.bank_doc_path },

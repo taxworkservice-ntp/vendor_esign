@@ -109,6 +109,7 @@ export async function getVendorInviteByToken(token: string): Promise<VendorInvit
     logoUrl: null,
     ref: onboardRef(inv.id),
     recipientLine: inv.recipientLine,
+    bankDocEnabled: settings.onboardBankDoc,
     submittedAt: inv.submittedAt,
     consentVersion: inv.consentVersion,
     docs: { id: !!inv.idDocData, bank: !!inv.bankDocData },

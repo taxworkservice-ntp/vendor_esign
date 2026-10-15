@@ -33,7 +33,14 @@ describe('SubmissionEvidence', () => {
     expect(html).toContain('ดาวน์โหลด PDF')
   })
 
-  it('notes an unattached bank-book page', () => {
-    expect(renderToString(<SubmissionEvidence data={data} />)).toContain('หน้าสมุดบัญชี (ไม่ได้แนบ)')
+  it('lists only the ID card when no bank-book page was attached', () => {
+    const html = renderToString(<SubmissionEvidence data={data} />)
+    expect(html).toContain('บัตรประชาชน (แนบ)')
+    expect(html).not.toContain('หน้าสมุดบัญชี')
+  })
+
+  it('lists the bank-book page when one was attached', () => {
+    const html = renderToString(<SubmissionEvidence data={{ ...data, docs: { id: true, bank: true } }} />)
+    expect(html).toContain('หน้าสมุดบัญชี (แนบ)')
   })
 })

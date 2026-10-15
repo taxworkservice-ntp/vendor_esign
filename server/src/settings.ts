@@ -49,6 +49,7 @@ export async function getTenantSettings(tenantId: string): Promise<TenantSetting
       consentVersion: String(m.get('consent_version') ?? DEFAULT_CONSENT_VERSION),
       receiptNote: String(m.get('receipt_note') ?? ''),
       showVerifyQr: Boolean(m.get('show_verify_qr') ?? false),
+      onboardBankDoc: Boolean(m.get('onboard_bank_doc') ?? false),
       inviteMessageTemplate: String(m.get('invite_message_template') ?? DEFAULT_INVITE_TEMPLATE),
       vendorInviteMessageTemplate: String(m.get('vendor_invite_message_template') ?? DEFAULT_VENDOR_INVITE_TEMPLATE),
       signatureStoragePath: (m.get('signature_storage_path') as string | undefined) || undefined,
@@ -87,6 +88,7 @@ export async function saveTenantSettings(tenantId: string, s: TenantSettings): P
     await put('consent_version', s.consentVersion)
     await put('receipt_note', s.receiptNote)
     await put('show_verify_qr', s.showVerifyQr)
+    await put('onboard_bank_doc', s.onboardBankDoc)
     await put('invite_message_template', s.inviteMessageTemplate)
     await put('vendor_invite_message_template', s.vendorInviteMessageTemplate)
     if (s.signatureStoragePath !== undefined) await put('signature_storage_path', s.signatureStoragePath)

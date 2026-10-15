@@ -180,6 +180,13 @@ export function Settings() {
             แสดง QR ตรวจสอบบนสำเนาภายใน
           </label>
         </div>
+        <label className="flex items-start gap-3 text-body">
+          <input type="checkbox" checked={form.onboardBankDoc} onChange={(e) => set({ onboardBankDoc: e.target.checked })} disabled={readOnly} className="mt-0.5 h-4 w-4" />
+          <span>
+            ให้ผู้ขายแนบหน้าสมุดบัญชีในลิงก์กรอกข้อมูล
+            <span className="mt-0.5 block text-label text-ink-500">ปิดไว้ = ขอเฉพาะสำเนาบัตรประชาชน (ค่าเริ่มต้น)</span>
+          </span>
+        </label>
         <div>
           <Label>บันทึกท้ายใบเสร็จ</Label>
           <Input value={form.receiptNote} onChange={(e) => set({ receiptNote: e.target.value })} disabled={readOnly} placeholder="เช่น ขอบคุณที่ใช้บริการ" />
