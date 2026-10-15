@@ -41,10 +41,10 @@ export interface OnboardInput {
 export const ONBOARD_FIELD_ORDER: OnboardField[] = [
   'name',
   'prefix',
+  'taxId',
   'address',
   'phone',
   'email',
-  'taxId',
   'bankName',
   'bankAccount',
   'accountHolder',

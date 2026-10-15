@@ -407,6 +407,13 @@ function OnboardForm({
           </div>
         </div>
         <div>
+          <Label htmlFor="ob-taxid" hint="13 หลัก" required>เลขบัตรประชาชน / เลขผู้เสียภาษี</Label>
+          <Input id="ob-taxid" value={taxId} inputMode="numeric" autoCapitalize="none" spellCheck={false} invalid={!!errors.taxId}
+            onChange={(e) => { setTaxId(e.target.value.replace(/\D/g, '').slice(0, 13)); clearError('taxId') }}
+            placeholder="0xxxxxxxxxxxx" className="font-mono" />
+          <FieldError msg={errors.taxId} />
+        </div>
+        <div>
           <Label htmlFor="ob-address" required hint="ที่อยู่ตามบัตรประชาชน/ทะเบียนราษฎร">ที่อยู่</Label>
           <Textarea id="ob-address" value={address} invalid={!!errors.address}
             onChange={(e) => { setAddress(e.target.value); clearError('address') }} rows={2}
@@ -437,13 +444,6 @@ function OnboardForm({
           {lineFromPayer && (
             <p className="mt-1.5 text-label text-ink-500">ผู้ว่าจ้างระบุไว้ — โปรดตรวจสอบให้ถูกต้องก่อนส่ง</p>
           )}
-        </div>
-        <div>
-          <Label htmlFor="ob-taxid" hint="13 หลัก" required>เลขบัตรประชาชน / เลขผู้เสียภาษี</Label>
-          <Input id="ob-taxid" value={taxId} inputMode="numeric" autoCapitalize="none" spellCheck={false} invalid={!!errors.taxId}
-            onChange={(e) => { setTaxId(e.target.value.replace(/\D/g, '').slice(0, 13)); clearError('taxId') }}
-            placeholder="0xxxxxxxxxxxx" className="font-mono" />
-          <FieldError msg={errors.taxId} />
         </div>
       </Section>
 
