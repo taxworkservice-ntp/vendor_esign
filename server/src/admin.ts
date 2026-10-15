@@ -504,7 +504,7 @@ adminApp.post('/api/admin/tenants/:id/users', async (c) => {
     values (${userId}, ${id}, ${role}, 'active', false, ${JSON.stringify(defaultPermissionsFor(role))}::jsonb)
     on conflict (member_user_id, workspace_user_id) do update set role = ${role}, status = 'active', password_changed = false`
   await db`insert into client_permission_audit (workspace_user_id, actor_user_id, target_member_id, action, after)
-    values (${id}, ${g.u.userId}, ${userId}, 'user.created', ${JSON.stringify({ role })}::jsonb)`
+    values (${id}, ${g.u.userId}, ${userId}, 'user.created', ${JSON.stringify({ role, permissions: defaultPermissionsFor(role) })}::jsonb)`
   await writeAudit(id, 'profiles', userId, 'user.created', g.u.email, { email, role }, ip)
   return c.json({ ok: true, userId, tempPassword: password })
 })

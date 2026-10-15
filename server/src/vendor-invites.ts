@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { randomBytes } from 'node:crypto'
 import { sql, withTenant } from '../../src/server/db'
-import { guard } from './data'
+import { canDo, guard } from './data'
 import { sha256hex } from './auth'
 import { audit, one, rateLimited } from './shared'
 import { saveBytesDurable, readStoredDurable } from './storage'
@@ -119,6 +119,7 @@ inviteClientRoutes.get('/vendor-invites', async (c) => {
 inviteClientRoutes.post('/vendor-invites', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canManageVendors')) return c.json({ error: 'forbidden' }, 403)
   const b = (await c.req.json().catch(() => null)) as { label?: string } | null
   const token = randomBytes(32).toString('base64url')
   const row = await withTenant(g.ws, 'owner', async () => {
@@ -134,6 +135,7 @@ inviteClientRoutes.post('/vendor-invites', async (c) => {
 inviteClientRoutes.post('/vendor-invites/:id/resend', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canManageVendors')) return c.json({ error: 'forbidden' }, 403)
   const token = randomBytes(32).toString('base64url')
   const row = await withTenant(g.ws, 'owner', async () => {
     const db = sql()
@@ -151,6 +153,7 @@ inviteClientRoutes.post('/vendor-invites/:id/resend', async (c) => {
 inviteClientRoutes.post('/vendor-invites/:id/approve', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canManageVendors')) return c.json({ error: 'forbidden' }, 403)
   const id = c.req.param('id')
   const vendorId = await withTenant(g.ws, 'owner', async () => {
     const db = sql()
@@ -181,6 +184,7 @@ for (const action of ['reject', 'request-changes'] as const) {
   inviteClientRoutes.post(`/vendor-invites/:id/${action}`, async (c) => {
     const g = await guard(c)
     if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+    if (!canDo(g, 'canManageVendors')) return c.json({ error: 'forbidden' }, 403)
     const b = (await c.req.json().catch(() => null)) as { note?: string } | null
     const status = action === 'reject' ? 'rejected' : 'changes_requested'
     const ok = await withTenant(g.ws, 'owner', async () => {
@@ -200,6 +204,7 @@ for (const action of ['reject', 'request-changes'] as const) {
 inviteClientRoutes.post('/vendor-invites/:id/cancel', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canManageVendors')) return c.json({ error: 'forbidden' }, 403)
   const ok = await withTenant(g.ws, 'owner', async () => {
     const db = sql()
     const rows = (await db`update vendor_invites set status = 'cancelled',
@@ -218,6 +223,7 @@ inviteClientRoutes.post('/vendor-invites/:id/cancel', async (c) => {
 inviteClientRoutes.get('/vendor-invites/:id/document/:kind', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canManageVendors')) return c.json({ error: 'forbidden' }, 403)
   const kind = c.req.param('kind')
   if (kind !== 'id' && kind !== 'bank') return c.json({ error: 'invalid-kind' }, 400)
   const rows = await withTenant(g.ws, 'owner', async () => {

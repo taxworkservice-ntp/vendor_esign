@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { Archive, ArchiveRestore, Package, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
 import { useDeleteItem, useItems, useSaveItem, useSetItemActive } from '../hooks/useItems'
+import { useClientAuth } from '../lib/client-auth'
 import { useColumnSort } from '../hooks/useColumnSort'
 import { sortRows, type SortAccessor } from '../lib/sort'
 import type { CatalogItem } from '../lib/items-mock'
@@ -42,6 +43,8 @@ const ITEM_SORT: Record<string, SortAccessor<CatalogItem>> = {
 const empty = { id: '' as string | undefined, itemNo: 0, name: '', unit: 'รายการ', unitPrice: '' }
 
 export function ItemsList() {
+  // Display-only mirrors of the server gates (hidden actions still 403).
+  const { can } = useClientAuth()
   const [search, setSearch] = useState('')
   const [showArchived, setShowArchived] = useState(false)
   const [showForm, setShowForm] = useState(false)
@@ -116,7 +119,7 @@ export function ItemsList() {
         title="สินค้า / บริการ"
         sub="รายการสินค้าและบริการ สำหรับเรียกใช้เมื่อสร้างธุรกรรม (รหัส · ชื่อ · หน่วย · ราคา)"
         actions={
-          !showForm && (
+          !showForm && can('canManageCatalog') && (
             <Button onClick={() => setShowForm(true)}>
               <Plus size={17} /> เพิ่มรายการใหม่
             </Button>
@@ -124,7 +127,7 @@ export function ItemsList() {
         }
       />
 
-      {showForm && (
+      {showForm && can('canManageCatalog') && (
         <Card>
           <CardBody className="space-y-4">
             <div className="flex items-center justify-between gap-2">
@@ -258,33 +261,39 @@ export function ItemsList() {
                             <Td align="right" className="tabular-nums">{fmtTHB(it.unitPrice)}</Td>
                             <Td className="px-2">
                               <div className="flex items-center justify-end gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => toggleActive(it)}
-                                  title={archived ? 'เปิดการใช้งาน' : 'ปิดการใช้งาน (ซ่อนจากรายการ แต่เอกสารเดิมยังอยู่)'}
-                                  aria-label={archived ? `เปิดการใช้งาน ${it.name}` : `ปิดการใช้งาน ${it.name}`}
-                                  className="grid h-8 w-8 place-items-center rounded-control text-ink-500 transition hover:bg-ink-100 hover:text-ink-900"
-                                >
-                                  {archived ? <ArchiveRestore size={15} aria-hidden /> : <Archive size={15} aria-hidden />}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => startEdit(it)}
-                                  className="grid h-8 w-8 place-items-center rounded-control text-ink-500 transition hover:bg-ink-100 hover:text-ink-900"
-                                  title="แก้ไข"
-                                  aria-label={`แก้ไข ${it.name}`}
-                                >
-                                  <Pencil size={15} aria-hidden />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setPendingDelete({ id: it.id, name: it.name })}
-                                  className="grid h-8 w-8 place-items-center rounded-control text-ink-400 transition hover:bg-ink-100 hover:text-danger"
-                                  title="ลบถาวร"
-                                  aria-label={`ลบ ${it.name}`}
-                                >
-                                  <Trash2 size={15} aria-hidden />
-                                </button>
+                                {can('canManageCatalog') && (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleActive(it)}
+                                    title={archived ? 'เปิดการใช้งาน' : 'ปิดการใช้งาน (ซ่อนจากรายการ แต่เอกสารเดิมยังอยู่)'}
+                                    aria-label={archived ? `เปิดการใช้งาน ${it.name}` : `ปิดการใช้งาน ${it.name}`}
+                                    className="grid h-8 w-8 place-items-center rounded-control text-ink-500 transition hover:bg-ink-100 hover:text-ink-900"
+                                  >
+                                    {archived ? <ArchiveRestore size={15} aria-hidden /> : <Archive size={15} aria-hidden />}
+                                  </button>
+                                )}
+                                {can('canManageCatalog') && (
+                                  <button
+                                    type="button"
+                                    onClick={() => startEdit(it)}
+                                    className="grid h-8 w-8 place-items-center rounded-control text-ink-500 transition hover:bg-ink-100 hover:text-ink-900"
+                                    title="แก้ไข"
+                                    aria-label={`แก้ไข ${it.name}`}
+                                  >
+                                    <Pencil size={15} aria-hidden />
+                                  </button>
+                                )}
+                                {can('canDeleteDocuments') && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setPendingDelete({ id: it.id, name: it.name })}
+                                    className="grid h-8 w-8 place-items-center rounded-control text-ink-400 transition hover:bg-ink-100 hover:text-danger"
+                                    title="ลบถาวร"
+                                    aria-label={`ลบ ${it.name}`}
+                                  >
+                                    <Trash2 size={15} aria-hidden />
+                                  </button>
+                                )}
                               </div>
                             </Td>
                           </Row>
@@ -314,9 +323,11 @@ export function ItemsList() {
                   title="ยังไม่มีรายการสินค้า/บริการ"
                   description="เพิ่มรายการเพื่อเรียกใช้เมื่อสร้างธุรกรรม"
                   action={
-                    <Button onClick={() => setShowForm(true)}>
-                      <Plus size={17} /> เพิ่มรายการใหม่
-                    </Button>
+                    can('canManageCatalog') && (
+                      <Button onClick={() => setShowForm(true)}>
+                        <Plus size={17} /> เพิ่มรายการใหม่
+                      </Button>
+                    )
                   }
                 />
               ))}

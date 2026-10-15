@@ -68,7 +68,7 @@ ADMIN_EMAIL=you@taxwork.local npm run db:seed-admin  # bootstrap super_admin (pr
   - `GET /api/client/transactions`, `GET /api/client/transactions/:id`, `POST /api/client/transactions`
     (create; WHT via `src/lib/wht-calc`, tax ID hashed), `POST /api/client/transactions/:id/send|revoke|void`.
     `send` returns the one-time `token` and stores it (with its hash) for later link re-copy.
-  - `GET /api/client/vendors/:id/tax-id` — decrypted vendor tax ID for form prefill (owner/manager).
+  - `GET /api/client/vendors/:id/tax-id` — decrypted vendor tax ID for form prefill (flag-gated: `canManageVendors`).
   - `GET/POST /api/client/wht/vendors`, `GET/POST /api/client/wht/records`, `PATCH /api/client/wht/records/:id`
     — WHT storage; certificate number auto-assigned via `generate_wht_certificate_no()`.
   - `GET /api/client/wht/records` is paged, filtered and aggregated:
@@ -132,16 +132,18 @@ because the policy text currently promises more than the code delivers.
 
 | Actor | Who | Enforced where |
 |---|---|---|
-| **Workspace member** | the client (or their accountant) who logs in | `guard()` — session + workspace scope only. **No per-member permission check.** |
+| **Workspace member** | the client (or their accountant) who logs in | `guard()` — session + workspace scope — plus `canDo()` per-write flags (`src/lib/permissions.ts`: 7 app-shaped keys; owner implicit, staff flag-driven). Reads stay open; sensitive PII reads are flag-gated like writes. |
 | **Platform bookkeeper** | Taxwork's own staff, serving many clients | `admin.ts` (port 8788). The client portal's RLS *also* has a clause for them — see below. |
 | **External bookkeeper** | the client's own accountant, who files the return | **not a user of this app.** They receive the issued PDF out of band. No role, no login. |
 
 Facts worth knowing before changing any of this:
 
-- **The client portal is tenant-scoped, full stop.** `guard()`
-  (`server/src/data.ts`) takes `u.memberships[0].tenantId` and does not inspect
-  the member's role. RBAC over members (owner / manager / client_admin /
-  client_user) exists only in the admin app.
+- **The client portal is tenant-scoped, then capability-gated.** `guard()`
+  (`server/src/data.ts`) takes `u.memberships[0].tenantId`; every write route
+  additionally passes `canDo(g, key)`. Owners pass implicitly; members need the
+  flag. The owner manages flags in Settings → Team (server `team.ts`);
+  identity (invite, roles, disable) stays operator-owned and has no client
+  endpoint by design.
 - **`app_is_bookkeeper()` and `app_is_super_admin()` are currently unreachable.**
   Every RLS policy reads `user_id = app_user_id() OR app_is_bookkeeper() OR
   app_is_super_admin()`, but those two functions test the `app.role` GUC for the

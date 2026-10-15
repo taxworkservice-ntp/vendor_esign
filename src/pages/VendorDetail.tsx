@@ -19,6 +19,7 @@ import { ErrorState } from '../components/ui/error-state'
 import { PanelSkeleton } from '../components/ui/table-skeleton'
 import { StatusBadge } from '../components/ui/badge'
 import { VendorDocument } from '../components/vendors/vendor-document'
+import { useClientAuth } from '../lib/client-auth'
 
 export function VendorDetail() {
   const { id } = useParams()
@@ -41,6 +42,8 @@ export function VendorDetail() {
   const [confirmForget, setConfirmForget] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmArchive, setConfirmArchive] = useState(false)
+  // Display-only mirrors of the server gates (hidden actions still 403).
+  const { can } = useClientAuth()
 
   // This vendor's transactions, via the vendorId filter the list endpoint
   // already pushes down. The page used to show no history at all, so seeing what
@@ -181,9 +184,11 @@ export function VendorDetail() {
           <span className="min-w-0 flex-1 text-ink-600">
             ผู้ขายรายนี้ถูก<strong>ปิดการใช้งาน</strong> — ไม่แสดงในทะเบียน แต่เอกสารเดิมทั้งหมดยังอยู่ครบ
           </span>
-          <Button variant="secondary" className="h-9" onClick={() => setConfirmArchive(true)} loading={setActive.isPending}>
-            <ArchiveRestore size={14} /> เปิดการใช้งาน
-          </Button>
+          {can('canManageVendors') && (
+            <Button variant="secondary" className="h-9" onClick={() => setConfirmArchive(true)} loading={setActive.isPending}>
+              <ArchiveRestore size={14} /> เปิดการใช้งาน
+            </Button>
+          )}
         </div>
       )}
       <PageHeader
@@ -191,9 +196,9 @@ export function VendorDetail() {
         sub={`รหัสผู้ขาย ${vendorCode(v.vendorNo)} · ${displayTaxId(v)} · ผู้ขายรายย่อย (ไม่จด VAT)`}
         breadcrumb={[{ to: '/vendors', label: 'ผู้ขาย' }, { label: vendorDisplayName(v.prefix, v.name) }]}
         actions={
-          editing
+          can('canManageVendors') && (editing
             ? <Button onClick={save} loading={update.isPending}>{update.isPending ? 'กำลังบันทึก…' : 'บันทึก'}</Button>
-            : <Button variant="secondary" onClick={startEdit}>แก้ไข</Button>
+            : <Button variant="secondary" onClick={startEdit}>แก้ไข</Button>)
         }
       />
       <Card>
@@ -273,14 +278,16 @@ export function VendorDetail() {
                   {v.taxLast4 ? `x-xxxx-xxxxx-${v.taxLast4.slice(0, 2)}-${v.taxLast4.slice(2)}` : 'บันทึกไว้'}
                   <span className="ml-2 font-sans text-body text-success">เข้ารหัส (AES-256-GCM)</span>
                 </p>
-                <Button
-                  variant="ghost"
-                  className="h-9 px-3 text-body"
-                  disabled={forget.isPending}
-                  onClick={() => setConfirmForget(true)}
-                >
-                  ลบเลขที่บันทึกไว้
-                </Button>
+                {can('canManageVendors') && (
+                  <Button
+                    variant="ghost"
+                    className="h-9 px-3 text-body"
+                    disabled={forget.isPending}
+                    onClick={() => setConfirmForget(true)}
+                  >
+                    ลบเลขที่บันทึกไว้
+                  </Button>
+                )}
               </div>
             ) : (
               <p className="text-body text-ink-500">ยังไม่บันทึก — ระบบจะบันทึกแบบเข้ารหัสอัตโนมัติเมื่อสร้างรายการแรก</p>
@@ -326,8 +333,8 @@ export function VendorDetail() {
               </div>
               <p className="text-body text-ink-500">เอกสารที่ผู้ขายแนบตอนกรอกข้อมูล หรือที่ท่านอัปโหลดเอง (เห็นเฉพาะเจ้าของเวิร์กสเปซ)</p>
               <div className="grid grid-cols-2 gap-3">
-                <VendorDocument owner={{ kind: 'vendor', id: v.id }} doc="id" label="บัตรประชาชน" hasDoc={!!v.hasIdDoc} editable onChanged={() => void refetch()} />
-                <VendorDocument owner={{ kind: 'vendor', id: v.id }} doc="bank" label="หน้าสมุดบัญชี" hasDoc={!!v.hasBankDoc} editable onChanged={() => void refetch()} />
+                <VendorDocument owner={{ kind: 'vendor', id: v.id }} doc="id" label="บัตรประชาชน" hasDoc={!!v.hasIdDoc} editable={can('canManageVendors')} canRemove={can('canDeleteDocuments')} onChanged={() => void refetch()} />
+                <VendorDocument owner={{ kind: 'vendor', id: v.id }} doc="bank" label="หน้าสมุดบัญชี" hasDoc={!!v.hasBankDoc} editable={can('canManageVendors')} canRemove={can('canDeleteDocuments')} onChanged={() => void refetch()} />
               </div>
             </CardBody>
           </Card>
@@ -379,7 +386,7 @@ export function VendorDetail() {
         </>
       )}
 
-      {!editing && (
+      {!editing && can('canDeleteDocuments') && (
         <Card>
           <CardBody className="flex flex-wrap items-center justify-between gap-3">
             <div>

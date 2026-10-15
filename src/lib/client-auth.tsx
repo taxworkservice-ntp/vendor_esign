@@ -71,7 +71,8 @@ function stateFrom(
     memberships,
     activeTenant: imp?.tenantId ?? activeTenantOf(memberships),
     mustChangePw,
-    // owner (top role) and manager may manage workspace settings; officer is read-only.
+    // Legacy display helper. New gates must use can(flag) — role alone no
+    // longer decides anything since flags went live.
     isClientAdmin: memberships.some((m) => m.role === 'owner' || m.role === 'manager' || m.role === 'client_admin'),
     isOwner: memberships.some((m) => m.role === 'owner'),
     impersonating: !!imp?.impersonating,

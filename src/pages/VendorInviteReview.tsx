@@ -12,6 +12,7 @@ import { Textarea } from '../components/ui/input'
 import { ErrorState } from '../components/ui/error-state'
 import { Spinner } from '../components/ui/spinner'
 import { useToast } from '../components/ui/toast'
+import { useClientAuth } from '../lib/client-auth'
 import { VendorDocument } from '../components/vendors/vendor-document'
 
 // Client-side review of a vendor's submitted onboarding data. Approving creates
@@ -22,6 +23,8 @@ export function VendorInviteReview() {
   const { id } = useParams()
   const nav = useNavigate()
   const toast = useToast()
+  // Display-only mirror of the server gate (hidden actions still 403).
+  const { can } = useClientAuth()
   const { data, isLoading, isError, refetch } = useVendorInvites()
   const review = useReviewVendorInvite()
   const [note, setNote] = useState('')
@@ -120,7 +123,7 @@ export function VendorInviteReview() {
             </div>
           )}
 
-          {inv.status === 'submitted' && (
+          {inv.status === 'submitted' && can('canManageVendors') && (
             <>
               <div>
                 <label className="mb-1.5 block text-label font-medium text-ink-600">หมายเหตุถึงผู้ขาย (ไม่บังคับ)</label>

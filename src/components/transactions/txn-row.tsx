@@ -20,6 +20,8 @@ export function TxnRow({
   onCopyLink,
   onIssue,
   dense,
+  canSend = true,
+  canIssue = true,
 }: {
   t: PaymentTransaction
   selected: boolean
@@ -29,6 +31,9 @@ export function TxnRow({
   onCopyLink: (t: PaymentTransaction) => void
   onIssue: (t: PaymentTransaction) => void
   dense: boolean
+  /** Display-only mirrors of the server gates (send/issue 403 without them). */
+  canSend?: boolean
+  canIssue?: boolean
 }) {
   const attention = attentionFor(t)
   const pad = dense ? 'py-1.5' : 'py-2.5'
@@ -40,11 +45,11 @@ export function TxnRow({
     if (!primary) return null
     const cls = 'h-8 whitespace-nowrap px-2.5 gap-1.5 text-label'
     if (primary.kind === 'send')
-      return (
+      return canSend ? (
         <Button variant="soft" className={cls} onClick={() => onSend(t)} title="สร้างลิงก์และคัดลอกให้ทันที">
           <Send size={14} aria-hidden /> {primary.label}
         </Button>
-      )
+      ) : null
     if (primary.kind === 'copy')
       return (
         <Button variant="soft" className={cls} onClick={() => onCopyLink(t)}>
@@ -52,11 +57,11 @@ export function TxnRow({
         </Button>
       )
     if (primary.kind === 'issue')
-      return (
+      return canIssue ? (
         <Button variant="soft-success" className={cls} onClick={() => onIssue(t)} title="ออกเลขที่ใบเสร็จและสร้างเอกสาร">
           <FileCheck2 size={14} aria-hidden /> {primary.label}
         </Button>
-      )
+      ) : null
     // 'open'
     return (
       <Link to={`/receipts/${t.id}`} onClick={(e) => e.stopPropagation()} className="inline-flex">

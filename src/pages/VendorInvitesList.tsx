@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Ban, Check, Copy, FileSearch, Plus, RotateCcw, Search, TriangleAlert, User } from 'lucide-react'
 import { useCancelVendorInvite, useResendVendorInvite, useVendorInvites } from '../hooks/useVendorInvites'
 import { useSettings } from '../hooks/useSettings'
+import { useClientAuth } from '../lib/client-auth'
 import { inviteUrl } from '../lib/vendor-invite-source'
 import { INVITE_STATUS_LABEL, inviteAttention, type VendorInvite, type VendorInviteStatus } from '../lib/vendor-invite'
 import { renderVendorInviteMessage } from '../lib/settings'
@@ -109,6 +110,8 @@ function IconAction({
 }
 
 export function VendorInvitesList() {
+  // Display-only mirror of the server gate (hidden actions still 403).
+  const { can } = useClientAuth()
   const [params, setParams] = useSearchParams()
   const initial = (params.get('status') as Group | null) ?? 'all'
   const [group, setGroup] = useState<Group>(CHIPS.some((c) => c.key === initial) ? initial : 'all')
@@ -184,9 +187,11 @@ export function VendorInvitesList() {
         sub="ลิงก์ให้ผู้ขายกรอกข้อมูลและแนบเอกสารเอง — ตรวจสอบและอนุมัติก่อนใช้ในรายการ"
         breadcrumb={[{ to: '/vendors', label: 'ผู้ขาย' }, { label: 'คำเชิญผู้ขาย' }]}
         actions={
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus size={16} /> สร้างลิงก์เชิญ
-          </Button>
+          can('canManageVendors') && (
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus size={16} /> สร้างลิงก์เชิญ
+            </Button>
+          )
         }
       />
 
@@ -275,7 +280,7 @@ export function VendorInvitesList() {
                                 <FileSearch size={16} aria-hidden />
                               </IconAction>
                             )}
-                            {['invited', 'opened', 'expired', 'changes_requested'].includes(inv.status) && (
+                            {can('canManageVendors') && ['invited', 'opened', 'expired', 'changes_requested'].includes(inv.status) && (
                               <IconAction
                                 label="สร้างลิงก์ใหม่"
                                 disabled={resend.isPending}
@@ -294,7 +299,7 @@ export function VendorInvitesList() {
                                 <User size={16} aria-hidden />
                               </IconAction>
                             )}
-                            {CAN_CANCEL.includes(inv.status) && (
+                            {can('canManageVendors') && CAN_CANCEL.includes(inv.status) && (
                               <IconAction label="ยกเลิกคำเชิญ" danger onClick={() => setCancelTarget(inv)}>
                                 <Ban size={16} aria-hidden />
                               </IconAction>

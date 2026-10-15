@@ -1,15 +1,20 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCreateVendor } from '../hooks/useVendors'
+import { useClientAuth } from '../lib/client-auth'
 import { VENDOR_PREFIXES, isVendorPrefix, prefixRequired } from '../lib/vendor-name'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
 import { Button } from '../components/ui/button'
 import { FieldError, Input, Label } from '../components/ui/input'
 import { Select } from '../components/ui/select'
+import { ErrorState } from '../components/ui/error-state'
 
 export function VendorNew() {
   const nav = useNavigate()
+  // Display-only mirror of the server gate: without the flag the form would
+  // only fail on submit, so it is not shown at all.
+  const { can } = useClientAuth()
   const create = useCreateVendor()
   const [prefix, setPrefix] = useState('')
   const [name, setName] = useState('')
@@ -48,6 +53,24 @@ export function VendorNew() {
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'บันทึกไม่สำเร็จ')
     }
+  }
+
+  if (!can('canManageVendors')) {
+    return (
+      <div className="mx-auto max-w-2xl space-y-5">
+        <PageHeader
+          title="เพิ่มผู้ขาย"
+          sub="ผู้ขายรายย่อย (ไม่จด VAT) — เก็บชื่อ/ที่อยู่/เลขบัตรประชาชน เพื่อออกใบเสร็จรับเงิน"
+          breadcrumb={[{ to: '/vendors', label: 'ผู้ขาย' }, { label: 'เพิ่มผู้ขาย' }]}
+        />
+        <Card>
+          <ErrorState
+            title="ไม่มีสิทธิ์เพิ่มผู้ขาย"
+            description="ต้องมีสิทธิ์จัดการผู้ขายจึงเพิ่มรายใหม่ได้ ติดต่อเจ้าของบัญชี"
+          />
+        </Card>
+      </div>
+    )
   }
 
   return (

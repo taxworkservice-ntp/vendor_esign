@@ -13,6 +13,7 @@ import { useAllSlipRefs, useCreateTransaction } from '../hooks/useTransactions'
 import { useAllVendors, useRecalledVendorId, useVendorMemory } from '../hooks/useVendors'
 import { useAllItems } from '../hooks/useItems'
 import { useSettings } from '../hooks/useSettings'
+import { useClientAuth } from '../lib/client-auth'
 import { usePlatformNotice } from '../hooks/usePlatformNotice'
 import { VendorPicker } from '../components/vendor-picker'
 import { Card, CardBody } from '../components/ui/card'
@@ -23,6 +24,7 @@ import { FieldError, Input, Label } from '../components/ui/input'
 import { Select } from '../components/ui/select'
 import { todayISO } from '../lib/txn-filters'
 import { ConfirmDialog } from '../components/ui/confirm-dialog'
+import { ErrorState } from '../components/ui/error-state'
 import { fmtTHB, fmtDateTH } from '../lib/format'
 import { cn } from '../lib/cn'
 import type { LineItem, WhtMode } from '../lib/types'
@@ -70,6 +72,9 @@ function Section({
 
 export function TransactionNew() {
   const nav = useNavigate()
+  // Display-only mirror of the server gate: without the flag the form would
+  // only fail on submit, so it is not shown at all.
+  const { can } = useClientAuth()
   const create = useCreateTransaction()
   const existingRefs = useAllSlipRefs()
   const vendors = useAllVendors()
@@ -309,6 +314,24 @@ export function TransactionNew() {
         vendorTaxId,
       },
       { onSuccess: () => nav('/') },
+    )
+  }
+
+  if (!can('canManageTransactions')) {
+    return (
+      <div className="mx-auto max-w-6xl space-y-5">
+        <PageHeader
+          title="สร้างรายการใหม่"
+          sub="ชำระผ่านธนาคาร · เลขที่ใบเสร็จจะออกเมื่อผู้ขายลงนามแล้ว"
+          breadcrumb={[{ to: '/', label: 'รายการธุรกรรม' }, { label: 'สร้างรายการใหม่' }]}
+        />
+        <Card>
+          <ErrorState
+            title="ไม่มีสิทธิ์สร้างรายการ"
+            description="ต้องมีสิทธิ์สร้างและส่งธุรกรรมจึงสร้างรายการใหม่ได้ ติดต่อเจ้าของบัญชี"
+          />
+        </Card>
+      </div>
     )
   }
 

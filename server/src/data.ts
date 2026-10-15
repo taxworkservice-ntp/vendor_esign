@@ -9,6 +9,7 @@ import { audit } from './shared'
 import type { SessionUser } from './auth'
 import { isVendorPrefix, prefixRequired } from '../../src/lib/vendor-name'
 import { getVendorMemory } from './vendor-memory'
+import { defaultPermissionsFor, hasPermission, type PermissionKey } from '../../src/lib/permissions'
 
 // ── Client data API (vendors + items) ─────────────────────────────────────
 // Session-guarded, workspace-scoped, RLS via withTenant. Mirrors the client
@@ -17,20 +18,21 @@ import { getVendorMemory } from './vendor-memory'
 
 export const dataRoutes = new Hono()
 
-type Guarded =
+export type Guarded =
   | { error: 401 | 403 }
   | { u: SessionUser | null; ws: string; impersonating: boolean; mode: ImpersonationMode; actor: string | null }
 
 /**
  * Session guard for the client portal (port 8787).
  *
- * Tenancy, and nothing else:
+ * Tenancy first, capability second:
  *
- *  - The portal is **tenant-scoped only**. Every authenticated member of a
- *    workspace has full read/write over its vendors, transactions and WHT.
- *    There is deliberately no per-member permission check here: role-based
- *    access control lives in the admin app (port 8788, `admin.ts`), which owns
- *    member management and enforces owner | manager | client_admin.
+ *  - The portal is **tenant-scoped** (workspace isolation via RLS), and every
+ *    *write* additionally passes `canDo()` below: owners pass implicitly,
+ *    members need the flag for the active workspace. Reads stay open to all
+ *    members except sensitive PII (full tax IDs, onboarding documents), which
+ *    are flag-gated like writes. Member management itself lives in the admin
+ *    app (port 8788, `admin.ts`) and the owner team routes (`team.ts`).
  *  - `u.memberships[0].tenantId` assumes **one workspace per login**. A user
  *    with memberships in more than one workspace always lands in the first, and
  *    there is no switcher. Fine for the current one-workspace-per-client
@@ -55,6 +57,24 @@ export async function guard(c: { req: { header: (n: string) => string | undefine
   const imp = impersonationFromCookie(c.req.header('cookie'))
   if (imp) return { u: null, ws: imp.tenantId, impersonating: true, mode: imp.mode, actor: imp.actor }
   return { error: 401 }
+}
+
+/**
+ * Portal capability gate. Owners pass implicitly; members need the flag for
+ * the active workspace. Write-mode impersonation passes (explicit operator
+ * opt-in); read-mode never reaches here for writes. An empty flag set reads
+ * as role defaults, so pre-backfill rows behave like their assigned role
+ * rather than locking staff out on deploy day.
+ */
+export function canDo(g: Guarded, key: PermissionKey): boolean {
+  if ('error' in g) return false
+  if (g.impersonating) return g.mode === 'write'
+  // Strict workspace match (no fallback): guard() derives ws from the
+  // memberships, so a mismatch means a forged context, not a lookup miss.
+  const m = g.u?.memberships.find((x) => x.tenantId === g.ws)
+  if (!m) return false
+  const flags = m.permissions && Object.keys(m.permissions).length ? m.permissions : defaultPermissionsFor(m.role)
+  return hasPermission(m.role, flags, key)
 }
 
 function maskTaxId(last4: string): string {
@@ -176,6 +196,7 @@ dataRoutes.get('/vendors', async (c) => {
 dataRoutes.post('/vendors', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canManageVendors')) return c.json({ error: 'forbidden' }, 403)
   const b = (await c.req.json().catch(() => null)) as
     | { prefix?: string; name?: string; address?: string; taxId?: string; lineUserId?: string; phone?: string; email?: string; isVatRegistered?: boolean }
     | null
@@ -198,10 +219,11 @@ dataRoutes.post('/vendors', async (c) => {
   return c.json({ ok: true, vendor: toVendor(row) })
 })
 
-// Full (decrypted) tax ID for a vendor — owner/manager only, for form prefill.
+// Full (decrypted) tax ID for a vendor — flag-gated PII read, for form prefill.
 dataRoutes.get('/vendors/:id/tax-id', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canManageVendors')) return c.json({ error: 'forbidden' }, 403)
   const rows = await withTenant(g.ws, 'owner', async () => {
     const db = sql()
     return (await db`select id_number_encrypted from vendor_payees where id = ${c.req.param('id')} and user_id = ${g.ws}`) as unknown as { id_number_encrypted: string | null }[]
@@ -218,11 +240,12 @@ dataRoutes.get('/vendors/:id/tax-id', async (c) => {
   return c.json({ taxId })
 })
 
-// Onboarding documents (ID card / bank-book page) for a vendor. Owner-only and
-// audit-logged; streamed through the app, never a public storage URL.
+// Onboarding documents (ID card / bank-book page) for a vendor. Flag-gated PII
+// read and audit-logged; streamed through the app, never a public storage URL.
 dataRoutes.get('/vendors/:id/document/:kind', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canManageVendors')) return c.json({ error: 'forbidden' }, 403)
   const kind = c.req.param('kind')
   if (kind !== 'id' && kind !== 'bank') return c.json({ error: 'invalid-kind' }, 400)
   const rows = await withTenant(g.ws, 'owner', async () => {
@@ -240,13 +263,14 @@ dataRoutes.get('/vendors/:id/document/:kind', async (c) => {
   return c.body(bytes as unknown as ArrayBuffer, 200, { 'Content-Type': type })
 })
 
-// Client upload of a vendor document (ID card / bank-book page). Owner-only and
+// Client upload of a vendor document (ID card / bank-book page). Flag-gated and
 // audit-logged, mirroring the read route above: the client may attach or replace
 // a document the vendor never sent (walk-in vendors, rescans). Accepts the same
 // image data URLs the onboarding submit route takes, stored under vendor-docs.
 dataRoutes.post('/vendors/:id/document/:kind', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canManageVendors')) return c.json({ error: 'forbidden' }, 403)
   const kind = c.req.param('kind')
   if (kind !== 'id' && kind !== 'bank') return c.json({ error: 'invalid-kind' }, 400)
   const body = (await c.req.json().catch(() => null)) as { dataUrl?: string } | null
@@ -268,11 +292,13 @@ dataRoutes.post('/vendors/:id/document/:kind', async (c) => {
   return c.json({ ok: true })
 })
 
-// Client removal of a vendor document. Owner-only and audit-logged. Clears the
-// reference; the bytes stay in storage (same as every other soft removal here).
+// Client removal of a vendor document. Destruction-gated and audit-logged.
+// Clears the reference; the bytes stay in storage (same as every other soft
+// removal here).
 dataRoutes.delete('/vendors/:id/document/:kind', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canDeleteDocuments')) return c.json({ error: 'forbidden' }, 403)
   const kind = c.req.param('kind')
   if (kind !== 'id' && kind !== 'bank') return c.json({ error: 'invalid-kind' }, 400)
   const column = kind === 'id' ? 'id_doc_path' : 'bank_doc_path'
@@ -304,6 +330,7 @@ dataRoutes.get('/vendors/:id/memory', async (c) => {
 dataRoutes.patch('/vendors/:id', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canManageVendors')) return c.json({ error: 'forbidden' }, 403)
   const b = (await c.req.json().catch(() => null)) as
     | { prefix?: string; name?: string; address?: string; lineUserId?: string; phone?: string; email?: string; isVatRegistered?: boolean; idNumber?: string; isActive?: boolean }
     | null
@@ -336,6 +363,7 @@ dataRoutes.patch('/vendors/:id', async (c) => {
 dataRoutes.delete('/vendors/:id', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canDeleteDocuments')) return c.json({ error: 'forbidden' }, 403)
   const id = c.req.param('id')
   const used = await withTenant(g.ws, 'owner', async () => {
     const db = sql()
@@ -382,6 +410,7 @@ dataRoutes.get('/items', async (c) => {
 dataRoutes.post('/items', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canManageCatalog')) return c.json({ error: 'forbidden' }, 403)
   const b = (await c.req.json().catch(() => null)) as { name?: string; unit?: string; unitPrice?: number } | null
   const name = (b?.name ?? '').trim()
   if (name.length < 2) return c.json({ error: 'invalid-body' }, 400)
@@ -413,6 +442,7 @@ dataRoutes.post('/items', async (c) => {
 dataRoutes.patch('/items/:id', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canManageCatalog')) return c.json({ error: 'forbidden' }, 403)
   const b = (await c.req.json().catch(() => null)) as { name?: string; unit?: string; unitPrice?: number; isActive?: boolean } | null
   // Renaming can collide with an existing entry, same rule as create.
   if (b?.name) {
@@ -444,6 +474,7 @@ dataRoutes.patch('/items/:id', async (c) => {
 dataRoutes.delete('/items/:id', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canDeleteDocuments')) return c.json({ error: 'forbidden' }, 403)
   await withTenant(g.ws, 'owner', async () => {
     const db = sql()
     await db`delete from items where id = ${c.req.param('id')} and user_id = ${g.ws}`

@@ -78,7 +78,9 @@ function readDense(): boolean {
 export function TransactionList() {
   const [params, setParams] = useSearchParams()
   const { month: globalMonth, setMonth: setGlobalMonth } = useGlobalMonth()
-  const { activeTenant } = useClientAuth()
+  // Display-only mirrors of the server gates (hidden actions still 403).
+  const { activeTenant, can } = useClientAuth()
+  const canTxn = can('canManageTransactions')
   const toast = useToast()
   const nav = useNavigate()
   const searchRef = useRef<HTMLInputElement>(null)
@@ -570,7 +572,7 @@ export function TransactionList() {
         }
       } else if (e.key === 's') {
         const t = focusedTxn()
-        if (t) {
+        if (t && canTxn) {
           e.preventDefault()
           void onRowSend(t)
         }
@@ -584,7 +586,7 @@ export function TransactionList() {
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [focusRow, focusedTxn, onRowCopyLink, onRowSend])
+  }, [focusRow, focusedTxn, onRowCopyLink, onRowSend, canTxn])
 
   const selectedLinkRows = useMemo(
     () => (allRows ?? rows).filter((t) => selected.has(t.id) && isLinkStatus(t.status)),
@@ -624,11 +626,13 @@ export function TransactionList() {
             >
               {dense ? <Rows3 size={17} aria-hidden /> : <Rows4 size={17} aria-hidden />}
             </button>
-            <Link to="/transactions/new">
-              <Button>
-                <Plus size={17} aria-hidden /> สร้างรายการใหม่
-              </Button>
-            </Link>
+            {can('canManageTransactions') && (
+              <Link to="/transactions/new">
+                <Button>
+                  <Plus size={17} aria-hidden /> สร้างรายการใหม่
+                </Button>
+              </Link>
+            )}
           </>
         }
       />
@@ -728,6 +732,8 @@ export function TransactionList() {
                 onIssue={onRowIssue}
                 loading={isLoading}
                 dense={dense}
+                canSend={canTxn}
+                canIssue={canTxn}
               />
             </TxnTableFrame>
 
@@ -749,11 +755,13 @@ export function TransactionList() {
                   title="ยังไม่มีรายการในรอบนี้"
                   description="สร้างรายการแรกเพื่อเริ่มออกใบเสร็จรับเงินให้ผู้ขายรายย่อย"
                   action={
-                    <Link to="/transactions/new">
-                      <Button>
-                        <Plus size={17} aria-hidden /> สร้างรายการใหม่
-                      </Button>
-                    </Link>
+                    can('canManageTransactions') && (
+                      <Link to="/transactions/new">
+                        <Button>
+                          <Plus size={17} aria-hidden /> สร้างรายการใหม่
+                        </Button>
+                      </Link>
+                    )
                   }
                 />
               ))}
@@ -772,6 +780,7 @@ export function TransactionList() {
               count={selected.size}
               createCount={createCount}
               messageCount={messageCount}
+              canCreateLinks={can('canManageTransactions')}
               onCreateLinks={() => void bulkCreateLinks()}
               onPreviewMessages={() => void openBulkPreview()}
               onExport={exportSelected}
@@ -857,6 +866,8 @@ export function TransactionList() {
         t={previewTxn}
         onClose={() => setPreviewTxn(null)}
         onSend={(t: PaymentTransaction) => void onRowSend(t)}
+        canSend={canTxn}
+        canIssue={canTxn}
         onCopyLink={onRowCopyLink}
         onIssue={(t: PaymentTransaction) => {
           setPreviewTxn(null)

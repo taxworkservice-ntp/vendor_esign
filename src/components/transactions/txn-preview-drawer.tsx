@@ -15,12 +15,17 @@ export function TxnPreviewDrawer({
   onSend,
   onCopyLink,
   onIssue,
+  canSend = true,
+  canIssue = true,
 }: {
   t: PaymentTransaction | null
   onClose: () => void
   onSend: (t: PaymentTransaction) => void
   onCopyLink: (t: PaymentTransaction) => void
   onIssue: (t: PaymentTransaction) => void
+  /** Display-only mirrors of the server gates (send/issue 403 without them). */
+  canSend?: boolean
+  canIssue?: boolean
 }) {
   useEffect(() => {
     if (!t) return
@@ -110,7 +115,7 @@ export function TxnPreviewDrawer({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 border-t border-card-border p-4">
-          {primary?.kind === 'send' && (
+          {primary?.kind === 'send' && canSend && (
             <Button onClick={() => onSend(t)}>
               <Send size={15} aria-hidden /> {primary.label}
             </Button>
@@ -120,7 +125,7 @@ export function TxnPreviewDrawer({
               <Copy size={15} aria-hidden /> {primary.label}
             </Button>
           )}
-          {primary?.kind === 'issue' && (
+          {primary?.kind === 'issue' && canIssue && (
             <Button onClick={() => onIssue(t)}>
               <FileCheck2 size={15} aria-hidden /> {primary.label}
             </Button>

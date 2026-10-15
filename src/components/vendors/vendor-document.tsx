@@ -16,15 +16,18 @@ import { FieldError } from '../ui/input'
 // owner-only on the server, click to enlarge. Used by both the invite review and
 // the vendor detail page.
 //
-// `editable` (vendor detail only) lets the client attach, replace, or remove a
-// document the vendor never sent — e.g. a walk-in vendor's ID photo taken at
-// the counter. Uploads go through the same downscale/transcode as onboarding.
+// `editable` (vendor detail only) lets the client attach or replace a document
+// the vendor never sent — e.g. a walk-in vendor's ID photo taken at the
+// counter. Uploads go through the same downscale/transcode as onboarding.
+// Removal is a separate, stricter grant (`canRemove`, defaults to `editable`
+// so existing callers keep working); display-only mirrors of the server gates.
 export function VendorDocument({
   owner,
   doc,
   label,
   hasDoc = true,
   editable = false,
+  canRemove,
   onChanged,
 }: {
   owner: DocOwner
@@ -32,8 +35,10 @@ export function VendorDocument({
   label: string
   hasDoc?: boolean
   editable?: boolean
+  canRemove?: boolean
   onChanged?: () => void
 }) {
+  const allowRemove = canRemove ?? editable
   const [zoom, setZoom] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -120,7 +125,7 @@ export function VendorDocument({
             {busy ? <Spinner /> : <Upload size={14} aria-hidden />}
             {hasDoc && src ? 'เปลี่ยนรูป' : 'อัปโหลด'}
           </button>
-          {hasDoc && src && (
+          {hasDoc && src && allowRemove && (
             <button
               type="button"
               disabled={busy}

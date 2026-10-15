@@ -12,7 +12,7 @@ import { authRoutes } from './client-auth'
 import { corsMw } from './cors'
 import { getTenantSettings, saveTenantSettings } from './settings'
 import { r2Configured, signDownload, signUpload } from './r2-storage'
-import { dataRoutes, guard } from './data'
+import { canDo, dataRoutes, guard } from './data'
 import { getPlatformSettingsCached } from './platform'
 import { clearImpersonationCookie, impersonationFromCookie } from './impersonation'
 import { txnRoutes } from './transactions'
@@ -451,6 +451,7 @@ app.post('/api/transactions/:id/finalize', async (c) => {
   // path issues in-process via finalizeReceipt and never hits this route.)
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canManageTransactions')) return c.json({ error: 'forbidden' }, 403)
   const id = c.req.param('id')
   const owned = await withTenant(g.ws, 'client', async () => {
     const rows = await sql()`select 1 as ok from vendor_payables where id = ${id} and user_id = ${g.ws}`
@@ -469,8 +470,8 @@ app.post('/api/transactions/:id/finalize', async (c) => {
   })
 })
 
-// Tenant settings (per-tenant). PREPARED, session-guarded: requires a client
-// session (401 until client API auth ships). client_admin may write; others read.
+// Tenant settings (per-tenant). Session-guarded; writes need the settings flag
+// (owners implicitly, managers by grant). Reads stay open to all members.
 app.get('/api/settings', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
@@ -484,8 +485,7 @@ app.get('/api/settings', async (c) => {
 app.put('/api/settings', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
-  const role = g.impersonating ? 'owner' : g.u?.memberships.find((m) => m.tenantId === g.ws)?.role
-  if (!['client_admin', 'owner', 'manager'].includes(String(role))) return c.json({ error: 'forbidden' }, 403)
+  if (!canDo(g, 'canManageSettings')) return c.json({ error: 'forbidden' }, 403)
   const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
   if (!body) return c.json({ error: 'invalid-body' }, 400)
   try {
@@ -511,6 +511,8 @@ app.get('/api/files/r2-status', async (c) => {
 app.post('/api/files/sign-upload', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  // Brand assets are managed from Settings — same gate (Settings is the only caller).
+  if (!canDo(g, 'canManageSettings')) return c.json({ error: 'forbidden' }, 403)
   if (!r2Configured()) return c.json({ error: 'storage-not-configured' }, 503)
   const body = (await c.req.json().catch(() => null)) as { fileName?: string } | null
   if (!body?.fileName) return c.json({ error: 'fileName required' }, 400)

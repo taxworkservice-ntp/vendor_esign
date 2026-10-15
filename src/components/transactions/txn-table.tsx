@@ -107,6 +107,8 @@ export function TxnTable({
   onIssue,
   loading,
   dense,
+  canSend = true,
+  canIssue = true,
 }: {
   rows: PaymentTransaction[]
   sort: SortKey
@@ -120,6 +122,9 @@ export function TxnTable({
   onIssue: (t: PaymentTransaction) => void
   loading: boolean
   dense: boolean
+  /** Display-only mirrors of the server gates (send/issue 403 without them). */
+  canSend?: boolean
+  canIssue?: boolean
 }) {
   const pageIds = rows.map((r) => r.id)
   const selectedOnPage = pageIds.filter((id) => selected.has(id)).length
@@ -169,6 +174,8 @@ export function TxnTable({
               onSend={onSend}
               onCopyLink={onCopyLink}
               onIssue={onIssue}
+              canSend={canSend}
+              canIssue={canIssue}
             />
           ))
         )}

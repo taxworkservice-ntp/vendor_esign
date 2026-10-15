@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { sql, withTenant } from '../../src/server/db'
-import { guard } from './data'
+import { canDo, guard } from './data'
 import { parseMonthParam } from './month'
 import { isoDay } from './dates'
 import { parseWhtListQuery } from '../../src/lib/wht-list-query'
@@ -87,6 +87,7 @@ whtRoutes.get('/wht/vendors', async (c) => {
 whtRoutes.post('/wht/vendors', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canManageWht')) return c.json({ error: 'forbidden' }, 403)
   const b = (await c.req.json().catch(() => null)) as
     | { name?: string; taxId?: string; address?: string; vendorType?: string; contactName?: string; phone?: string; email?: string }
     | null
@@ -171,6 +172,7 @@ whtRoutes.get('/wht/records', async (c) => {
 whtRoutes.post('/wht/records', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canManageWht')) return c.json({ error: 'forbidden' }, 403)
   const b = (await c.req.json().catch(() => null)) as
     | { vendorId?: string; formType?: string; issueDate?: string; amount?: number; whtRate?: number; whtAmount?: number; description?: string; note?: string }
     | null
@@ -199,6 +201,7 @@ whtRoutes.post('/wht/records', async (c) => {
 whtRoutes.patch('/wht/records/:id', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canManageWht')) return c.json({ error: 'forbidden' }, 403)
   const b = (await c.req.json().catch(() => null)) as { status?: string; amount?: number; whtRate?: number; whtAmount?: number } | null
   const status = b?.status === 'done' ? 'done' : b?.status === 'active' ? 'active' : null
   await withTenant(g.ws, 'owner', async () => {

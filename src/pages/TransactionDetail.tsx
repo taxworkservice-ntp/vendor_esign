@@ -20,6 +20,7 @@ import { vendorDisplayName } from '../lib/vendor-name'
 import { fmtTHB, fmtDateTH, fmtDateTimeTH } from '../lib/format'
 import { signMethodLabel } from '../lib/typed-signature'
 import { NextActionBand } from '../components/transactions/transaction-stage'
+import { useClientAuth } from '../lib/client-auth'
 
 export function TransactionDetail() {
   const { id } = useParams()
@@ -27,6 +28,9 @@ export function TransactionDetail() {
   const { data: t, isLoading, isError, error, refetch } = useTransaction(id)
   const acts = useTransactionActions()
   const { data: settings } = useSettings()
+  // Display-only mirror of the server gates: hidden buttons still 403 if
+  // invoked directly, so this only removes what would fail.
+  const { can } = useClientAuth()
   const [voidReason, setVoidReason] = useState('')
   const [showVoid, setShowVoid] = useState(false)
   const [copiedKind, setCopiedKind] = useState<'' | 'link' | 'message'>('')
@@ -169,7 +173,7 @@ export function TransactionDetail() {
         ) : (
           <p className="text-body text-ink-500">จะออกใบเสร็จได้หลังผู้ขายลงนามแล้ว</p>
         )}
-        {t.status !== 'void' &&
+        {t.status !== 'void' && can('canVoidDocuments') &&
           (!showVoid ? (
             <Button variant="ghost" onClick={() => setShowVoid(true)}>ยกเลิกเอกสาร…</Button>
           ) : (
@@ -202,6 +206,8 @@ export function TransactionDetail() {
         onIssue={() => setConfirmIssue(true)}
         onCopyLink={() => void copyText(link, 'link')}
         receiptHref={`/receipts/${t.id}`}
+        canSend={can('canManageTransactions')}
+        canIssue={can('canManageTransactions')}
       />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
@@ -381,9 +387,11 @@ export function TransactionDetail() {
                   <p className={`text-label font-semibold ${t.taxIdLast4 ? 'text-success' : 'text-warning'}`}>
                     {t.taxIdLast4 ? `ล็อกด้วยเลขบัตรประชาชน (ลงท้าย ${t.taxIdLast4}) — ผู้ที่ไม่มีเลขบัตรจะเปิดไม่ได้` : 'รายการก่อนหน้า — ไม่ได้ตั้งการล็อกด้วยเลขบัตรประชาชน'}
                   </p>
-                  <Button variant="ghost" className="w-full" onClick={() => setConfirmRevoke(true)}>
-                    เพิกถอนลิงก์
-                  </Button>
+                  {can('canManageTransactions') && (
+                    <Button variant="ghost" className="w-full" onClick={() => setConfirmRevoke(true)}>
+                      เพิกถอนลิงก์
+                    </Button>
+                  )}
                 </>
               ) : (
                 <p className="text-body text-ink-500">ยังไม่มีลิงก์ — ใช้ปุ่ม “สร้างลิงก์ให้ผู้ขาย” ด้านบน จากนั้นคัดลอกข้อความไปวางในแชท</p>
@@ -395,7 +403,7 @@ export function TransactionDetail() {
             <CardBody className="space-y-3">
               <h2 className="font-semibold">สลิปโอนเงิน</h2>
               <p className="text-body text-ink-500">สลิป {t.slipReference || '— ยังไม่แนบ'} · {t.slipName || '—'}</p>
-              {!t.slipReference && (
+              {!t.slipReference && can('canManageTransactions') && (
                 <div className="space-y-2 rounded-control bg-ink-50 p-3">
                   <Label>แนบสลิปภายหลัง (ไม่บังคับ)</Label>
                   <Input value={slipRef} onChange={(e) => setSlipRef(e.target.value)} placeholder="เลขที่อ้างอิงสลิป เช่น TRF-881201" className="font-mono" />

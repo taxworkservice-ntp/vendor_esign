@@ -25,6 +25,7 @@ import { nextWhtSort, whtSortField, type WhtSortField, type WhtStatusFilter } fr
 import { downloadCsv, whtToCsv } from '../lib/csv'
 import { downloadName } from '../lib/download-name'
 import { useSettings } from '../hooks/useSettings'
+import { useClientAuth } from '../lib/client-auth'
 import { defaultSettings } from '../lib/settings'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
@@ -73,6 +74,8 @@ function readSize(sp: URLSearchParams): number {
 }
 
 export function WhtList() {
+  // Display-only mirror of the server gate (hidden actions still 403).
+  const { can } = useClientAuth()
   const { month: globalMonth } = useGlobalMonth()
   const [params, setParams] = useSearchParams()
   const toast = useToast()
@@ -345,14 +348,16 @@ export function WhtList() {
         <div className="flex flex-wrap items-center gap-2 border border-card-border bg-ink-50 px-3 py-2.5" role="region" aria-label="เครื่องมือสำหรับรายการที่เลือก">
           <span className="text-body font-semibold tabular-nums">เลือกแล้ว {selected.size} ฉบับ</span>
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={onBulkFiled}
-              disabled={bulkSetStatus.isPending}
-              className="inline-flex h-8 items-center gap-1.5 rounded-control bg-primary px-3 text-body font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {bulkSetStatus.isPending ? 'กำลังบันทึก…' : 'ทำเครื่องหมายยื่นแล้ว'}
-            </button>
+            {can('canManageWht') && (
+              <button
+                type="button"
+                onClick={onBulkFiled}
+                disabled={bulkSetStatus.isPending}
+                className="inline-flex h-8 items-center gap-1.5 rounded-control bg-primary px-3 text-body font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {bulkSetStatus.isPending ? 'กำลังบันทึก…' : 'ทำเครื่องหมายยื่นแล้ว'}
+              </button>
+            )}
             <button
               type="button"
               onClick={onClearSelection}
@@ -456,10 +461,11 @@ export function WhtList() {
                             </td>
                             <td className="px-2 py-2.5">
                               <div className="flex items-center justify-end gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setStatus.mutate(
+                                {can('canManageWht') && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setStatus.mutate(
                                       { id: r.id, status: filed ? 'active' : 'done' },
                                       {
                                         onSuccess: () =>
@@ -480,7 +486,8 @@ export function WhtList() {
                                   )}
                                 >
                                   {filed ? <CheckCircle2 size={15} aria-hidden /> : <CircleDashed size={15} aria-hidden />}
-                                </button>
+                                  </button>
+                                )}
                                 <Link
                                   to={`/wht/print?ids=${r.id}&layout=pnd`}
                                   target="_blank"

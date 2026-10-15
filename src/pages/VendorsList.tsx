@@ -12,6 +12,7 @@ import { fmtDateTH, fmtTHB } from '../lib/format'
 import { downloadCsv, toCsv, withBom, type CsvColumn } from '../lib/csv'
 import { downloadName } from '../lib/download-name'
 import { useSettings } from '../hooks/useSettings'
+import { useClientAuth } from '../lib/client-auth'
 import { defaultSettings } from '../lib/settings'
 import type { ClientVendor } from '../lib/vendors-mock'
 import { Card, CardBody } from '../components/ui/card'
@@ -73,6 +74,8 @@ const CSV_COLUMNS: CsvColumn<ClientVendor>[] = [
 ]
 
 export function VendorsList() {
+  // Display-only mirrors of the server gates (hidden actions still 403).
+  const { can } = useClientAuth()
   const [search, setSearch] = useState('')
   const [showArchived, setShowArchived] = useState(false)
   const [pendingArchive, setPendingArchive] = useState<{ id: string; name: string } | null>(null)
@@ -138,11 +141,13 @@ export function VendorsList() {
             <Button variant="secondary" onClick={exportCsv} disabled={vendors.length === 0} title="ส่งออกทะเบียนผู้ขายเป็น CSV">
               <Download size={16} aria-hidden /> ส่งออก CSV
             </Button>
-            <Link to="/vendors/new">
-              <Button>
-                <Plus size={17} /> เพิ่มผู้ขาย
-              </Button>
-            </Link>
+            {can('canManageVendors') && (
+              <Link to="/vendors/new">
+                <Button>
+                  <Plus size={17} /> เพิ่มผู้ขาย
+                </Button>
+              </Link>
+            )}
           </>
         }
       />
@@ -244,15 +249,17 @@ export function VendorsList() {
                             </Td>
                             <Td className="px-2" onClick={(e) => e.stopPropagation()}>
                               <div className="flex justify-end">
-                                <button
-                                  type="button"
-                                  onClick={() => toggleActive(v)}
-                                  title={archived ? 'เปิดการใช้งาน' : 'ปิดการใช้งาน (ซ่อนจากทะเบียน แต่เอกสารเดิมยังอยู่)'}
-                                  aria-label={archived ? `เปิดการใช้งาน ${name}` : `ปิดการใช้งาน ${name}`}
-                                  className="grid h-8 w-8 place-items-center rounded-control text-ink-500 transition hover:bg-ink-100 hover:text-ink-900"
-                                >
-                                  {archived ? <ArchiveRestore size={15} aria-hidden /> : <Archive size={15} aria-hidden />}
-                                </button>
+                                {can('canManageVendors') && (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleActive(v)}
+                                    title={archived ? 'เปิดการใช้งาน' : 'ปิดการใช้งาน (ซ่อนจากทะเบียน แต่เอกสารเดิมยังอยู่)'}
+                                    aria-label={archived ? `เปิดการใช้งาน ${name}` : `ปิดการใช้งาน ${name}`}
+                                    className="grid h-8 w-8 place-items-center rounded-control text-ink-500 transition hover:bg-ink-100 hover:text-ink-900"
+                                  >
+                                    {archived ? <ArchiveRestore size={15} aria-hidden /> : <Archive size={15} aria-hidden />}
+                                  </button>
+                                )}
                               </div>
                             </Td>
                             <Td className="px-2 text-ink-400">
@@ -285,11 +292,13 @@ export function VendorsList() {
                   title="ยังไม่มีผู้ขาย"
                   description="เพิ่มผู้ขายรายใหม่เพื่อเริ่มออกใบเสร็จรับเงิน"
                   action={
-                    <Link to="/vendors/new">
-                      <Button>
-                        <Plus size={17} /> เพิ่มผู้ขาย
-                      </Button>
-                    </Link>
+                    can('canManageVendors') && (
+                      <Link to="/vendors/new">
+                        <Button>
+                          <Plus size={17} /> เพิ่มผู้ขาย
+                        </Button>
+                      </Link>
+                    )
                   }
                 />
               ))}

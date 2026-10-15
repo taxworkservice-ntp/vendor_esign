@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { randomBytes } from 'node:crypto'
 import { sql, withTenant } from '../../src/server/db'
-import { guard } from './data'
+import { canDo, guard } from './data'
 import { sha256hex } from './auth'
 import { applyWhtThreshold, calcWht } from '../../src/lib/wht-calc'
 import { getTenantSettings } from './settings'
@@ -395,6 +395,7 @@ txnRoutes.get('/transactions/:id', async (c) => {
 txnRoutes.post('/transactions', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canManageTransactions')) return c.json({ error: 'forbidden' }, 403)
   const b = (await c.req.json().catch(() => null)) as
     | { vendorId?: string; paymentType?: string; note?: string; lineItems?: unknown; whtRate?: number; whtMode?: string; forceWht?: boolean; transferDate?: string; slipReference?: string; slipName?: string; vendorTaxId?: string }
     | null
@@ -440,6 +441,7 @@ txnRoutes.post('/transactions', async (c) => {
 txnRoutes.post('/transactions/:id/send', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canManageTransactions')) return c.json({ error: 'forbidden' }, 403)
   const id = c.req.param('id')
   const token = await withTenant(g.ws, 'owner', async () => {
     const db = sql()
@@ -471,6 +473,7 @@ txnRoutes.post('/transactions/:id/send', async (c) => {
 txnRoutes.post('/transactions/:id/revoke', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canManageTransactions')) return c.json({ error: 'forbidden' }, 403)
   const id = c.req.param('id')
   await withTenant(g.ws, 'owner', async () => {
     const db = sql()
@@ -484,6 +487,7 @@ txnRoutes.post('/transactions/:id/revoke', async (c) => {
 txnRoutes.post('/transactions/:id/void', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canVoidDocuments')) return c.json({ error: 'forbidden' }, 403)
   const b = (await c.req.json().catch(() => null)) as { reason?: string } | null
   const reason = (b?.reason ?? '').trim()
   if (!reason) return c.json({ error: 'reason-required' }, 400)
@@ -524,6 +528,7 @@ txnRoutes.post('/transactions/:id/void', async (c) => {
 txnRoutes.post('/transactions/:id/slip', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canManageTransactions')) return c.json({ error: 'forbidden' }, 403)
   const b = (await c.req.json().catch(() => null)) as { slipReference?: string; slipName?: string } | null
   const id = c.req.param('id')
   const ref = (b?.slipReference ?? '').trim()

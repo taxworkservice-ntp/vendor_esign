@@ -68885,6 +68885,49 @@ function toItems(raw2) {
   }).filter((it2) => it2.description && it2.amount > 0);
 }
 
+// src/lib/permissions.ts
+var PERMISSION_KEYS = [
+  "canManageVendors",
+  "canManageTransactions",
+  "canManageCatalog",
+  "canManageWht",
+  "canManageSettings",
+  "canVoidDocuments",
+  "canDeleteDocuments"
+];
+var ALLOWED = new Set(PERMISSION_KEYS);
+function normalizePermissions(input) {
+  if (input == null || typeof input !== "object" || Array.isArray(input)) return {};
+  const out = {};
+  for (const [key2, value] of Object.entries(input)) {
+    if (!ALLOWED.has(key2) || typeof value !== "boolean") continue;
+    out[key2] = value;
+  }
+  return out;
+}
+function hasPermission(role, permissions, key2) {
+  if (role === "owner") return true;
+  return permissions?.[key2] === true;
+}
+var DEFAULT_MANAGER_PERMS = {
+  canManageVendors: true,
+  canManageTransactions: true,
+  canManageCatalog: true,
+  canManageWht: true,
+  canManageSettings: true,
+  canVoidDocuments: true
+};
+var DEFAULT_OFFICER_PERMS = {
+  canManageVendors: true,
+  canManageTransactions: true,
+  canManageCatalog: true
+};
+function defaultPermissionsFor(role) {
+  if (role === "manager" || role === "client_admin") return { ...DEFAULT_MANAGER_PERMS };
+  if (role === "officer" || role === "client_user") return { ...DEFAULT_OFFICER_PERMS };
+  return {};
+}
+
 // server/src/data.ts
 var dataRoutes = new Hono2();
 async function guard(c) {
@@ -68897,6 +68940,14 @@ async function guard(c) {
   const imp = impersonationFromCookie(c.req.header("cookie"));
   if (imp) return { u: null, ws: imp.tenantId, impersonating: true, mode: imp.mode, actor: imp.actor };
   return { error: 401 };
+}
+function canDo(g, key2) {
+  if ("error" in g) return false;
+  if (g.impersonating) return g.mode === "write";
+  const m2 = g.u?.memberships.find((x2) => x2.tenantId === g.ws);
+  if (!m2) return false;
+  const flags = m2.permissions && Object.keys(m2.permissions).length ? m2.permissions : defaultPermissionsFor(m2.role);
+  return hasPermission(m2.role, flags, key2);
 }
 function maskTaxId(last4) {
   const d2 = last4.replace(/\D/g, "").slice(-4);
@@ -69000,6 +69051,7 @@ dataRoutes.get("/vendors", async (c) => {
 dataRoutes.post("/vendors", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageVendors")) return c.json({ error: "forbidden" }, 403);
   const b2 = await c.req.json().catch(() => null);
   const prefix = (b2?.prefix ?? "").trim();
   const name = (b2?.name ?? "").trim();
@@ -69022,6 +69074,7 @@ dataRoutes.post("/vendors", async (c) => {
 dataRoutes.get("/vendors/:id/tax-id", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageVendors")) return c.json({ error: "forbidden" }, 403);
   const rows = await withTenant(g.ws, "owner", async () => {
     const db = sql();
     return await db`select id_number_encrypted from vendor_payees where id = ${c.req.param("id")} and user_id = ${g.ws}`;
@@ -69040,6 +69093,7 @@ dataRoutes.get("/vendors/:id/tax-id", async (c) => {
 dataRoutes.get("/vendors/:id/document/:kind", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageVendors")) return c.json({ error: "forbidden" }, 403);
   const kind = c.req.param("kind");
   if (kind !== "id" && kind !== "bank") return c.json({ error: "invalid-kind" }, 400);
   const rows = await withTenant(g.ws, "owner", async () => {
@@ -69058,6 +69112,7 @@ dataRoutes.get("/vendors/:id/document/:kind", async (c) => {
 dataRoutes.post("/vendors/:id/document/:kind", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageVendors")) return c.json({ error: "forbidden" }, 403);
   const kind = c.req.param("kind");
   if (kind !== "id" && kind !== "bank") return c.json({ error: "invalid-kind" }, 400);
   const body = await c.req.json().catch(() => null);
@@ -69080,6 +69135,7 @@ dataRoutes.post("/vendors/:id/document/:kind", async (c) => {
 dataRoutes.delete("/vendors/:id/document/:kind", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canDeleteDocuments")) return c.json({ error: "forbidden" }, 403);
   const kind = c.req.param("kind");
   if (kind !== "id" && kind !== "bank") return c.json({ error: "invalid-kind" }, 400);
   const column = kind === "id" ? "id_doc_path" : "bank_doc_path";
@@ -69106,6 +69162,7 @@ dataRoutes.get("/vendors/:id/memory", async (c) => {
 dataRoutes.patch("/vendors/:id", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageVendors")) return c.json({ error: "forbidden" }, 403);
   const b2 = await c.req.json().catch(() => null);
   const nextName = (b2?.name ?? "").trim();
   if (b2?.name !== void 0 && nextName.length < 2) return c.json({ error: "invalid-body" }, 400);
@@ -69133,6 +69190,7 @@ dataRoutes.patch("/vendors/:id", async (c) => {
 dataRoutes.delete("/vendors/:id", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canDeleteDocuments")) return c.json({ error: "forbidden" }, 403);
   const id = c.req.param("id");
   const used = await withTenant(g.ws, "owner", async () => {
     const db = sql();
@@ -69174,6 +69232,7 @@ dataRoutes.get("/items", async (c) => {
 dataRoutes.post("/items", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageCatalog")) return c.json({ error: "forbidden" }, 403);
   const b2 = await c.req.json().catch(() => null);
   const name = (b2?.name ?? "").trim();
   if (name.length < 2) return c.json({ error: "invalid-body" }, 400);
@@ -69200,6 +69259,7 @@ dataRoutes.post("/items", async (c) => {
 dataRoutes.patch("/items/:id", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageCatalog")) return c.json({ error: "forbidden" }, 403);
   const b2 = await c.req.json().catch(() => null);
   if (b2?.name) {
     const nextName = b2.name.trim();
@@ -69229,6 +69289,7 @@ dataRoutes.patch("/items/:id", async (c) => {
 dataRoutes.delete("/items/:id", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canDeleteDocuments")) return c.json({ error: "forbidden" }, 403);
   await withTenant(g.ws, "owner", async () => {
     const db = sql();
     await db`delete from items where id = ${c.req.param("id")} and user_id = ${g.ws}`;
@@ -69916,6 +69977,7 @@ txnRoutes.get("/transactions/:id", async (c) => {
 txnRoutes.post("/transactions", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageTransactions")) return c.json({ error: "forbidden" }, 403);
   const b2 = await c.req.json().catch(() => null);
   const items = (Array.isArray(b2?.lineItems) ? b2.lineItems : []).map((it2) => normalizeLineItem(it2)).filter((it2) => it2.description && it2.amount > 0);
   if (!b2?.vendorId || items.length === 0) return c.json({ error: "invalid-body" }, 400);
@@ -69952,6 +70014,7 @@ txnRoutes.post("/transactions", async (c) => {
 txnRoutes.post("/transactions/:id/send", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageTransactions")) return c.json({ error: "forbidden" }, 403);
   const id = c.req.param("id");
   const token = await withTenant(g.ws, "owner", async () => {
     const db = sql();
@@ -69975,6 +70038,7 @@ txnRoutes.post("/transactions/:id/send", async (c) => {
 txnRoutes.post("/transactions/:id/revoke", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageTransactions")) return c.json({ error: "forbidden" }, 403);
   const id = c.req.param("id");
   await withTenant(g.ws, "owner", async () => {
     const db = sql();
@@ -69987,6 +70051,7 @@ txnRoutes.post("/transactions/:id/revoke", async (c) => {
 txnRoutes.post("/transactions/:id/void", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canVoidDocuments")) return c.json({ error: "forbidden" }, 403);
   const b2 = await c.req.json().catch(() => null);
   const reason = (b2?.reason ?? "").trim();
   if (!reason) return c.json({ error: "reason-required" }, 400);
@@ -70016,6 +70081,7 @@ txnRoutes.post("/transactions/:id/void", async (c) => {
 txnRoutes.post("/transactions/:id/slip", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageTransactions")) return c.json({ error: "forbidden" }, 403);
   const b2 = await c.req.json().catch(() => null);
   const id = c.req.param("id");
   const ref = (b2?.slipReference ?? "").trim();
@@ -70261,6 +70327,7 @@ whtRoutes.get("/wht/vendors", async (c) => {
 whtRoutes.post("/wht/vendors", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageWht")) return c.json({ error: "forbidden" }, 403);
   const b2 = await c.req.json().catch(() => null);
   const name = (b2?.name ?? "").trim();
   if (name.length < 2) return c.json({ error: "invalid-body" }, 400);
@@ -70332,6 +70399,7 @@ whtRoutes.get("/wht/records", async (c) => {
 whtRoutes.post("/wht/records", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageWht")) return c.json({ error: "forbidden" }, 403);
   const b2 = await c.req.json().catch(() => null);
   if (!b2?.vendorId) return c.json({ error: "invalid-body" }, 400);
   const issueDate = (b2.issueDate ?? (/* @__PURE__ */ new Date()).toISOString()).slice(0, 10);
@@ -70355,6 +70423,7 @@ whtRoutes.post("/wht/records", async (c) => {
 whtRoutes.patch("/wht/records/:id", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageWht")) return c.json({ error: "forbidden" }, 403);
   const b2 = await c.req.json().catch(() => null);
   const status = b2?.status === "done" ? "done" : b2?.status === "active" ? "active" : null;
   await withTenant(g.ws, "owner", async () => {
@@ -71033,6 +71102,7 @@ inviteClientRoutes.get("/vendor-invites", async (c) => {
 inviteClientRoutes.post("/vendor-invites", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageVendors")) return c.json({ error: "forbidden" }, 403);
   const b2 = await c.req.json().catch(() => null);
   const token = randomBytes5(32).toString("base64url");
   const row = await withTenant(g.ws, "owner", async () => {
@@ -71047,6 +71117,7 @@ inviteClientRoutes.post("/vendor-invites", async (c) => {
 inviteClientRoutes.post("/vendor-invites/:id/resend", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageVendors")) return c.json({ error: "forbidden" }, 403);
   const token = randomBytes5(32).toString("base64url");
   const row = await withTenant(g.ws, "owner", async () => {
     const db = sql();
@@ -71063,6 +71134,7 @@ inviteClientRoutes.post("/vendor-invites/:id/resend", async (c) => {
 inviteClientRoutes.post("/vendor-invites/:id/approve", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageVendors")) return c.json({ error: "forbidden" }, 403);
   const id = c.req.param("id");
   const vendorId = await withTenant(g.ws, "owner", async () => {
     const db = sql();
@@ -71092,6 +71164,7 @@ for (const action of ["reject", "request-changes"]) {
   inviteClientRoutes.post(`/vendor-invites/:id/${action}`, async (c) => {
     const g = await guard(c);
     if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+    if (!canDo(g, "canManageVendors")) return c.json({ error: "forbidden" }, 403);
     const b2 = await c.req.json().catch(() => null);
     const status = action === "reject" ? "rejected" : "changes_requested";
     const ok = await withTenant(g.ws, "owner", async () => {
@@ -71109,6 +71182,7 @@ for (const action of ["reject", "request-changes"]) {
 inviteClientRoutes.post("/vendor-invites/:id/cancel", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageVendors")) return c.json({ error: "forbidden" }, 403);
   const ok = await withTenant(g.ws, "owner", async () => {
     const db = sql();
     const rows = await db`update vendor_invites set status = 'cancelled',
@@ -71125,6 +71199,7 @@ inviteClientRoutes.post("/vendor-invites/:id/cancel", async (c) => {
 inviteClientRoutes.get("/vendor-invites/:id/document/:kind", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageVendors")) return c.json({ error: "forbidden" }, 403);
   const kind = c.req.param("kind");
   if (kind !== "id" && kind !== "bank") return c.json({ error: "invalid-kind" }, 400);
   const rows = await withTenant(g.ws, "owner", async () => {
@@ -71228,45 +71303,6 @@ invitePublicRoutes.post("/:token/submit", async (c) => {
   await audit(userId, "vendor_invites", inviteId, "vendor_invite.submitted", "vendor", {}, ip);
   return c.json({ ok: true });
 });
-
-// src/lib/permissions.ts
-var PERMISSION_KEYS = [
-  "canManageVendors",
-  "canManageTransactions",
-  "canManageCatalog",
-  "canManageWht",
-  "canManageSettings",
-  "canVoidDocuments",
-  "canDeleteDocuments"
-];
-var ALLOWED = new Set(PERMISSION_KEYS);
-function normalizePermissions(input) {
-  if (input == null || typeof input !== "object" || Array.isArray(input)) return {};
-  const out = {};
-  for (const [key2, value] of Object.entries(input)) {
-    if (!ALLOWED.has(key2) || typeof value !== "boolean") continue;
-    out[key2] = value;
-  }
-  return out;
-}
-var DEFAULT_MANAGER_PERMS = {
-  canManageVendors: true,
-  canManageTransactions: true,
-  canManageCatalog: true,
-  canManageWht: true,
-  canManageSettings: true,
-  canVoidDocuments: true
-};
-var DEFAULT_OFFICER_PERMS = {
-  canManageVendors: true,
-  canManageTransactions: true,
-  canManageCatalog: true
-};
-function defaultPermissionsFor(role) {
-  if (role === "manager" || role === "client_admin") return { ...DEFAULT_MANAGER_PERMS };
-  if (role === "officer" || role === "client_user") return { ...DEFAULT_OFFICER_PERMS };
-  return {};
-}
 
 // server/src/team.ts
 var teamRoutes = new Hono2();
@@ -71688,6 +71724,7 @@ app.post("/api/vendor/:token/sign", async (c) => {
 app.post("/api/transactions/:id/finalize", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageTransactions")) return c.json({ error: "forbidden" }, 403);
   const id = c.req.param("id");
   const owned = await withTenant(g.ws, "client", async () => {
     const rows = await sql()`select 1 as ok from vendor_payables where id = ${id} and user_id = ${g.ws}`;
@@ -71717,8 +71754,7 @@ app.get("/api/settings", async (c) => {
 app.put("/api/settings", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
-  const role = g.impersonating ? "owner" : g.u?.memberships.find((m2) => m2.tenantId === g.ws)?.role;
-  if (!["client_admin", "owner", "manager"].includes(String(role))) return c.json({ error: "forbidden" }, 403);
+  if (!canDo(g, "canManageSettings")) return c.json({ error: "forbidden" }, 403);
   const body = await c.req.json().catch(() => null);
   if (!body) return c.json({ error: "invalid-body" }, 400);
   try {
@@ -71739,6 +71775,7 @@ app.get("/api/files/r2-status", async (c) => {
 app.post("/api/files/sign-upload", async (c) => {
   const g = await guard(c);
   if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageSettings")) return c.json({ error: "forbidden" }, 403);
   if (!r2Configured()) return c.json({ error: "storage-not-configured" }, 503);
   const body = await c.req.json().catch(() => null);
   if (!body?.fileName) return c.json({ error: "fileName required" }, 400);
@@ -72226,7 +72263,7 @@ adminApp.post("/api/admin/tenants/:id/users", async (c) => {
     values (${userId}, ${id}, ${role}, 'active', false, ${JSON.stringify(defaultPermissionsFor(role))}::jsonb)
     on conflict (member_user_id, workspace_user_id) do update set role = ${role}, status = 'active', password_changed = false`;
   await db`insert into client_permission_audit (workspace_user_id, actor_user_id, target_member_id, action, after)
-    values (${id}, ${g.u.userId}, ${userId}, 'user.created', ${JSON.stringify({ role })}::jsonb)`;
+    values (${id}, ${g.u.userId}, ${userId}, 'user.created', ${JSON.stringify({ role, permissions: defaultPermissionsFor(role) })}::jsonb)`;
   await writeAudit(id, "profiles", userId, "user.created", g.u.email, { email, role }, ip);
   return c.json({ ok: true, userId, tempPassword: password });
 });

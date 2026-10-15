@@ -10,6 +10,7 @@ export function TxnBulkBar({
   onClear,
   busy,
   progress,
+  canCreateLinks = true,
 }: {
   count: number
   createCount: number
@@ -20,6 +21,8 @@ export function TxnBulkBar({
   onClear: () => void
   busy?: boolean
   progress?: { done: number; total: number } | null
+  /** Display-only mirror of the server gate (bulk send 403s without it). */
+  canCreateLinks?: boolean
 }) {
   if (count === 0) return null
 
@@ -47,15 +50,17 @@ export function TxnBulkBar({
         )}
 
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
-          <button
-            type="button"
-            onClick={onCreateLinks}
-            disabled={createCount === 0 || busy}
-            title={createCount === 0 ? 'ทุกรายการที่เลือกมีลิงก์แล้ว' : 'สร้างลิงก์สำหรับรายการที่ยังไม่มี'}
-            className="inline-flex h-8 items-center gap-1.5 rounded-control bg-primary px-3 text-body font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Link2 size={14} aria-hidden /> สร้างลิงก์ ({createCount})
-          </button>
+          {canCreateLinks && (
+            <button
+              type="button"
+              onClick={onCreateLinks}
+              disabled={createCount === 0 || busy}
+              title={createCount === 0 ? 'ทุกรายการที่เลือกมีลิงก์แล้ว' : 'สร้างลิงก์สำหรับรายการที่ยังไม่มี'}
+              className="inline-flex h-8 items-center gap-1.5 rounded-control bg-primary px-3 text-body font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Link2 size={14} aria-hidden /> สร้างลิงก์ ({createCount})
+            </button>
+          )}
           <button
             type="button"
             onClick={onPreviewMessages}

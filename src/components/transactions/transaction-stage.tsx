@@ -119,6 +119,8 @@ export function NextActionBand({
   onIssue,
   onCopyLink,
   receiptHref,
+  canSend = true,
+  canIssue = true,
 }: {
   t: PaymentTransaction
   copiedLink: boolean
@@ -126,6 +128,9 @@ export function NextActionBand({
   onIssue: () => void
   onCopyLink: () => void
   receiptHref: string
+  /** Display-only mirrors of the server gates (send/issue 403 without them). */
+  canSend?: boolean
+  canIssue?: boolean
 }) {
   const stage = stageFor(t.status, t.receiptNumber)
   const tone = TONE[stage.tone]
@@ -143,8 +148,8 @@ export function NextActionBand({
         </div>
         {stage.action && (
           <div className="shrink-0">
-            {stage.action === 'issue' && <Button onClick={onIssue}>{stage.actionLabel}</Button>}
-            {stage.action === 'send' && <Button onClick={onSend}>{stage.actionLabel}</Button>}
+            {stage.action === 'issue' && canIssue && <Button onClick={onIssue}>{stage.actionLabel}</Button>}
+            {stage.action === 'send' && canSend && <Button onClick={onSend}>{stage.actionLabel}</Button>}
             {stage.action === 'copy' && (
               <Button variant="secondary" onClick={onCopyLink}>
                 <Copy size={15} aria-hidden /> {copiedLink ? 'คัดลอกลิงก์แล้ว' : stage.actionLabel}

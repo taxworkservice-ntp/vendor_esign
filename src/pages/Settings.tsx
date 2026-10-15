@@ -29,7 +29,7 @@ function Section({ step, title, desc, children }: { step: string; title: string;
 }
 
 export function Settings() {
-  const { isClientAdmin, isOwner, ready } = useClientAuth()
+  const { can, isOwner, ready } = useClientAuth()
   const { data } = useSettings()
   const save = useUpdateSettings()
   const toast = useToast()
@@ -42,7 +42,9 @@ export function Settings() {
   }, [data])
 
   if (!form) return <p className="py-10 text-center text-body text-ink-500">กำลังโหลด…</p>
-  const readOnly = !isClientAdmin
+  // Settings writes need the flag (owners implicitly, managers by grant).
+  // The team section below is owner-only regardless.
+  const readOnly = !can('canManageSettings')
   const set = (patch: Partial<TenantSettings>) => setForm({ ...form, ...patch })
 
   const submit = async () => {
@@ -71,7 +73,7 @@ export function Settings() {
     <div className="mx-auto max-w-4xl space-y-5">
       <PageHeader
         title="ตั้งค่า"
-        sub={readOnly ? 'ดูได้อย่างเดียว — เฉพาะผู้ดูแลระบบ (admin) แก้ไขได้' : 'ปรับแต่งข้อมูลบริษัท ภาษี และเอกสารสำหรับออกใบเสร็จรับเงินผู้ขาย'}
+        sub={readOnly ? 'ดูได้อย่างเดียว — ต้องมีสิทธิ์ตั้งค่าระบบจึงแก้ไขได้' : 'ปรับแต่งข้อมูลบริษัท ภาษี และเอกสารสำหรับออกใบเสร็จรับเงินผู้ขาย'}
       />
 
       <Section step="1" title="ข้อมูลบริษัท" desc="แสดงบนใบเสร็จ · รหัสลูกค้าใช้เป็นคำนำหน้าเลขที่ใบเสร็จ">
