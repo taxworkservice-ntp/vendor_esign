@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import type { LineItem, PaymentTransaction, TxnStatus } from '../lib/types'
+import type { LineItem, PaymentTransaction, TxnStatus, VendorReceiptInfo } from '../lib/types'
 import { loadTxns, saveTxns } from '../lib/mock'
 import { normalizeLineItem } from '../lib/line-items'
 import { normalizeTaxId, taxIdHash } from '../lib/taxid'
@@ -115,12 +115,19 @@ interface ServerVendor {
   vendorTaxId?: string | null
   receiptNumber?: string | null
   verificationCode?: string | null
+  receipt?: VendorReceiptInfo | null
   unlocked?: boolean
 }
 
 function maskFromLast4(last4: string | null | undefined): string {
   const d = String(last4 ?? '').replace(/\D/g, '').slice(-4)
   return d.length === 4 ? `x-xxxx-xxxxx-${d.slice(0, 2)}-${d.slice(2)}` : ''
+}
+
+/** Token-gated URL for the vendor's signature image — used to rebuild the
+ *  receipt sheet on a return visit. */
+export function vendorSignatureUrl(token: string): string {
+  return `${API}/api/vendor/${encodeURIComponent(token)}/signature.png`
 }
 
 async function fetchServerVendor(token: string): Promise<PaymentTransaction | undefined> {
@@ -167,6 +174,7 @@ async function fetchServerVendor(token: string): Promise<PaymentTransaction | un
     status: (j.status as TxnStatus) ?? 'sent',
     receiptNumber: j.receiptNumber ?? undefined,
     verificationCode: j.verificationCode ?? undefined,
+    vendorReceipt: j.receipt ?? undefined,
     createdAt: '',
     timeline: [],
     inviteToken: token,

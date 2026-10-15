@@ -70748,7 +70748,7 @@ import { join as join2 } from "node:path";
 var INK = (0, import_pdf_lib.rgb)(0.102, 0.137, 0.196);
 var MUTED = (0, import_pdf_lib.rgb)(0.392, 0.451, 0.549);
 var FAINT = (0, import_pdf_lib.rgb)(0.62, 0.671, 0.741);
-var ACCENT = (0, import_pdf_lib.rgb)(0.059, 0.463, 0.431);
+var ACCENT = (0, import_pdf_lib.rgb)(0, 0.459, 0.871);
 var PANEL = (0, import_pdf_lib.rgb)(0.965, 0.973, 0.98);
 var RULE = (0, import_pdf_lib.rgb)(0.886, 0.91, 0.941);
 var ZEBRA = (0, import_pdf_lib.rgb)(0.98, 0.984, 0.99);
@@ -71597,19 +71597,23 @@ app.get("/api/vendor/:token", async (c) => {
   const rows = await db`
     select vr.id as req_id, vr.user_id, vr.expires_at, vr.used_at, vr.revoked_at, vr.unlocked_at,
       t.id, t.ref, t.description, t.note, t.line_items, t.payment_type, t.gross_amount, t.wht_rate,
-      t.wht_amount, t.net_amount, t.transfer_date, t.slip_reference, t.status,
+      t.wht_amount, t.net_amount, t.transfer_date, t.slip_reference, t.status, t.void_reason as txn_void_reason,
       t.tax_id_hash, t.tax_id_last4,
       v.prefix as vendor_prefix, v.name as vendor_name, v.address as vendor_address,
       v.phone as vendor_phone, v.email as vendor_email,
       v.id_number_encrypted as vendor_id_encrypted,
       (select client_code from client_profiles where id = vr.user_id) as client_code,
-      (select row_to_json(x) from (
-         select number, verification_code from vendor_receipts rr
-         where rr.transaction_id = t.id and rr.user_id = vr.user_id
-         order by rr.issue_date desc limit 1) x) as receipt
+      a.vendor_prefix as auth_vendor_prefix, a.vendor_name as auth_vendor_name,
+      a.vendor_address as auth_vendor_address, a.vendor_masked_id, a.vendor_phone as auth_vendor_phone,
+      a.vendor_email as auth_vendor_email, a.auth_ref, a.signed_at, a.verification_method,
+      a.consent_text_version, a.signature_image_path,
+      r.number as receipt_number, r.verification_code, r.issue_date, r.status as receipt_status,
+      r.void_reason as receipt_void_reason
     from vendor_requests vr
     join vendor_payables t on t.id = vr.transaction_id
     join vendor_payees v on v.id = t.vendor_id
+    left join vendor_authorizations a on a.transaction_id = t.id and a.user_id = vr.user_id
+    left join vendor_receipts r on r.transaction_id = t.id and r.user_id = vr.user_id
     where vr.token_hash = ${sha256hex(token)}`;
   const r = one(rows);
   if (!r) return c.json({ error: "invalid-or-expired" }, 404);
@@ -71648,6 +71652,29 @@ app.get("/api/vendor/:token", async (c) => {
       vendorTaxId = null;
     }
   }
+  const authName = r.auth_vendor_name;
+  const receipt = authName != null ? {
+    number: r.receipt_number ?? null,
+    verificationCode: r.verification_code ?? null,
+    issueDate: isoDay(r.issue_date) || null,
+    signedAt: r.signed_at ?? null,
+    sigMethod: r.verification_method ?? null,
+    authRef: r.auth_ref ?? null,
+    consentVersion: r.consent_text_version ?? null,
+    hasSignature: r.signature_image_path != null,
+    isVoid: String(r.receipt_status ?? "") === "void",
+    voidReason: r.receipt_void_reason ?? r.txn_void_reason ?? null,
+    client: { displayName: settings.displayName, address: settings.address, taxId: settings.taxId },
+    vendor: {
+      prefix: r.auth_vendor_prefix ?? "",
+      name: authName,
+      address: r.auth_vendor_address ?? "",
+      phone: r.auth_vendor_phone ?? null,
+      email: r.auth_vendor_email ?? null,
+      taxId: vendorTaxId,
+      maskedId: r.vendor_masked_id ?? ""
+    }
+  } : null;
   return c.json({
     id: r.id,
     tenantId: rowTenant,
@@ -71676,8 +71703,9 @@ app.get("/api/vendor/:token", async (c) => {
     vendorPhone: r.vendor_phone ?? null,
     vendorEmail: r.vendor_email ?? null,
     vendorTaxId,
-    receiptNumber: r.receipt?.number ?? null,
-    verificationCode: r.receipt?.verification_code ?? null,
+    receiptNumber: r.receipt_number ?? null,
+    verificationCode: r.verification_code ?? null,
+    receipt,
     unlocked: true
   });
 });
@@ -71716,6 +71744,35 @@ app.get("/api/vendor/:token/receipt.pdf", async (c) => {
       "Content-Length": String(bytes.byteLength),
       "X-Pdf-Sha256": String(r.pdf_sha256 ?? ""),
       "X-Verification-Code": String(r.verification_code ?? ""),
+      "Cache-Control": "private, no-store"
+    }
+  });
+});
+app.get("/api/vendor/:token/signature.png", async (c) => {
+  const ip = c.req.header("x-forwarded-for") ?? "local";
+  if (await rateLimited(`signature:${ip}`, 30)) return c.json({ error: "too-many-requests" }, 429);
+  const token = c.req.param("token");
+  const db = sql();
+  const rows = await db`
+    select vr.user_id, vr.expires_at, vr.revoked_at, vr.unlocked_at,
+      t.tax_id_hash, a.signature_image_path
+    from vendor_requests vr
+    join vendor_payables t on t.id = vr.transaction_id
+    left join vendor_authorizations a on a.transaction_id = t.id and a.user_id = vr.user_id
+    where vr.token_hash = ${sha256hex(token)}`;
+  const r = one(rows);
+  if (!r) return c.json({ error: "invalid-or-expired" }, 404);
+  if (r.revoked_at || new Date(String(r.expires_at)) < /* @__PURE__ */ new Date())
+    return c.json({ error: "invalid-or-expired" }, 410);
+  if (r.tax_id_hash && !r.unlocked_at) return c.json({ error: "not-unlocked" }, 403);
+  if (!r.signature_image_path) return c.json({ error: "not-signed" }, 404);
+  const bytes = await readStoredDurable(String(r.user_id), String(r.signature_image_path));
+  if (!bytes) return c.json({ error: "signature-unavailable" }, 404);
+  return new Response(new Uint8Array(bytes), {
+    headers: {
+      "Content-Type": "image/png",
+      "Content-Disposition": "inline",
+      "Content-Length": String(bytes.byteLength),
       "Cache-Control": "private, no-store"
     }
   });

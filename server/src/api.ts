@@ -137,19 +137,23 @@ app.get('/api/vendor/:token', async (c) => {
   const rows = await db`
     select vr.id as req_id, vr.user_id, vr.expires_at, vr.used_at, vr.revoked_at, vr.unlocked_at,
       t.id, t.ref, t.description, t.note, t.line_items, t.payment_type, t.gross_amount, t.wht_rate,
-      t.wht_amount, t.net_amount, t.transfer_date, t.slip_reference, t.status,
+      t.wht_amount, t.net_amount, t.transfer_date, t.slip_reference, t.status, t.void_reason as txn_void_reason,
       t.tax_id_hash, t.tax_id_last4,
       v.prefix as vendor_prefix, v.name as vendor_name, v.address as vendor_address,
       v.phone as vendor_phone, v.email as vendor_email,
       v.id_number_encrypted as vendor_id_encrypted,
       (select client_code from client_profiles where id = vr.user_id) as client_code,
-      (select row_to_json(x) from (
-         select number, verification_code from vendor_receipts rr
-         where rr.transaction_id = t.id and rr.user_id = vr.user_id
-         order by rr.issue_date desc limit 1) x) as receipt
+      a.vendor_prefix as auth_vendor_prefix, a.vendor_name as auth_vendor_name,
+      a.vendor_address as auth_vendor_address, a.vendor_masked_id, a.vendor_phone as auth_vendor_phone,
+      a.vendor_email as auth_vendor_email, a.auth_ref, a.signed_at, a.verification_method,
+      a.consent_text_version, a.signature_image_path,
+      r.number as receipt_number, r.verification_code, r.issue_date, r.status as receipt_status,
+      r.void_reason as receipt_void_reason
     from vendor_requests vr
     join vendor_payables t on t.id = vr.transaction_id
     join vendor_payees v on v.id = t.vendor_id
+    left join vendor_authorizations a on a.transaction_id = t.id and a.user_id = vr.user_id
+    left join vendor_receipts r on r.transaction_id = t.id and r.user_id = vr.user_id
     where vr.token_hash = ${sha256hex(token)}`
   const r = one<Record<string, unknown>>(rows)
   if (!r) return c.json({ error: 'invalid-or-expired' }, 404)
@@ -190,6 +194,36 @@ app.get('/api/vendor/:token', async (c) => {
   if (encVendor) {
     try { vendorTaxId = decryptId(encVendor) } catch { vendorTaxId = null }
   }
+  // Everything the vendor needs to rebuild the SAME receipt sheet the client
+  // sees (the on-screen renderer), so a return visit never falls back to the
+  // pdf-lib artifact. Present only once the vendor has signed.
+  const authName = (r as Record<string, unknown>).auth_vendor_name as string | null
+  const receipt = authName != null
+    ? {
+        number: ((r as Record<string, unknown>).receipt_number as string) ?? null,
+        verificationCode: ((r as Record<string, unknown>).verification_code as string) ?? null,
+        issueDate: isoDay((r as Record<string, unknown>).issue_date as string) || null,
+        signedAt: ((r as Record<string, unknown>).signed_at as string) ?? null,
+        sigMethod: ((r as Record<string, unknown>).verification_method as string) ?? null,
+        authRef: ((r as Record<string, unknown>).auth_ref as string) ?? null,
+        consentVersion: ((r as Record<string, unknown>).consent_text_version as string) ?? null,
+        hasSignature: (r as Record<string, unknown>).signature_image_path != null,
+        isVoid: String((r as Record<string, unknown>).receipt_status ?? '') === 'void',
+        voidReason:
+          ((r as Record<string, unknown>).receipt_void_reason as string) ??
+          ((r as Record<string, unknown>).txn_void_reason as string) ?? null,
+        client: { displayName: settings.displayName, address: settings.address, taxId: settings.taxId },
+        vendor: {
+          prefix: ((r as Record<string, unknown>).auth_vendor_prefix as string) ?? '',
+          name: authName,
+          address: ((r as Record<string, unknown>).auth_vendor_address as string) ?? '',
+          phone: ((r as Record<string, unknown>).auth_vendor_phone as string) ?? null,
+          email: ((r as Record<string, unknown>).auth_vendor_email as string) ?? null,
+          taxId: vendorTaxId,
+          maskedId: ((r as Record<string, unknown>).vendor_masked_id as string) ?? '',
+        },
+      }
+    : null
   return c.json({
     id: r.id, tenantId: rowTenant, clientCode: (r as Record<string, unknown>).client_code ?? null,
     clientName: settings.displayName,
@@ -206,8 +240,9 @@ app.get('/api/vendor/:token', async (c) => {
     vendorPhone: (r as Record<string, unknown>).vendor_phone ?? null,
     vendorEmail: (r as Record<string, unknown>).vendor_email ?? null,
     vendorTaxId,
-    receiptNumber: ((r as Record<string, unknown>).receipt as { number?: string } | null)?.number ?? null,
-    verificationCode: ((r as Record<string, unknown>).receipt as { verification_code?: string } | null)?.verification_code ?? null,
+    receiptNumber: ((r as Record<string, unknown>).receipt_number as string) ?? null,
+    verificationCode: ((r as Record<string, unknown>).verification_code as string) ?? null,
+    receipt,
     unlocked: true,
   })
 })
@@ -252,6 +287,40 @@ app.get('/api/vendor/:token/receipt.pdf', async (c) => {
       'Content-Length': String(bytes.byteLength),
       'X-Pdf-Sha256': String(r.pdf_sha256 ?? ''),
       'X-Verification-Code': String(r.verification_code ?? ''),
+      'Cache-Control': 'private, no-store',
+    },
+  })
+})
+
+// Vendor return-download: the signature image for a signed link, so a return
+// visit can rebuild the SAME receipt sheet the client sees instead of falling
+// back to the pdf-lib artifact. Same guards as the payload/PDF routes; only
+// available once signed (and after the gate).
+app.get('/api/vendor/:token/signature.png', async (c) => {
+  const ip = c.req.header('x-forwarded-for') ?? 'local'
+  if (await rateLimited(`signature:${ip}`, 30)) return c.json({ error: 'too-many-requests' }, 429)
+  const token = c.req.param('token')
+  const db = sql()
+  const rows = await db`
+    select vr.user_id, vr.expires_at, vr.revoked_at, vr.unlocked_at,
+      t.tax_id_hash, a.signature_image_path
+    from vendor_requests vr
+    join vendor_payables t on t.id = vr.transaction_id
+    left join vendor_authorizations a on a.transaction_id = t.id and a.user_id = vr.user_id
+    where vr.token_hash = ${sha256hex(token)}`
+  const r = one<Record<string, unknown>>(rows)
+  if (!r) return c.json({ error: 'invalid-or-expired' }, 404)
+  if (r.revoked_at || new Date(String(r.expires_at)) < new Date())
+    return c.json({ error: 'invalid-or-expired' }, 410)
+  if (r.tax_id_hash && !r.unlocked_at) return c.json({ error: 'not-unlocked' }, 403)
+  if (!r.signature_image_path) return c.json({ error: 'not-signed' }, 404)
+  const bytes = await readStoredDurable(String(r.user_id), String(r.signature_image_path))
+  if (!bytes) return c.json({ error: 'signature-unavailable' }, 404)
+  return new Response(new Uint8Array(bytes), {
+    headers: {
+      'Content-Type': 'image/png',
+      'Content-Disposition': 'inline',
+      'Content-Length': String(bytes.byteLength),
       'Cache-Control': 'private, no-store',
     },
   })

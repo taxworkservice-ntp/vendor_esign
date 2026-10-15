@@ -1,27 +1,33 @@
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { ReceiptSheet, type ReceiptSheetData } from './receipt-sheet'
+import { apiDownload } from '../../lib/api-client'
 import { Card, CardBody } from '../ui/card'
 import { Button } from '../ui/button'
 
 // The vendor's receipt copy, shown inline over the signing page so the vendor
-// never navigates away. With the just-signed snapshot it renders the exact sheet
-// the client sees; on a return visit it embeds the archived server PDF (the only
-// signature-bearing artifact available once the snapshot is gone).
+// never navigates away. With the just-signed snapshot (or the rebuilt return
+// visit) it renders the exact sheet the client sees; only when the signature
+// could not be loaded does it fall back to the archived PDF — fetched as a blob
+// so it renders inline (the raw endpoint sends `Content-Disposition: attachment`,
+// which browsers refuse to frame).
 export function ReceiptCopyDialog({
   open,
   data,
-  pdfUrl,
+  pdfPath,
   onClose,
 }: {
   open: boolean
   data: ReceiptSheetData | null
-  pdfUrl?: string
+  pdfPath?: string
   onClose: () => void
 }) {
   const closeRef = useRef<HTMLButtonElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const blobRef = useRef<string | null>(null)
   const [zoom, setZoom] = useState(1)
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null)
+  const [pdfErr, setPdfErr] = useState(false)
 
   // Fit the fixed A4 sheet to the dialog width (never scale up past 100%).
   useEffect(() => {
@@ -34,6 +40,35 @@ export function ReceiptCopyDialog({
     ro.observe(el)
     return () => ro.disconnect()
   }, [open, data])
+
+  // Fallback: no snapshot → load the archived PDF as an object URL so it can be
+  // shown inline without the attachment disposition blocking it.
+  useEffect(() => {
+    if (!open || data || !pdfPath) return
+    let cancelled = false
+    setPdfErr(false)
+    void (async () => {
+      try {
+        const { blob } = await apiDownload(pdfPath)
+        const url = URL.createObjectURL(blob)
+        if (cancelled) {
+          URL.revokeObjectURL(url)
+          return
+        }
+        blobRef.current = url
+        setPdfBlobUrl(url)
+      } catch {
+        if (!cancelled) setPdfErr(true)
+      }
+    })()
+    return () => {
+      cancelled = true
+      if (blobRef.current) {
+        URL.revokeObjectURL(blobRef.current)
+        blobRef.current = null
+      }
+    }
+  }, [open, data, pdfPath])
 
   useEffect(() => {
     if (!open) return
@@ -80,12 +115,16 @@ export function ReceiptCopyDialog({
           <div ref={wrapRef} className="max-h-[70vh] overflow-y-auto rounded-control bg-ink-50 p-2">
             {data ? (
               <ReceiptSheet style={{ zoom }} data={data} />
-            ) : pdfUrl ? (
-              <object data={pdfUrl} type="application/pdf" className="h-[70vh] w-full rounded-control bg-white">
-                <iframe title="สำเนาใบเสร็จ (PDF)" src={pdfUrl} className="h-[70vh] w-full rounded-control border-0" />
-              </object>
+            ) : pdfBlobUrl ? (
+              <iframe
+                title="สำเนาใบเสร็จ (PDF)"
+                src={pdfBlobUrl}
+                className="h-[70vh] w-full rounded-control border-0 bg-white"
+              />
+            ) : pdfErr ? (
+              <p className="p-8 text-center text-body text-ink-500">ไม่สามารถแสดงสำเนาได้ — กรุณาดาวน์โหลดใบเสร็จ</p>
             ) : (
-              <p className="p-8 text-center text-body text-ink-500">ไม่พบสำเนาใบเสร็จ</p>
+              <p className="p-8 text-center text-body text-ink-500">กำลังโหลดสำเนา…</p>
             )}
           </div>
 

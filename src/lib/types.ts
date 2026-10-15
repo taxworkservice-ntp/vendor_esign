@@ -38,6 +38,31 @@ export interface LineItem {
   subItems?: string[]
 }
 
+/** Vendor-portal only: everything needed to rebuild the receipt sheet on a
+ *  return visit (the server returns it once the vendor has signed). */
+export interface VendorReceiptInfo {
+  number?: string | null
+  verificationCode?: string | null
+  issueDate?: string | null
+  signedAt?: string | null
+  sigMethod?: string | null
+  authRef?: string | null
+  consentVersion?: string | null
+  hasSignature: boolean
+  isVoid?: boolean
+  voidReason?: string | null
+  client: { displayName: string; address: string; taxId: string }
+  vendor: {
+    prefix?: string
+    name: string
+    address: string
+    phone?: string | null
+    email?: string | null
+    taxId?: string | null
+    maskedId: string
+  }
+}
+
 export interface PaymentTransaction {
   id: string
   tenantId: string
@@ -82,6 +107,8 @@ export interface PaymentTransaction {
   /** Consent wording (with {{placeholders}}) + its version, from tenant settings. */
   consentTemplate?: string
   consentVersion?: string
+  /** Vendor-portal only: the signed receipt payload for a return visit. */
+  vendorReceipt?: VendorReceiptInfo
   checks: { key: string; label: string; state: 'pass' | 'warn' | 'fail' }[]
 }
 

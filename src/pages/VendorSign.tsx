@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { CheckCircle2, Download, Eraser, Lock, ShieldAlert } from 'lucide-react'
-import { GATE_MAX_TRIES, gateRemaining, isGateUnlocked, tryGateUnlock, useVendorActions, useVendorTxn, type VendorAuth } from '../hooks/useVendor'
+import { GATE_MAX_TRIES, gateRemaining, isGateUnlocked, tryGateUnlock, useVendorActions, useVendorTxn, vendorSignatureUrl, type VendorAuth } from '../hooks/useVendor'
 import { apiDownload, hasServer, saveFile } from '../lib/api-client'
 import { receiptSheetToA4PdfBytes } from '../lib/receipt-to-a4-pdf'
 import { normalizeLineItem } from '../lib/line-items'
 import { renderTypedSignature, SIGNATURE_FONT, signMethodLabel } from '../lib/typed-signature'
+import type { SignatureState } from '../lib/signature-state'
 import { cn } from '../lib/cn'
 import { ReceiptSheet, type ReceiptSheetData } from '../components/receipt/receipt-sheet'
 import { ReceiptCopyDialog } from '../components/receipt/receipt-copy-dialog'
@@ -69,6 +70,69 @@ function ConsentBody({ text }: { text: string }) {
   )
 }
 
+// Build the receipt-sheet data the vendor sees. Used for the just-signed
+// snapshot AND for a return visit (rebuilt from the signed payload + the
+// token-gated signature), so both render the identical on-screen sheet.
+function buildVendorReceiptData(
+  t: PaymentTransaction,
+  info: {
+    number: string
+    client: { displayName: string; address: string; taxId: string }
+    vendor: {
+      prefix?: string
+      name: string
+      address: string
+      phone?: string | null
+      email?: string | null
+      taxId?: string | null
+      maskedId: string
+    }
+    signedAt?: string | null
+    sigMethod?: string | null
+    authRef?: string | null
+    consentVersion?: string | null
+    verificationCode?: string | null
+    issueDate?: string | null
+    isVoid?: boolean
+    voidReason?: string | null
+  },
+  sig: SignatureState,
+): ReceiptSheetData {
+  return {
+    number: info.number,
+    transferDate: t.transferDate,
+    issueDate: info.issueDate ?? new Date().toISOString().slice(0, 10),
+    items: (t.lineItems.some((it) => it.description || it.amount)
+      ? t.lineItems
+      : [{ description: t.description, amount: t.grossAmount }]
+    ).map(normalizeLineItem),
+    grossAmount: t.grossAmount,
+    whtRate: t.whtRate,
+    whtAmount: t.whtAmount,
+    netAmount: t.netAmount,
+    note: t.note,
+    isVoid: info.isVoid,
+    voidReason: info.voidReason ?? undefined,
+    client: info.client,
+    vendor: {
+      prefix: info.vendor.prefix,
+      name: info.vendor.name,
+      address: info.vendor.address,
+      phone: info.vendor.phone || undefined,
+      email: info.vendor.email || undefined,
+      taxId: info.vendor.taxId || undefined,
+      maskedId: info.vendor.maskedId,
+    },
+    sig,
+    signedAt: info.signedAt ?? undefined,
+    sigMethod: info.sigMethod ?? undefined,
+    authRef: info.authRef ?? undefined,
+    consentVersion: info.consentVersion ?? undefined,
+    verificationCode: info.verificationCode ?? undefined,
+    verifyUrl: info.verificationCode ? `${window.location.origin}/verify/${info.verificationCode}` : undefined,
+  }
+}
+
 function Shell({ children, brand }: { children: React.ReactNode; brand?: Brand }) {
   return (
     <div className="flex min-h-screen flex-col bg-paper">
@@ -118,6 +182,8 @@ export function VendorSign() {
   const [vendorData, setVendorData] = useState<ReceiptSheetData | null>(null)
   const [downloading, setDownloading] = useState(false)
   const vendorSheetRef = useRef<HTMLDivElement>(null)
+  // Guards the one-shot rebuild of the sheet on a return visit.
+  const receiptBuiltRef = useRef(false)
   const [tid, setTid] = useState('')
   const [consent, setConsent] = useState(false)
   const [drew, setDrew] = useState(false)
@@ -165,6 +231,53 @@ export function VendorSign() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t?.id, t?.status])
 
+  // Return visit: the just-signed snapshot is gone (token consumed, page
+  // reloaded). Rebuild the SAME receipt sheet from the signed payload + the
+  // token-gated signature, so download and copy look identical to the client's
+  // — never the pdf-lib artifact. If the signature can't be loaded, leave it
+  // null so both fall back to the archived PDF.
+  useEffect(() => {
+    const txn = t
+    const info = txn?.vendorReceipt
+    if (!txn || !info || !token || !hasServer || vendorData || receiptBuiltRef.current) return
+    receiptBuiltRef.current = true
+    let cancelled = false
+    void (async () => {
+      if (!info.hasSignature) return
+      let png: string | undefined
+      try {
+        const r = await fetch(vendorSignatureUrl(token), { credentials: 'include' })
+        if (r.ok) png = URL.createObjectURL(await r.blob())
+      } catch {
+        /* fall back to the archived PDF */
+      }
+      if (cancelled || !png) return
+      setVendorData(
+        buildVendorReceiptData(
+          txn,
+          {
+            number: info.number || txn.receiptNumber || 'ยังไม่ออกเลข',
+            client: info.client,
+            vendor: info.vendor,
+            signedAt: info.signedAt,
+            sigMethod: info.sigMethod,
+            authRef: info.authRef,
+            consentVersion: info.consentVersion,
+            verificationCode: info.verificationCode,
+            issueDate: info.issueDate,
+            isVoid: info.isVoid,
+            voidReason: info.voidReason,
+          },
+          { kind: 'ready', png },
+        ),
+      )
+    })()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t, token, vendorData])
+
   const downloadReceipt = async () => {
     // Just signed on this device: rasterise the on-screen sheet so the PDF is
     // identical to the preview. Returning on the same link later: the archived
@@ -202,9 +315,11 @@ export function VendorSign() {
   // lookup can return the receipt state on a return visit — keep a snapshot id
   // so the success state still renders if the lookup lags.
   if (done || t?.status === 'signed' || t?.status === 'issued') {
-    const number = receipt?.number ?? t?.receiptNumber
+    const number = receipt?.number ?? vendorData?.number ?? t?.receiptNumber
+    const verificationCode = receipt?.verificationCode ?? vendorData?.verificationCode ?? t?.verificationCode
+    const shownAuthRef = authRef || vendorData?.authRef
     const successClient = vendorData?.client?.displayName || t?.clientName || 'ลูกค้าผู้จ่าย'
-    const copyPdfUrl = token && hasServer ? `/api/vendor/${encodeURIComponent(token)}/receipt.pdf` : undefined
+    const copyPdfPath = token && hasServer ? `/api/vendor/${encodeURIComponent(token)}/receipt.pdf` : undefined
     const consentLabel = consentVersionLabel(vendorData?.consentVersion ?? t?.consentVersion)
     return (
       <>
@@ -219,14 +334,14 @@ export function VendorSign() {
                 เลขที่ใบเสร็จ: <span className="font-mono font-semibold text-ink-900">{number}</span>
               </p>
             )}
-            {receipt?.verificationCode && (
+            {verificationCode && (
               <p className="text-body text-ink-500">
-                รหัสตรวจสอบ: <span className="font-mono font-semibold text-ink-900">{receipt.verificationCode}</span>
+                รหัสตรวจสอบ: <span className="font-mono font-semibold text-ink-900">{verificationCode}</span>
               </p>
             )}
-            {authRef && (
+            {shownAuthRef && (
               <p className="text-body text-ink-500">
-                เลขอ้างอิงการลงนาม: <span className="font-mono font-semibold text-ink-900">{authRef}</span>
+                เลขอ้างอิงการลงนาม: <span className="font-mono font-semibold text-ink-900">{shownAuthRef}</span>
               </p>
             )}
             {vendorData?.signedAt && (
@@ -245,7 +360,7 @@ export function VendorSign() {
                   <Download size={15} aria-hidden /> {downloading ? 'กำลังดาวน์โหลด…' : 'ดาวน์โหลดใบเสร็จ (PDF)'}
                 </Button>
               )}
-              {(vendorData || copyPdfUrl) && (
+              {(vendorData || copyPdfPath) && (
                 <Button variant="secondary" onClick={() => setCopyOpen(true)}>ดูสำเนาใบเสร็จ</Button>
               )}
             </div>
@@ -266,7 +381,7 @@ export function VendorSign() {
           <ReceiptSheet ref={vendorSheetRef} data={vendorData} />
         </div>
       )}
-      <ReceiptCopyDialog open={copyOpen} data={vendorData} pdfUrl={copyPdfUrl} onClose={() => setCopyOpen(false)} />
+      <ReceiptCopyDialog open={copyOpen} data={vendorData} pdfPath={copyPdfPath} onClose={() => setCopyOpen(false)} />
       </>
     )
   }
@@ -416,41 +531,35 @@ export function VendorSign() {
       // version come from the sign response when present (server), falling back
       // to workspace settings so the vendor's copy matches the client's.
       const s = loadSettings(t.tenantId)
-      setVendorData({
-        number,
-        transferDate: t.transferDate,
-        issueDate: new Date().toISOString().slice(0, 10),
-        items: (t.lineItems.some((it) => it.description || it.amount)
-          ? t.lineItems
-          : [{ description: t.description, amount: t.grossAmount }]
-        ).map(normalizeLineItem),
-        grossAmount: t.grossAmount,
-        whtRate: t.whtRate,
-        whtAmount: t.whtAmount,
-        netAmount: t.netAmount,
-        note: t.note,
-        client: res.client ?? {
-          displayName: t.clientName || s.displayName,
-          address: s.address,
-          taxId: s.taxId,
-        },
-        vendor: {
-          prefix: auth.vendorPrefix,
-          name: auth.vendorName,
-          address: auth.vendorAddress,
-          phone: auth.vendorPhone || undefined,
-          email: auth.vendorEmail || undefined,
-          taxId: t.vendor.taxId,
-          maskedId: t.vendor.maskedId,
-        },
-        sig: { kind: 'ready', png: auth.signaturePng },
-        signedAt: auth.signedAt,
-        sigMethod: auth.verificationMethod,
-        authRef: res.authRef,
-        consentVersion: res.consentVersion ?? auth.consentVersion,
-        verificationCode: res.verificationCode ?? undefined,
-        verifyUrl: res.verificationCode ? `${window.location.origin}/verify/${res.verificationCode}` : undefined,
-      })
+      setVendorData(
+        buildVendorReceiptData(
+          t,
+          {
+            number,
+            client: res.client ?? {
+              displayName: t.clientName || s.displayName,
+              address: s.address,
+              taxId: s.taxId,
+            },
+            vendor: {
+              prefix: auth.vendorPrefix,
+              name: auth.vendorName,
+              address: auth.vendorAddress,
+              phone: auth.vendorPhone,
+              email: auth.vendorEmail,
+              taxId: t.vendor.taxId,
+              maskedId: t.vendor.maskedId,
+            },
+            signedAt: auth.signedAt,
+            sigMethod: auth.verificationMethod,
+            authRef: res.authRef,
+            consentVersion: res.consentVersion ?? auth.consentVersion,
+            verificationCode: res.verificationCode,
+            issueDate: new Date().toISOString().slice(0, 10),
+          },
+          { kind: 'ready', png: auth.signaturePng },
+        ),
+      )
       setDone(true)
       window.scrollTo(0, 0)
     } finally {

@@ -70,7 +70,9 @@ interface Fonts {
 const INK = rgb(0.102, 0.137, 0.196)
 const MUTED = rgb(0.392, 0.451, 0.549)
 const FAINT = rgb(0.62, 0.671, 0.741)
-const ACCENT = rgb(0.059, 0.463, 0.431)
+// Brand primary (--color-primary #0075de) — keeps the archived PDF's header band
+// consistent with the on-screen receipt sheet.
+const ACCENT = rgb(0, 0.459, 0.871)
 const PANEL = rgb(0.965, 0.973, 0.98)
 const RULE = rgb(0.886, 0.91, 0.941)
 const ZEBRA = rgb(0.98, 0.984, 0.99)

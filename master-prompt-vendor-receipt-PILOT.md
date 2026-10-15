@@ -341,7 +341,13 @@ opens the receipt copy **inline in a modal** instead of navigating away, so the 
 never leaves the signed page. The old `/v/receipt/:id` route (+ its session-flagged
 client view) is **retired** — it rendered the client receipt and dropped the vendor onto
 the client portal → `/login`. Just-signed, the modal renders the same receipt sheet as
-the client; on a return visit it embeds the archived server PDF. The vendor's copy now
+the client; on a **return visit** (token consumed, page reloaded) the sheet is **rebuilt
+from the signed payload** — `GET /api/vendor/:token` returns a `receipt` block (buyer,
+vendor, signing metadata) and a token-gated `GET /api/vendor/:token/signature.png`
+returns the signature — so download and copy render the **same on-screen sheet** (blue
+header, correct Thai) rather than the pdf-lib artifact. The archived `/api/vendor/:token/
+receipt.pdf` is used **only as a fallback** (signature unloadable), fetched as a blob so
+its `Content-Disposition: attachment` can't blank the modal frame. The vendor's copy now
 matches the client's exactly: the buyer block comes from the workspace profile (the
 **mock** sign response previously returned no buyer, so previews showed the client code),
 and the vendor's **full 13-digit ID** prints on every copy — revealed to the vendor only
@@ -351,7 +357,8 @@ holds the verification code, signing reference, and consent version. The consent
 is normalised to a single leading `v` (fixes a `vv1` print), and signing is rejected with
 `consent-version-mismatch` if the workspace wording changed while the page was open.
 The receipt item table **drops the ส่วนลด column** (the discount still applies to the
-line amount); its width goes to **รายละเอียด** — on screen and in both PDF paths.
+line amount); its width goes to **รายละเอียด** — on screen and in both PDF paths. The
+pdf-lib artifact's header band was recoloured from teal to the brand blue (#0075de).
 
 **Still deferred.** LINE Login/LIFF verification (vendor signs via versioned consent +
 signature for now); automated reminders (email/LINE OA); invite funnel analytics;
