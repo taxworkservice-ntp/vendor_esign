@@ -148,12 +148,10 @@ export const ReceiptSheet = forwardRef<
           <div key={i} className="flex items-baseline gap-2 border-b border-card-border py-1 last:border-0">
             <span className="w-6 shrink-0 text-left font-mono text-label text-ink-400">{i + 1}</span>
             <span className="min-w-0 flex-1 leading-snug">
-              {it.description}
-              {(it.subItems ?? []).length > 0 && (
-                <span className="mt-0.5 block text-bodySm text-ink-500">
-                  {(it.subItems ?? []).map((s) => `• ${s}`).join('   ')}
-                </span>
-              )}
+              <span className="block">{it.description}</span>
+              {(it.subItems ?? []).map((s, si) => (
+                <span key={si} className="mt-0.5 block text-bodySm text-ink-500">• {s}</span>
+              ))}
             </span>
             <span className="w-14 shrink-0 text-right tabular-nums">{it.quantity ?? 1}</span>
             <span className="w-16 shrink-0 text-right text-ink-600">{it.unit || 'รายการ'}</span>
