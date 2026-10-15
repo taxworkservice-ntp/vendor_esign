@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import { CLIENT_ROLES, findMockUser, hasRole } from './mock-users'
 import { adminPath } from './admin-api'
 import { API_BASE } from './api-base'
+import { defaultPermissionsFor, hasPermission, type PermissionKey, type Permissions } from './permissions'
 
 // Client portal auth (admin-provisioned passwords). Talks to the client/vendor
 // operation at VITE_API_BASE; falls back to mock credentials when no API base is
@@ -15,6 +16,9 @@ import { API_BASE } from './api-base'
 export interface Membership {
   tenantId: string
   role: string
+  /** Flag set for the workspace (server) or derived from role defaults (mock
+   *  or pre-backfill rows). Owner needs none — access is implicit. */
+  permissions?: Permissions
 }
 
 export type ImpersonationMode = 'read' | 'write'
@@ -25,6 +29,8 @@ interface ClientAuthState {
   activeTenant: string
   mustChangePw: boolean
   isClientAdmin: boolean
+  /** Top role in any membership — the only role that may manage people. */
+  isOwner: boolean
   /** Operator viewing as a client. */
   impersonating: boolean
   impersonationMode: ImpersonationMode
@@ -38,6 +44,8 @@ interface ClientAuthCtx extends ClientAuthState {
   refresh: () => Promise<void>
   stopImpersonation: () => Promise<void>
   setImpersonationMode: (mode: ImpersonationMode) => Promise<void>
+  /** Flag check for the active workspace. Display-only — the server enforces. */
+  can: (key: PermissionKey) => boolean
 }
 
 const Ctx = createContext<ClientAuthCtx | null>(null)
@@ -65,6 +73,7 @@ function stateFrom(
     mustChangePw,
     // owner (top role) and manager may manage workspace settings; officer is read-only.
     isClientAdmin: memberships.some((m) => m.role === 'owner' || m.role === 'manager' || m.role === 'client_admin'),
+    isOwner: memberships.some((m) => m.role === 'owner'),
     impersonating: !!imp?.impersonating,
     impersonationMode: imp?.mode === 'write' ? 'write' : 'read',
     impersonationTenant: imp?.impersonating ? (imp.tenantId ?? null) : null,
@@ -75,6 +84,7 @@ function stateFrom(
 function loggedOut(): ClientAuthState {
   return {
     email: null, memberships: [], activeTenant: 'ABC', mustChangePw: false, isClientAdmin: false,
+    isOwner: false,
     impersonating: false, impersonationMode: 'read', impersonationTenant: null, ready: true,
   }
 }
@@ -90,8 +100,23 @@ function storedState(): ClientAuthState | null {
 export function ClientAuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<ClientAuthState>({
     email: null, memberships: [], activeTenant: 'ABC', mustChangePw: false, isClientAdmin: false,
+    isOwner: false,
     impersonating: false, impersonationMode: 'read', impersonationTenant: null, ready: false,
   })
+
+  // Display-only mirror of the server check: impersonated sessions keep full
+  // view (support), everyone else resolves flags for the active workspace.
+  // Missing flags fall back to role defaults so mock and pre-backfill rows
+  // behave like their assigned role until real flags arrive.
+  const can = useCallback(
+    (key: PermissionKey): boolean => {
+      if (state.impersonating) return true
+      const m = state.memberships.find((x) => x.tenantId === state.activeTenant) ?? state.memberships[0]
+      if (!m) return false
+      return hasPermission(m.role, m.permissions ?? defaultPermissionsFor(m.role), key)
+    },
+    [state.memberships, state.activeTenant, state.impersonating],
+  )
 
   const refresh = useCallback(async () => {
     if (MOCK_MODE) {
@@ -176,7 +201,7 @@ export function ClientAuthProvider({ children }: { children: React.ReactNode }) 
   )
 
   return (
-    <Ctx.Provider value={{ ...state, login, logout, refresh, stopImpersonation, setImpersonationMode }}>
+    <Ctx.Provider value={{ ...state, login, logout, refresh, stopImpersonation, setImpersonationMode, can }}>
       {children}
     </Ctx.Provider>
   )

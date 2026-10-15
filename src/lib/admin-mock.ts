@@ -1,3 +1,5 @@
+import type { Permissions } from './permissions'
+
 export interface AdminTenant {
   id: string
   clientCode: string
@@ -19,6 +21,9 @@ export interface AdminUser {
   role: 'owner' | 'manager' | 'officer' | 'client_user' | 'client_admin' | 'bookkeeper' | 'super_admin'
   status: 'active' | 'disabled'
   mustChangePw: boolean
+  /** Customized flags (owner team editor / operator PATCH). Absent means the
+   *  role defaults apply — see defaultPermissionsFor in lib/permissions. */
+  permissions?: Permissions
 }
 
 const TKEY = 'taxwork-admin-tenants-v3'

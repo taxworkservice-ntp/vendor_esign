@@ -68255,14 +68255,18 @@ async function sessionUser(cookieHeader, cookieName = SESSION_COOKIE) {
     where s.token_hash = ${sha256hex(token)} and s.expires_at > now() and u.status = 'active'`;
   const u = rows[0];
   if (!u) return null;
-  const mems = await db`select workspace_user_id, role from client_members where member_user_id = ${u.id}`;
+  const mems = await db`select workspace_user_id, role, permissions from client_members where member_user_id = ${u.id}`;
   return {
     userId: String(u.id),
     email: String(u.email),
     mustChangePw: Boolean(u.must_change_pw),
     status: String(u.status),
     isPlatformAdmin: Boolean(u.is_platform_admin),
-    memberships: mems.map((m2) => ({ tenantId: String(m2.workspace_user_id), role: String(m2.role) }))
+    memberships: mems.map((m2) => ({
+      tenantId: String(m2.workspace_user_id),
+      role: String(m2.role),
+      permissions: m2.permissions ?? {}
+    }))
   };
 }
 function sessionCookie(token, expiresAt, name = SESSION_COOKIE) {
@@ -68511,8 +68515,12 @@ authRoutes.post("/login", async (c) => {
       { headers: { "Content-Type": "application/json", "Set-Cookie": sessionCookie(token2, expiresAt2, ADMIN_COOKIE) } }
     );
   }
-  const mems = await db`select workspace_user_id, role from client_members where member_user_id = ${String(u.id)}`;
-  const memberships = mems.map((m2) => ({ tenantId: String(m2.workspace_user_id), role: String(m2.role) }));
+  const mems = await db`select workspace_user_id, role, permissions from client_members where member_user_id = ${String(u.id)}`;
+  const memberships = mems.map((m2) => ({
+    tenantId: String(m2.workspace_user_id),
+    role: String(m2.role),
+    permissions: m2.permissions ?? {}
+  }));
   if (!memberships.some((m2) => m2.role === "client_user" || m2.role === "client_admin" || m2.role === "owner" || m2.role === "manager" || m2.role === "officer"))
     return c.json({ error: "not-a-client-user" }, 403);
   await clearLoginFailures(email);
@@ -71221,6 +71229,128 @@ invitePublicRoutes.post("/:token/submit", async (c) => {
   return c.json({ ok: true });
 });
 
+// src/lib/permissions.ts
+var PERMISSION_KEYS = [
+  "canManageVendors",
+  "canManageTransactions",
+  "canManageCatalog",
+  "canManageWht",
+  "canManageSettings",
+  "canVoidDocuments",
+  "canDeleteDocuments"
+];
+var ALLOWED = new Set(PERMISSION_KEYS);
+function normalizePermissions(input) {
+  if (input == null || typeof input !== "object" || Array.isArray(input)) return {};
+  const out = {};
+  for (const [key2, value] of Object.entries(input)) {
+    if (!ALLOWED.has(key2) || typeof value !== "boolean") continue;
+    out[key2] = value;
+  }
+  return out;
+}
+var DEFAULT_MANAGER_PERMS = {
+  canManageVendors: true,
+  canManageTransactions: true,
+  canManageCatalog: true,
+  canManageWht: true,
+  canManageSettings: true,
+  canVoidDocuments: true
+};
+var DEFAULT_OFFICER_PERMS = {
+  canManageVendors: true,
+  canManageTransactions: true,
+  canManageCatalog: true
+};
+function defaultPermissionsFor(role) {
+  if (role === "manager" || role === "client_admin") return { ...DEFAULT_MANAGER_PERMS };
+  if (role === "officer" || role === "client_user") return { ...DEFAULT_OFFICER_PERMS };
+  return {};
+}
+
+// server/src/team.ts
+var teamRoutes = new Hono2();
+function checkTeamEdit(actor, target, body) {
+  if (!actor || actor.role !== "owner") return { ok: false, error: "forbidden" };
+  if (!target) return { ok: false, error: "not-found" };
+  if (target.userId === actor.userId) return { ok: false, error: "forbidden-self" };
+  if (!["manager", "officer", "client_user", "client_admin"].includes(target.role)) {
+    return { ok: false, error: "forbidden-role" };
+  }
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return { ok: false, error: "invalid-body" };
+  }
+  const keys = Object.keys(body);
+  if (keys.length !== 1 || keys[0] !== "permissions") return { ok: false, error: "invalid-body" };
+  return { ok: true, permissions: normalizePermissions(body.permissions) };
+}
+function actorOf(g) {
+  if ("error" in g) return null;
+  if (g.impersonating) return { userId: `impersonator:${g.actor ?? "operator"}`, role: "owner" };
+  if (!g.u) return null;
+  const role = g.u.memberships.find((m2) => m2.tenantId === g.ws)?.role ?? "";
+  return { userId: g.u.userId, role };
+}
+teamRoutes.get("/team", async (c) => {
+  const g = await guard(c);
+  if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  const actor = actorOf(g);
+  if (!actor || actor.role !== "owner") return c.json({ error: "forbidden" }, 403);
+  const db = sql();
+  const rows = await db`select u.id, u.email, cm.role, cm.permissions, u.status, c.must_change_pw
+    from client_members cm
+    join profiles u on u.id = cm.member_user_id
+    left join auth_credentials c on c.user_id = u.id
+    where cm.workspace_user_id = ${g.ws} order by u.email`;
+  return c.json({
+    members: rows.map((r) => ({
+      id: String(r.id),
+      email: String(r.email),
+      role: String(r.role),
+      permissions: r.permissions ?? {},
+      status: String(r.status ?? "active"),
+      mustChangePw: Boolean(r.must_change_pw)
+    }))
+  });
+});
+teamRoutes.patch("/team/:userId", async (c) => {
+  const g = await guard(c);
+  if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  const targetId = c.req.param("userId");
+  const body = await c.req.json().catch(() => null);
+  const db = sql();
+  const trows = await db`select member_user_id, role, permissions from client_members
+    where member_user_id = ${targetId} and workspace_user_id = ${g.ws}`;
+  const t = one(trows);
+  const checked = checkTeamEdit(
+    actorOf(g),
+    t ? { userId: String(t.member_user_id), role: String(t.role) } : void 0,
+    body
+  );
+  if (!checked.ok) {
+    const status = checked.error === "not-found" ? 404 : checked.error === "invalid-body" ? 400 : 403;
+    return c.json({ error: checked.error }, status);
+  }
+  const before = t?.permissions ?? {};
+  await db`update client_members set permissions = ${JSON.stringify(checked.permissions)}::jsonb
+    where member_user_id = ${targetId} and workspace_user_id = ${g.ws}`;
+  const actorUuid = !("error" in g) && !g.impersonating && g.u ? g.u.userId : null;
+  await db`insert into client_permission_audit (workspace_user_id, actor_user_id, target_member_id, action, before, after)
+    values (${g.ws}, ${actorUuid}, ${targetId}, 'member.permissions.updated',
+      ${JSON.stringify({ permissions: before })}::jsonb, ${JSON.stringify({ permissions: checked.permissions })}::jsonb)`;
+  const ip = c.req.header("x-forwarded-for") ?? "local";
+  await withTenant(g.ws, "owner", async () => audit(
+    g.ws,
+    "client_members",
+    targetId,
+    "member.permissions.updated",
+    g.actor,
+    { permissions: checked.permissions },
+    ip
+  ));
+  return c.json({ ok: true });
+});
+
 // server/src/api.ts
 var TENANT = PILOT_TENANT;
 var GATE_MAX = 5;
@@ -71265,6 +71395,7 @@ app.route("/api/client", whtRoutes);
 app.route("/api/client", receiptRoutes);
 app.route("/api/client", inviteClientRoutes);
 app.route("/api/vendor-invite", invitePublicRoutes);
+app.route("/api/client", teamRoutes);
 app.get("/api/health", (c) => c.json({ ok: true, operation: "public", tenant: TENANT }));
 app.get("/api/branding/:tenantId/logo", async (c) => {
   const ip = c.req.header("x-forwarded-for") ?? "local";
@@ -71670,52 +71801,6 @@ app.get("/api/verify/:code", async (c) => {
     voidReason: voided ? r.void_reason ?? null : null
   });
 });
-
-// src/lib/permissions.ts
-var ALL_PERMISSION_KEYS = [
-  "canManageSettings",
-  "canViewReports",
-  "canExportReports",
-  "canViewCustomers",
-  "canManageCustomers",
-  "canViewCatalog",
-  "canManageCatalog",
-  "canCreateEditDocuments",
-  "canManagePayroll",
-  "canManageWht",
-  "canSendDocuments",
-  "canSendQuotations",
-  "canSendDeliveryNotes",
-  "canSendFinancialDocuments",
-  "canRecordPayments",
-  "canVoidDocuments",
-  "canDeleteDocuments"
-];
-var EDITABLE_PERMISSION_KEYS = ALL_PERMISSION_KEYS.filter((k) => k !== "canSendDocuments");
-var ALL = new Set(ALL_PERMISSION_KEYS);
-var EDITABLE = new Set(EDITABLE_PERMISSION_KEYS);
-var LEGACY_ALIASES = {
-  canManageCustomers: ["canViewCustomers"],
-  canManageCatalog: ["canViewCatalog"],
-  canViewReports: ["canExportReports"]
-};
-function normalizePermissions(input, { allowLegacy = false } = {}) {
-  if (input == null) return {};
-  if (typeof input !== "object" || Array.isArray(input)) return {};
-  const allowed = allowLegacy ? ALL : EDITABLE;
-  const out = {};
-  for (const [key2, value] of Object.entries(input)) {
-    if (!allowed.has(key2)) continue;
-    if (typeof value !== "boolean") continue;
-    out[key2] = value;
-  }
-  if (allowLegacy) {
-    for (const [legacyKey, targets] of Object.entries(LEGACY_ALIASES)) {
-      if (input[legacyKey] === true) for (const t of targets) out[t] = true;
-    }
-  }
-  return out;
-}
 
 // server/src/admin.ts
 function adminIpAllowed(ip) {
@@ -72138,7 +72223,7 @@ adminApp.post("/api/admin/tenants/:id/users", async (c) => {
     await db`update profiles set status = 'active', password_hash = ${await hashPassword(password)}, updated_at = now() where id = ${userId}`;
   }
   await db`insert into client_members (member_user_id, workspace_user_id, role, status, password_changed, permissions)
-    values (${userId}, ${id}, ${role}, 'active', false, '{}'::jsonb)
+    values (${userId}, ${id}, ${role}, 'active', false, ${JSON.stringify(defaultPermissionsFor(role))}::jsonb)
     on conflict (member_user_id, workspace_user_id) do update set role = ${role}, status = 'active', password_changed = false`;
   await db`insert into client_permission_audit (workspace_user_id, actor_user_id, target_member_id, action, after)
     values (${id}, ${g.u.userId}, ${userId}, 'user.created', ${JSON.stringify({ role })}::jsonb)`;

@@ -21,6 +21,7 @@ import { receiptRoutes } from './receipts-register'
 import { finalizeReceipt } from './receipts'
 import { contentDisposition, documentFileName } from '../../src/lib/download-name'
 import { inviteClientRoutes, invitePublicRoutes } from './vendor-invites'
+import { teamRoutes } from './team'
 import { PILOT_TENANT, audit, one, rateLimited, gateBlocked, gateFail, gateClear } from './shared'
 
 // ── Public client/vendor operation ─────────────────────────────────────
@@ -100,6 +101,9 @@ app.route('/api/client', receiptRoutes)
 // Vendor self-onboarding: client routes + public invite/submit.
 app.route('/api/client', inviteClientRoutes)
 app.route('/api/vendor-invite', invitePublicRoutes)
+
+// Team permission flags (owner self-service; identity stays operator-owned).
+app.route('/api/client', teamRoutes)
 
 app.get('/api/health', (c) => c.json({ ok: true, operation: 'public', tenant: TENANT }))
 

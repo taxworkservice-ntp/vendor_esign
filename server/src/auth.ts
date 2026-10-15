@@ -1,6 +1,7 @@
 import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto'
 import { promisify } from 'node:util'
 import { sql } from '../../src/server/db'
+import type { Permissions } from '../../src/lib/permissions'
 
 const scryptAsync = promisify(scryptCb) as unknown as (
   pw: string | Buffer,
@@ -70,7 +71,7 @@ export interface SessionUser {
   status: string
   /** Provider/operator account (controls the whole app, member of no client). */
   isPlatformAdmin: boolean
-  memberships: { tenantId: string; role: string }[]
+  memberships: { tenantId: string; role: string; permissions?: Permissions }[]
 }
 
 export const SESSION_COOKIE = 'tw_session'
@@ -111,15 +112,19 @@ export async function sessionUser(
     { id: string; email: string; must_change_pw: boolean; status: string; is_platform_admin: boolean }[]
   const u = rows[0]
   if (!u) return null
-  const mems = (await db`select workspace_user_id, role from client_members where member_user_id = ${u.id}`) as unknown as
-    { workspace_user_id: string; role: string }[]
+  const mems = (await db`select workspace_user_id, role, permissions from client_members where member_user_id = ${u.id}`) as unknown as
+    { workspace_user_id: string; role: string; permissions: Permissions | null }[]
   return {
     userId: String(u.id),
     email: String(u.email),
     mustChangePw: Boolean(u.must_change_pw),
     status: String(u.status),
     isPlatformAdmin: Boolean(u.is_platform_admin),
-    memberships: mems.map((m) => ({ tenantId: String(m.workspace_user_id), role: String(m.role) })),
+    memberships: mems.map((m) => ({
+      tenantId: String(m.workspace_user_id),
+      role: String(m.role),
+      permissions: (m.permissions as Permissions | null) ?? {},
+    })),
   }
 }
 

@@ -13,6 +13,7 @@ import {
   type SessionUser,
 } from './auth'
 import { MAX_PASSWORD_LEN, PILOT_TENANT, audit, clearLoginFailures, dummyPasswordHash, loginLocked, noteLoginFailure, one, rateLimited } from './shared'
+import type { Permissions } from '../../src/lib/permissions'
 import { impersonationFromCookie } from './impersonation'
 
 // Client portal auth (admin-provisioned passwords, no self-signup).
@@ -76,9 +77,13 @@ authRoutes.post('/login', async (c) => {
     )
   }
 
-  const mems = (await db`select workspace_user_id, role from client_members where member_user_id = ${String(u.id)}`) as unknown as
-    { workspace_user_id: string; role: string }[]
-  const memberships = mems.map((m) => ({ tenantId: String(m.workspace_user_id), role: String(m.role) }))
+  const mems = (await db`select workspace_user_id, role, permissions from client_members where member_user_id = ${String(u.id)}`) as unknown as
+    { workspace_user_id: string; role: string; permissions: Permissions | null }[]
+  const memberships = mems.map((m) => ({
+    tenantId: String(m.workspace_user_id),
+    role: String(m.role),
+    permissions: (m.permissions as Permissions | null) ?? {},
+  }))
   if (!memberships.some((m) => m.role === 'client_user' || m.role === 'client_admin' || m.role === 'owner' || m.role === 'manager' || m.role === 'officer'))
     return c.json({ error: 'not-a-client-user' }, 403)
 

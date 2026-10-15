@@ -45,6 +45,12 @@ ADMIN_EMAIL=you@taxwork.local npm run db:seed-admin  # bootstrap super_admin (pr
 - `GET /api/cron/vendor-link-expiry` — **protected** (`Authorization: Bearer $CRON_SECRET`);
   marks payments whose vendor link lapsed as `expired`. `503` if `CRON_SECRET` unset.
 - `GET /api/settings`, `PUT /api/settings` — tenant settings (session-guarded; owner/manager writes).
+- `GET /api/client/team`, `PATCH /api/client/team/:userId` — owner self-service for
+  permission flags (session-guarded, workspace-scoped; **owner only**). The PATCH
+  body carries exactly `{ permissions }` — role/status fields are rejected (400),
+  as are self-edits, owner targets and platform roles (403). Identity (invite,
+  roles, disable) stays operator-owned; there is deliberately no client endpoint
+  for it. Writes audit to `client_permission_audit` + `audit_events`.
 - **Client data (session-guarded, workspace-scoped, RLS):**
   - `GET/POST /api/client/vendors`, `PATCH /api/client/vendors/:id` — vendor (payee) directory; tax IDs encrypted at rest.
     `GET /vendors?includeArchived=1` also returns archived suppliers; without it

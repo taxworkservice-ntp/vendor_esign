@@ -5,6 +5,7 @@ import { useClientAuth } from '../lib/client-auth'
 import { CONSENT_VARS_MISSING_ERROR, CONSENT_VERSION_REQUIRED_ERROR, currentBeYear, validateSettings, type TenantSettings } from '../lib/settings'
 import { signDownload, signUpload, uploadToR2 } from '../lib/r2-assets'
 import { Card, CardBody } from '../components/ui/card'
+import { TeamSection } from '../components/settings/team-section'
 import { PageHeader } from '../components/ui/page-header'
 import { Button } from '../components/ui/button'
 import { FieldError, Input, Label, Textarea } from '../components/ui/input'
@@ -28,7 +29,7 @@ function Section({ step, title, desc, children }: { step: string; title: string;
 }
 
 export function Settings() {
-  const { isClientAdmin, ready } = useClientAuth()
+  const { isClientAdmin, isOwner, ready } = useClientAuth()
   const { data } = useSettings()
   const save = useUpdateSettings()
   const toast = useToast()
@@ -252,6 +253,12 @@ export function Settings() {
           />
         </div>
       </Section>
+
+      {isOwner && (
+        <Section step="5" title="สิทธิ์ทีมงาน" desc="เจ้าของบัญชีจัดการได้เฉพาะสิทธิ์ของผู้จัดการและเจ้าหน้าที่ — เชิญสมาชิก เปลี่ยนบทบาท และปิดใช้งานบัญชี ติดต่อผู้ให้บริการ">
+          <TeamSection />
+        </Section>
+      )}
 
       {msg && <p className={`text-body font-medium ${msg === 'บันทึกแล้ว' ? 'text-success' : 'text-danger'}`}>{msg}</p>}
       {!readOnly && (

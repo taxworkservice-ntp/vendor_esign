@@ -22,7 +22,7 @@ import {
   signImpersonation,
   type ImpersonationMode,
 } from './impersonation'
-import { normalizePermissions } from '../../src/lib/permissions'
+import { defaultPermissionsFor, normalizePermissions } from '../../src/lib/permissions'
 import { DEFAULT_CONSENT } from '../../src/lib/settings-types'
 
 // ── Provider / operator console ────────────────────────────────────────────
@@ -497,8 +497,11 @@ adminApp.post('/api/admin/tenants/:id/users', async (c) => {
         must_change_pw = true, temp_expires_at = excluded.temp_expires_at, updated_at = now()`
     await db`update profiles set status = 'active', password_hash = ${await hashPassword(password)}, updated_at = now() where id = ${userId}`
   }
+  // New memberships start from the role defaults (owner holds everything
+  // implicitly, so nothing is stored for them). Re-adding an existing member
+  // keeps their customized flags — the conflict path never touches permissions.
   await db`insert into client_members (member_user_id, workspace_user_id, role, status, password_changed, permissions)
-    values (${userId}, ${id}, ${role}, 'active', false, '{}'::jsonb)
+    values (${userId}, ${id}, ${role}, 'active', false, ${JSON.stringify(defaultPermissionsFor(role))}::jsonb)
     on conflict (member_user_id, workspace_user_id) do update set role = ${role}, status = 'active', password_changed = false`
   await db`insert into client_permission_audit (workspace_user_id, actor_user_id, target_member_id, action, after)
     values (${id}, ${g.u.userId}, ${userId}, 'user.created', ${JSON.stringify({ role })}::jsonb)`

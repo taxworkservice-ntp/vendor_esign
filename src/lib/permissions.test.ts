@@ -1,33 +1,64 @@
 import { describe, expect, it } from 'vitest'
-import { EDITABLE_PERMISSION_KEYS, hasPermission, normalizePermissions } from './permissions'
+import {
+  DEFAULT_MANAGER_PERMS,
+  DEFAULT_OFFICER_PERMS,
+  PERMISSION_KEYS,
+  PERMISSION_META,
+  defaultPermissionsFor,
+  hasPermission,
+  normalizePermissions,
+} from './permissions'
 
-describe('permissions', () => {
-  it('owner has everything implicitly; others are gated', () => {
-    expect(hasPermission('owner', {}, 'canVoidDocuments')).toBe(true)
+describe('workspace permissions', () => {
+  it('owner has everything implicitly; others are strictly flag-driven', () => {
+    expect(hasPermission('owner', {}, 'canDeleteDocuments')).toBe(true)
+    expect(hasPermission('owner', undefined, 'canManageSettings')).toBe(true)
     expect(hasPermission('manager', { canVoidDocuments: true }, 'canVoidDocuments')).toBe(true)
-    expect(hasPermission('officer', {}, 'canVoidDocuments')).toBe(false)
+    expect(hasPermission('manager', {}, 'canVoidDocuments')).toBe(false)
+    expect(hasPermission('officer', {}, 'canManageTransactions')).toBe(false)
+    expect(hasPermission('officer', undefined, 'canManageTransactions')).toBe(false)
   })
 
-  it('normalizes to known boolean keys only (drops canSendDocuments by default)', () => {
+  it('normalizes to known boolean keys only', () => {
     const p = normalizePermissions({
       canManageCatalog: true,
-      canSendDocuments: true, // legacy, not editable
+      canVoidDocuments: false,
       junk: true,
-      canVoidDocuments: 'yes', // non-boolean dropped
+      canManageWht: 'yes', // non-boolean dropped
     })
-    expect(p).toEqual({ canManageCatalog: true })
+    expect(p).toEqual({ canManageCatalog: true, canVoidDocuments: false })
   })
 
-  it('expands legacy aliases when allowed', () => {
-    const p = normalizePermissions({ canManageCustomers: true, canViewReports: true }, { allowLegacy: true })
-    expect(p.canManageCustomers).toBe(true)
-    expect(p.canViewCustomers).toBe(true)
-    expect(p.canViewReports).toBe(true)
-    expect(p.canExportReports).toBe(true)
+  it('normalizes garbage to empty', () => {
+    expect(normalizePermissions(null)).toEqual({})
+    expect(normalizePermissions(undefined)).toEqual({})
+    expect(normalizePermissions(['canManageCatalog'])).toEqual({})
+    expect(normalizePermissions('owner')).toEqual({})
   })
 
-  it('exposes the editable key set without canSendDocuments', () => {
-    expect(EDITABLE_PERMISSION_KEYS).not.toContain('canSendDocuments')
-    expect(EDITABLE_PERMISSION_KEYS.length).toBeGreaterThan(10)
+  it('role defaults match the locked spec (manager broad, officer daily)', () => {
+    expect(defaultPermissionsFor('manager')).toEqual(DEFAULT_MANAGER_PERMS)
+    expect(defaultPermissionsFor('officer')).toEqual(DEFAULT_OFFICER_PERMS)
+    expect(DEFAULT_MANAGER_PERMS.canDeleteDocuments).toBeUndefined()
+    expect(DEFAULT_OFFICER_PERMS.canManageWht).toBeUndefined()
+    expect(DEFAULT_OFFICER_PERMS.canManageSettings).toBeUndefined()
+    expect(DEFAULT_OFFICER_PERMS.canVoidDocuments).toBeUndefined()
+    expect(DEFAULT_OFFICER_PERMS.canDeleteDocuments).toBeUndefined()
+    // Legacy rows resolve to their modern equivalents; owners store nothing.
+    expect(defaultPermissionsFor('client_admin')).toEqual(DEFAULT_MANAGER_PERMS)
+    expect(defaultPermissionsFor('client_user')).toEqual(DEFAULT_OFFICER_PERMS)
+    expect(defaultPermissionsFor('owner')).toEqual({})
+    expect(defaultPermissionsFor('super_admin')).toEqual({})
+    // Copies, never shared references.
+    expect(defaultPermissionsFor('manager')).not.toBe(DEFAULT_MANAGER_PERMS)
+  })
+
+  it('every key has a Thai label for the owner editor', () => {
+    expect(PERMISSION_KEYS).toHaveLength(7)
+    for (const k of PERMISSION_KEYS) {
+      expect(PERMISSION_META[k].label.length).toBeGreaterThan(0)
+      expect(PERMISSION_META[k].desc.length).toBeGreaterThan(0)
+      expect(['daily', 'finance', 'danger']).toContain(PERMISSION_META[k].group)
+    }
   })
 })
