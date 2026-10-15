@@ -3,7 +3,9 @@ import type { CreateTxnInput, PaymentTransaction } from '../lib/types'
 import { calcWht, isDuplicateSlipRef } from '../lib/config'
 import { applyWhtThreshold } from '../lib/wht-calc'
 import { loadSettings } from '../lib/settings'
-import { itemsSummary, itemsTotal } from '../lib/line-items'
+import { whtRateFor } from '../lib/settings-types'
+import { resolveTransactionTax, subNotesSubset } from '../lib/item-tax'
+import { itemsSummary, itemsTotal, normalizeLineItem } from '../lib/line-items'
 import { normalizeTaxId, taxIdHash, taxIdLast4 } from '../lib/taxid'
 import {
   emptyFilters,
@@ -17,6 +19,7 @@ import {
 } from '../lib/txn-filters'
 import { EXPORT_LIMIT, pagedQuery, queryFromFilters, queryToParams } from '../lib/txn-list-query'
 import { loadTxns, saveTxns } from '../lib/mock'
+import { loadItems } from '../lib/items-mock'
 import { loadVendors } from '../lib/vendors-mock'
 import { currentBeYear } from '../lib/settings'
 import { nextReceiptNumber } from '../lib/receipt-number'
@@ -181,13 +184,28 @@ export function useCreateTransaction() {
         throw new Error('เลขที่อ้างอิงสลิปนี้ถูกใช้แล้ว — โปรดตรวจสอบสลิปซ้ำ')
       }
       const lineItems = input.lineItems
-        .map((it) => ({ description: it.description.trim(), amount: Number(it.amount) || 0 }))
+        .map((it) => normalizeLineItem(it))
         .filter((it) => it.description && it.amount > 0)
       if (lineItems.length === 0) throw new Error('กรุณาเพิ่มรายการอย่างน้อย 1 บรรทัด')
+      // Mirror the server: tax derives from the picked catalog items, never
+      // from submitted values. (The mock omits the authorized forceWht path —
+      // dev-only; the server enforces it.)
+      const catById = new Map(loadItems(activeTenant).map((c) => [c.id, c]))
+      const resolved: { paymentType: string }[] = []
+      for (const it of lineItems) {
+        const cat = it.itemId ? catById.get(it.itemId) : undefined
+        if (!cat) throw new Error('ไม่พบรายการในคลัง — โปรดเลือกใหม่')
+        const ptype = (cat.paymentType ?? '').trim()
+        if (!ptype) throw new Error('มีรายการที่ยังไม่ได้ตั้งประเภทภาษี — ติดต่อเจ้าของบัญชี')
+        if (!subNotesSubset(it.subItems, cat.subItems)) throw new Error('หมายเหตุย่อยไม่ตรงกับที่กำหนดไว้')
+        resolved.push({ paymentType: ptype })
+      }
+      const tax = resolveTransactionTax(resolved)
+      if (!tax.ok) throw new Error('รายการที่เลือกมีประเภทภาษีต่างกัน — กรุณาแยกเป็นคนละรายการกัน')
       const base = itemsTotal(lineItems)
       // มาตรา 50/1 — same rule the server applies, so the mock cannot drift.
       const s = loadSettings(activeTenant)
-      const eff = applyWhtThreshold(base, input.whtRate, input.paymentType, s.whtMinThreshold, !!input.forceWht)
+      const eff = applyWhtThreshold(base, whtRateFor(tax.paymentType, s), tax.paymentType, s.whtMinThreshold, false)
       const { gross, wht, net } = calcWht(base, eff.rate, input.whtMode)
       const found = loadVendors(activeTenant).find((v) => v.id === input.vendorId)
       if (!found) throw new Error('กรุณาเลือกผู้ขาย')

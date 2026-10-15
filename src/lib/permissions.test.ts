@@ -36,12 +36,14 @@ describe('workspace permissions', () => {
     expect(normalizePermissions('owner')).toEqual({})
   })
 
-  it('role defaults match the locked spec (manager broad, officer daily)', () => {
+  it('role defaults match the locked spec (manager broad, officer daily, catalog owner-only)', () => {
     expect(defaultPermissionsFor('manager')).toEqual(DEFAULT_MANAGER_PERMS)
     expect(defaultPermissionsFor('officer')).toEqual(DEFAULT_OFFICER_PERMS)
     expect(DEFAULT_MANAGER_PERMS.canDeleteDocuments).toBeUndefined()
+    expect(DEFAULT_MANAGER_PERMS.canManageCatalog).toBeUndefined()
     expect(DEFAULT_OFFICER_PERMS.canManageWht).toBeUndefined()
     expect(DEFAULT_OFFICER_PERMS.canManageSettings).toBeUndefined()
+    expect(DEFAULT_OFFICER_PERMS.canManageCatalog).toBeUndefined()
     expect(DEFAULT_OFFICER_PERMS.canVoidDocuments).toBeUndefined()
     expect(DEFAULT_OFFICER_PERMS.canDeleteDocuments).toBeUndefined()
     // Legacy rows resolve to their modern equivalents; owners store nothing.

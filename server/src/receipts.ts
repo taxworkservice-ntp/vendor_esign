@@ -141,9 +141,13 @@ export async function finalizeReceipt(txnId: string, ip: string): Promise<Finali
     })
   }
 
-  const rawItems = Array.isArray(d.line_items) ? (d.line_items as { description?: unknown; amount?: unknown }[]) : []
+  const rawItems = Array.isArray(d.line_items) ? (d.line_items as { description?: unknown; amount?: unknown; subItems?: unknown }[]) : []
   const lineItems = rawItems
-    .map((it) => ({ description: String(it.description ?? ''), amount: Number(it.amount) || 0 }))
+    .map((it) => ({
+      description: String(it.description ?? ''),
+      amount: Number(it.amount) || 0,
+      subItems: Array.isArray(it.subItems) ? (it.subItems as unknown[]).filter((s): s is string => typeof s === 'string') : [],
+    }))
     .filter((it) => it.description.trim() || it.amount > 0)
   // Read the vendor's signature through the storage seam so it comes from R2
   // when configured — a serverless instance rarely has the file on local disk.

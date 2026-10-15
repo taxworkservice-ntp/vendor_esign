@@ -15,7 +15,8 @@ export function lineTotal(it: Partial<LineItem>): number {
 }
 
 // Fill defaults and recompute `amount`. Keeps optional fields absent when unset
-// so legacy/simple items stay clean.
+// so legacy/simple items stay clean. Catalog linkage (`itemId`) and the ticked
+// sub-note snapshot ride along untouched — they are identity/evidence, not money.
 export function normalizeLineItem(raw: Partial<LineItem>): LineItem {
   const quantity = raw.quantity != null ? Number(raw.quantity) || 0 : 1
   const unitPrice = raw.unitPrice != null ? Number(raw.unitPrice) || 0 : Number(raw.amount) || 0
@@ -26,6 +27,9 @@ export function normalizeLineItem(raw: Partial<LineItem>): LineItem {
   item.quantity = quantity
   item.unitPrice = unitPrice
   if (discount) item.discount = discount
+  if (typeof raw.itemId === 'string' && raw.itemId) item.itemId = raw.itemId
+  const subs = (raw.subItems ?? []).filter((s): s is string => typeof s === 'string' && !!s.trim())
+  if (subs.length) item.subItems = subs
   item.amount = lineTotal(item)
   return item
 }

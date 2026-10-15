@@ -4,6 +4,8 @@ import { sql, withTenant } from '../../src/server/db'
 import { canDo, guard } from './data'
 import { sha256hex } from './auth'
 import { applyWhtThreshold, calcWht } from '../../src/lib/wht-calc'
+import { resolveTransactionTax, subNotesSubset } from '../../src/lib/item-tax'
+import { whtRateFor } from '../../src/lib/settings-types'
 import { getTenantSettings } from './settings'
 import { getPlatformSettingsCached } from './platform'
 import { itemsSummary, itemsTotal, normalizeLineItem } from '../../src/lib/line-items'
@@ -403,20 +405,43 @@ txnRoutes.post('/transactions', async (c) => {
     .map((it) => normalizeLineItem(it as never))
     .filter((it) => it.description && it.amount > 0)
   if (!b?.vendorId || items.length === 0) return c.json({ error: 'invalid-body' }, 400)
+  const db = sql()
   // Gross-up is disabled platform-wide by default (operator flag): force the
   // standard "หักจากยอดชำระ" so it cannot be set via the API either.
   const { flags } = await getPlatformSettingsCached()
   const whtMode = flags.whtGrossUp === true && b.whtMode === 'grossup' ? 'grossup' : 'deduct'
   const base = itemsTotal(items)
-  // มาตรา 50/1 — server is authoritative: re-derive the effective rate/type
-  // from the tenant threshold rather than trusting the submitted values.
   const settings = await getTenantSettings(g.ws)
+  // Tax is item-driven and server-authoritative: the payment type/rate come
+  // from the referenced catalog items, never from the submitted values. Every
+  // line must resolve to one shared type; sub-notes must be a subset of the
+  // item's defined list (selection only — no invented notes).
+  const catRows = (await db`select id, payment_type, sub_items from items where user_id = ${g.ws}`) as unknown as
+    { id: string; payment_type: string | null; sub_items: unknown }[]
+  const catById = new Map(catRows.map((r) => [String(r.id), r]))
+  const resolved: { paymentType: string }[] = []
+  for (const it of items) {
+    if (!it.itemId) return c.json({ error: 'missing-item-ref' }, 400)
+    const cat = catById.get(it.itemId)
+    if (!cat) return c.json({ error: 'unknown-item' }, 400)
+    const ptype = String(cat.payment_type ?? '').trim()
+    if (!ptype) return c.json({ error: 'missing-item-tax' }, 400)
+    const defined = Array.isArray(cat.sub_items) ? (cat.sub_items as unknown[]).filter((s): s is string => typeof s === 'string') : []
+    if (!subNotesSubset(it.subItems, defined)) return c.json({ error: 'invalid-sub-items' }, 400)
+    resolved.push({ paymentType: ptype })
+  }
+  const tax = resolveTransactionTax(resolved)
+  if (!tax.ok) return c.json({ error: tax.error }, 400)
+  // มาตรา 50/1 — threshold stays server-authoritative on the derived rate.
+  // forceWht is honored only from catalog managers (the form never sends it);
+  // everyone else gets the plain rule, so officers cannot switch tax on.
+  const allowForce = !!b.forceWht && canDo(g, 'canManageCatalog')
   const eff = applyWhtThreshold(
     base,
-    Number(b.whtRate) || 0,
-    b.paymentType ?? 'ค่าบริการ',
+    whtRateFor(tax.paymentType, settings),
+    tax.paymentType,
     settings.whtMinThreshold,
-    !!b.forceWht,
+    allowForce,
   )
   const { gross, wht, net } = calcWht(base, eff.rate, whtMode)
   const note = (b.note ?? '').trim()

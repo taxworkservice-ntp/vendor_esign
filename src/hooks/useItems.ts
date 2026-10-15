@@ -60,19 +60,24 @@ export function useSaveItem() {
   const qc = useQueryClient()
   const { activeTenant } = useClientAuth()
   return useMutation({
-    mutationFn: async (input: { id?: string; name: string; unit: string; unitPrice: number }) => {
+    mutationFn: async (input: { id?: string; name: string; unit: string; unitPrice: number; paymentType?: string; subItems?: string[] }) => {
       const name = input.name.trim()
       if (name.length < 2) throw new Error('กรุณากรอกชื่อรายการ')
       const unit = input.unit.trim() || 'รายการ'
       const unitPrice = Math.max(0, Number(input.unitPrice) || 0)
+      // Every usable item carries its WHT type (owner-set). The server
+      // validates it against the workspace rate table; the mock mirrors that.
+      const paymentType = (input.paymentType ?? '').trim()
+      if (!paymentType) throw new Error('กรุณาเลือกประเภทภาษีของรายการ')
+      const subItems = (input.subItems ?? []).map((s) => s.trim()).filter(Boolean).slice(0, 10)
 
       if (hasServer) {
         if (input.id) {
-          await apiSend(`/api/client/items/${input.id}`, 'PATCH', { name, unit, unitPrice })
+          await apiSend(`/api/client/items/${input.id}`, 'PATCH', { name, unit, unitPrice, paymentType, subItems })
           return { ok: true }
         }
         try {
-          return await apiSend('/api/client/items', 'POST', { name, unit, unitPrice })
+          return await apiSend('/api/client/items', 'POST', { name, unit, unitPrice, paymentType, subItems })
         } catch (e) {
           // The server owns uniqueness (migration 015); translate its conflict
           // into the same message the mock produces, so the UI behaves the same
@@ -100,6 +105,8 @@ export function useSaveItem() {
         name,
         unit,
         unitPrice,
+        paymentType,
+        subItems,
         isActive: prev?.isActive ?? true,
         createdAt: prev?.createdAt ?? new Date().toISOString(),
       }

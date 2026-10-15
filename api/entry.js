@@ -67667,6 +67667,9 @@ var DEFAULT_VENDOR_INVITE_TEMPLATE = `\u0E40\u0E23\u0E35\u0E22\u0E19 \u0E1C\u0E3
 {{client}} \u0E02\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E23\u0E48\u0E27\u0E21\u0E21\u0E37\u0E2D\u0E01\u0E23\u0E2D\u0E01\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E1C\u0E39\u0E49\u0E02\u0E32\u0E22 \u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E43\u0E0A\u0E49\u0E43\u0E19\u0E01\u0E32\u0E23\u0E2D\u0E2D\u0E01\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19\u0E41\u0E25\u0E30\u0E42\u0E2D\u0E19\u0E40\u0E07\u0E34\u0E19\u0E43\u0E2B\u0E49\u0E17\u0E48\u0E32\u0E19\u0E2D\u0E22\u0E48\u0E32\u0E07\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07
 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E01\u0E23\u0E2D\u0E01\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E41\u0E25\u0E30\u0E41\u0E19\u0E1A\u0E40\u0E2D\u0E01\u0E2A\u0E32\u0E23\u0E1C\u0E48\u0E32\u0E19\u0E25\u0E34\u0E07\u0E01\u0E4C\u0E19\u0E35\u0E49 (\u0E43\u0E0A\u0E49\u0E40\u0E27\u0E25\u0E32\u0E1B\u0E23\u0E30\u0E21\u0E32\u0E13 2\u20133 \u0E19\u0E32\u0E17\u0E35)
 {{link}}`;
+function whtRateFor(paymentType, s) {
+  return s.whtRates.find((r) => r.paymentType === paymentType)?.value ?? 0;
+}
 
 // src/lib/format.ts
 var fmtTHB = (n) => n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -68819,6 +68822,9 @@ function normalizeLineItem(raw2) {
   item.quantity = quantity;
   item.unitPrice = unitPrice;
   if (discount) item.discount = discount;
+  if (typeof raw2.itemId === "string" && raw2.itemId) item.itemId = raw2.itemId;
+  const subs = (raw2.subItems ?? []).filter((s) => typeof s === "string" && !!s.trim());
+  if (subs.length) item.subItems = subs;
   item.amount = lineTotal(item);
   return item;
 }
@@ -68885,6 +68891,32 @@ function toItems(raw2) {
   }).filter((it2) => it2.description && it2.amount > 0);
 }
 
+// src/lib/item-tax.ts
+function resolveTransactionTax(items) {
+  if (items.length === 0) return { ok: false, error: "no-items" };
+  const types = items.map((it2) => (it2.paymentType ?? "").trim()).filter(Boolean);
+  if (types.length === 0) return { ok: false, error: "missing-item-tax" };
+  const first = types[0];
+  if (!types.every((t) => t === first)) return { ok: false, error: "mixed-tax-types" };
+  return { ok: true, paymentType: first };
+}
+function subNotesSubset(selected, defined) {
+  const sel = (selected ?? []).map((s) => s.trim()).filter(Boolean);
+  if (sel.length === 0) return true;
+  const allowed = new Set((defined ?? []).map((s) => s.trim()).filter(Boolean));
+  return sel.every((s) => allowed.has(s));
+}
+function cleanSubNotes(raw2, maxItems = 10, maxLen = 120) {
+  if (!Array.isArray(raw2)) return [];
+  const out = [];
+  for (const v2 of raw2) {
+    if (typeof v2 !== "string") continue;
+    const s = v2.trim().slice(0, maxLen);
+    if (s && !out.includes(s) && out.length < maxItems) out.push(s);
+  }
+  return out;
+}
+
 // src/lib/permissions.ts
 var PERMISSION_KEYS = [
   "canManageVendors",
@@ -68912,15 +68944,13 @@ function hasPermission(role, permissions, key2) {
 var DEFAULT_MANAGER_PERMS = {
   canManageVendors: true,
   canManageTransactions: true,
-  canManageCatalog: true,
   canManageWht: true,
   canManageSettings: true,
   canVoidDocuments: true
 };
 var DEFAULT_OFFICER_PERMS = {
   canManageVendors: true,
-  canManageTransactions: true,
-  canManageCatalog: true
+  canManageTransactions: true
 };
 function defaultPermissionsFor(role) {
   if (role === "manager" || role === "client_admin") return { ...DEFAULT_MANAGER_PERMS };
@@ -69211,6 +69241,8 @@ var toItem = (r) => ({
   name: String(r.name),
   unit: String(r.unit ?? "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23"),
   unitPrice: Number(r.unit_price ?? 0),
+  paymentType: String(r.payment_type ?? ""),
+  subItems: Array.isArray(r.sub_items) ? r.sub_items.filter((s) => typeof s === "string") : [],
   isActive: r.is_active === void 0 ? true : Boolean(r.is_active),
   createdAt: new Date(String(r.created_at ?? Date.now())).toISOString()
 });
@@ -69221,7 +69253,7 @@ dataRoutes.get("/items", async (c) => {
   const rows = await withTenant(g.ws, "client", async () => {
     const db = sql();
     return await db.query(
-      `select id, user_id, item_no, name, unit, unit_price, is_active, created_at
+      `select id, user_id, item_no, name, unit, unit_price, payment_type, sub_items, is_active, created_at
        from items where user_id = $1 ${includeArchived ? "" : "and is_active"}
        order by item_no desc`,
       [g.ws]
@@ -69236,6 +69268,10 @@ dataRoutes.post("/items", async (c) => {
   const b2 = await c.req.json().catch(() => null);
   const name = (b2?.name ?? "").trim();
   if (name.length < 2) return c.json({ error: "invalid-body" }, 400);
+  const settings = await getTenantSettings(g.ws);
+  const paymentType = (b2?.paymentType ?? "").trim();
+  if (!paymentType || !settings.paymentTypes.includes(paymentType)) return c.json({ error: "invalid-tax-type" }, 400);
+  const subItems = cleanSubNotes(b2?.subItems);
   const dup = await withTenant(g.ws, "client", async () => {
     const db = sql();
     const rows = await db.query(
@@ -69247,11 +69283,12 @@ dataRoutes.post("/items", async (c) => {
   if (dup) return c.json({ error: "duplicate-item", existing: dup }, 409);
   const row = await withTenant(g.ws, "client", async () => {
     const db = sql();
-    const ins = await db`insert into items (user_id, item_no, name, unit, unit_price)
+    const ins = await db`insert into items (user_id, item_no, name, unit, unit_price, payment_type, sub_items)
       values (${g.ws},
         (select coalesce(max(item_no), 0) + 1 from items where user_id = ${g.ws}),
-        ${name}, ${(b2?.unit ?? "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23").trim() || "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23"}, ${Math.max(0, Number(b2?.unitPrice) || 0)})
-      returning id, user_id, item_no, name, unit, unit_price, is_active, created_at`;
+        ${name}, ${(b2?.unit ?? "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23").trim() || "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23"}, ${Math.max(0, Number(b2?.unitPrice) || 0)},
+        ${paymentType}, ${JSON.stringify(subItems)}::jsonb)
+      returning id, user_id, item_no, name, unit, unit_price, payment_type, sub_items, is_active, created_at`;
     return ins[0];
   });
   return c.json({ ok: true, item: toItem(row) });
@@ -69274,12 +69311,26 @@ dataRoutes.patch("/items/:id", async (c) => {
     });
     if (dup) return c.json({ error: "duplicate-item", existing: dup }, 409);
   }
+  let nextPaymentType = null;
+  let nextSubItems = null;
+  if (b2?.paymentType !== void 0 || b2?.subItems !== void 0) {
+    const settings = await getTenantSettings(g.ws);
+    if (b2?.paymentType !== void 0) {
+      nextPaymentType = (b2.paymentType ?? "").trim();
+      if (!nextPaymentType || !settings.paymentTypes.includes(nextPaymentType)) {
+        return c.json({ error: "invalid-tax-type" }, 400);
+      }
+    }
+    if (b2?.subItems !== void 0) nextSubItems = cleanSubNotes(b2.subItems);
+  }
   await withTenant(g.ws, "client", async () => {
     const db = sql();
     await db`update items set
       name = coalesce(${b2?.name ?? null}, name),
       unit = coalesce(${b2?.unit ?? null}, unit),
       unit_price = coalesce(${b2?.unitPrice ?? null}, unit_price),
+      payment_type = coalesce(${nextPaymentType}, payment_type),
+      sub_items = coalesce(${nextSubItems ? JSON.stringify(nextSubItems) : null}::jsonb, sub_items),
       is_active = coalesce(${b2?.isActive === void 0 ? null : Boolean(b2.isActive)}, is_active),
       updated_at = now()
       where id = ${c.req.param("id")} and user_id = ${g.ws}`;
@@ -69981,23 +70032,40 @@ txnRoutes.post("/transactions", async (c) => {
   const b2 = await c.req.json().catch(() => null);
   const items = (Array.isArray(b2?.lineItems) ? b2.lineItems : []).map((it2) => normalizeLineItem(it2)).filter((it2) => it2.description && it2.amount > 0);
   if (!b2?.vendorId || items.length === 0) return c.json({ error: "invalid-body" }, 400);
+  const db = sql();
   const { flags } = await getPlatformSettingsCached();
   const whtMode = flags.whtGrossUp === true && b2.whtMode === "grossup" ? "grossup" : "deduct";
   const base = itemsTotal(items);
   const settings = await getTenantSettings(g.ws);
+  const catRows = await db`select id, payment_type, sub_items from items where user_id = ${g.ws}`;
+  const catById = new Map(catRows.map((r) => [String(r.id), r]));
+  const resolved = [];
+  for (const it2 of items) {
+    if (!it2.itemId) return c.json({ error: "missing-item-ref" }, 400);
+    const cat = catById.get(it2.itemId);
+    if (!cat) return c.json({ error: "unknown-item" }, 400);
+    const ptype = String(cat.payment_type ?? "").trim();
+    if (!ptype) return c.json({ error: "missing-item-tax" }, 400);
+    const defined = Array.isArray(cat.sub_items) ? cat.sub_items.filter((s) => typeof s === "string") : [];
+    if (!subNotesSubset(it2.subItems, defined)) return c.json({ error: "invalid-sub-items" }, 400);
+    resolved.push({ paymentType: ptype });
+  }
+  const tax = resolveTransactionTax(resolved);
+  if (!tax.ok) return c.json({ error: tax.error }, 400);
+  const allowForce = !!b2.forceWht && canDo(g, "canManageCatalog");
   const eff = applyWhtThreshold(
     base,
-    Number(b2.whtRate) || 0,
-    b2.paymentType ?? "\u0E04\u0E48\u0E32\u0E1A\u0E23\u0E34\u0E01\u0E32\u0E23",
+    whtRateFor(tax.paymentType, settings),
+    tax.paymentType,
     settings.whtMinThreshold,
-    !!b2.forceWht
+    allowForce
   );
   const { gross, wht, net } = calcWht(base, eff.rate, whtMode);
   const note = (b2.note ?? "").trim();
   const taxId = norm(b2.vendorTaxId ?? "");
   const row = await withTenant(g.ws, "owner", async () => {
-    const db = sql();
-    const ins = await db`
+    const db2 = sql();
+    const ins = await db2`
       insert into vendor_payables (user_id, ref, vendor_id, payment_type, description, note, line_items,
         gross_amount, wht_rate, wht_mode, wht_amount, net_amount, transfer_date, slip_reference, status,
         tax_id_hash, tax_id_last4, created_by)
@@ -70783,7 +70851,8 @@ async function buildReceiptPdf(input) {
   const items = normalizeItems(input);
   items.forEach((it2, i) => {
     const lines = wrap(it2.description || "\u2014", regular, 9.5, descW);
-    const rowH = Math.max(20, lines.length * 14 + 6);
+    const subs = (it2.subItems ?? []).flatMap((s) => wrap(`\u2022 ${s}`, regular, 8.5, descW));
+    const rowH = Math.max(20, (lines.length + subs.length) * 14 + 6);
     if (y - rowH < ITEMS_LIMIT) {
       newPage(true);
       itemsHeader();
@@ -70791,6 +70860,7 @@ async function buildReceiptPdf(input) {
     if (i % 2 === 1) page.drawRectangle({ x: M - 6, y: y - rowH + 4, width: maxW + 12, height: rowH - 4, color: ZEBRA });
     text(String(i + 1), M + numW - regular.widthOfTextAtSize(String(i + 1), 9.5), y - 10, 9.5, regular, MUTED);
     lines.forEach((ln2, li) => text(ln2, descX, y - 10 - li * 14, 9.5, regular, INK));
+    subs.forEach((ln2, si) => text(ln2, descX + 10, y - 10 - (lines.length + si) * 14, 8.5, regular, MUTED));
     rightText(`${it2.quantity ?? 1}`, qtyRight, y - 10, 9.5, regular, INK);
     rightText(`${it2.unit || "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23"}`, unitRight, y - 10, 9.5, regular, INK);
     rightText(`${thb(it2.unitPrice ?? it2.amount)}`, priceRight, y - 10, 9.5, regular, INK);
@@ -70959,7 +71029,11 @@ async function finalizeReceipt(txnId, ip) {
     });
   }
   const rawItems = Array.isArray(d2.line_items) ? d2.line_items : [];
-  const lineItems = rawItems.map((it2) => ({ description: String(it2.description ?? ""), amount: Number(it2.amount) || 0 })).filter((it2) => it2.description.trim() || it2.amount > 0);
+  const lineItems = rawItems.map((it2) => ({
+    description: String(it2.description ?? ""),
+    amount: Number(it2.amount) || 0,
+    subItems: Array.isArray(it2.subItems) ? it2.subItems.filter((s) => typeof s === "string") : []
+  })).filter((it2) => it2.description.trim() || it2.amount > 0);
   const sig = await readStoredDurable(rowTenant, d2.signature_image_path);
   const verifyUrl = `${PUBLIC_BASE}/verify/${code.toUpperCase()}`;
   const { bytes, sha256: sha2562 } = await buildReceiptPdf({

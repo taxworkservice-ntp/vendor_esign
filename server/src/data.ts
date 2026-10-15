@@ -9,6 +9,8 @@ import { audit } from './shared'
 import type { SessionUser } from './auth'
 import { isVendorPrefix, prefixRequired } from '../../src/lib/vendor-name'
 import { getVendorMemory } from './vendor-memory'
+import { getTenantSettings } from './settings'
+import { cleanSubNotes } from '../../src/lib/item-tax'
 import { defaultPermissionsFor, hasPermission, type PermissionKey } from '../../src/lib/permissions'
 
 // ── Client data API (vendors + items) ─────────────────────────────────────
@@ -387,6 +389,8 @@ dataRoutes.delete('/vendors/:id', async (c) => {
 const toItem = (r: Record<string, unknown>) => ({
   id: String(r.id), tenantId: String(r.user_id), itemNo: Number(r.item_no ?? 0), name: String(r.name),
   unit: String(r.unit ?? 'รายการ'), unitPrice: Number(r.unit_price ?? 0),
+  paymentType: String(r.payment_type ?? ''),
+  subItems: Array.isArray(r.sub_items) ? (r.sub_items as unknown[]).filter((s): s is string => typeof s === 'string') : [],
   isActive: r.is_active === undefined ? true : Boolean(r.is_active),
   createdAt: new Date(String(r.created_at ?? Date.now())).toISOString(),
 })
@@ -398,7 +402,7 @@ dataRoutes.get('/items', async (c) => {
   const rows = await withTenant(g.ws, 'client', async () => {
     const db = sql()
     return (await db.query(
-      `select id, user_id, item_no, name, unit, unit_price, is_active, created_at
+      `select id, user_id, item_no, name, unit, unit_price, payment_type, sub_items, is_active, created_at
        from items where user_id = $1 ${includeArchived ? '' : 'and is_active'}
        order by item_no desc`,
       [g.ws],
@@ -411,9 +415,15 @@ dataRoutes.post('/items', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
   if (!canDo(g, 'canManageCatalog')) return c.json({ error: 'forbidden' }, 403)
-  const b = (await c.req.json().catch(() => null)) as { name?: string; unit?: string; unitPrice?: number } | null
+  const b = (await c.req.json().catch(() => null)) as { name?: string; unit?: string; unitPrice?: number; paymentType?: string; subItems?: unknown } | null
   const name = (b?.name ?? '').trim()
   if (name.length < 2) return c.json({ error: 'invalid-body' }, 400)
+  // Every usable item carries its WHT type (owner-set). Reject unknown types
+  // against the workspace table so a typo can never smuggle a wrong rate in.
+  const settings = await getTenantSettings(g.ws)
+  const paymentType = (b?.paymentType ?? '').trim()
+  if (!paymentType || !settings.paymentTypes.includes(paymentType)) return c.json({ error: 'invalid-tax-type' }, 400)
+  const subItems = cleanSubNotes(b?.subItems)
   // The catalogue has a unique index on (user_id, lower(name)) — see migration
   // 015. A duplicate service in the catalogue becomes the default line item in
   // new transactions, so this is a real data-quality problem, not a nicety.
@@ -429,11 +439,12 @@ dataRoutes.post('/items', async (c) => {
   if (dup) return c.json({ error: 'duplicate-item', existing: dup }, 409)
   const row = await withTenant(g.ws, 'client', async () => {
     const db = sql()
-    const ins = (await db`insert into items (user_id, item_no, name, unit, unit_price)
+    const ins = (await db`insert into items (user_id, item_no, name, unit, unit_price, payment_type, sub_items)
       values (${g.ws},
         (select coalesce(max(item_no), 0) + 1 from items where user_id = ${g.ws}),
-        ${name}, ${(b?.unit ?? 'รายการ').trim() || 'รายการ'}, ${Math.max(0, Number(b?.unitPrice) || 0)})
-      returning id, user_id, item_no, name, unit, unit_price, is_active, created_at`) as unknown as Record<string, unknown>[]
+        ${name}, ${(b?.unit ?? 'รายการ').trim() || 'รายการ'}, ${Math.max(0, Number(b?.unitPrice) || 0)},
+        ${paymentType}, ${JSON.stringify(subItems)}::jsonb)
+      returning id, user_id, item_no, name, unit, unit_price, payment_type, sub_items, is_active, created_at`) as unknown as Record<string, unknown>[]
     return ins[0]
   })
   return c.json({ ok: true, item: toItem(row) })
@@ -443,7 +454,7 @@ dataRoutes.patch('/items/:id', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
   if (!canDo(g, 'canManageCatalog')) return c.json({ error: 'forbidden' }, 403)
-  const b = (await c.req.json().catch(() => null)) as { name?: string; unit?: string; unitPrice?: number; isActive?: boolean } | null
+  const b = (await c.req.json().catch(() => null)) as { name?: string; unit?: string; unitPrice?: number; isActive?: boolean; paymentType?: string; subItems?: unknown } | null
   // Renaming can collide with an existing entry, same rule as create.
   if (b?.name) {
     const nextName = b.name.trim()
@@ -458,12 +469,26 @@ dataRoutes.patch('/items/:id', async (c) => {
     })
     if (dup) return c.json({ error: 'duplicate-item', existing: dup }, 409)
   }
+  let nextPaymentType: string | null = null
+  let nextSubItems: string[] | null = null
+  if (b?.paymentType !== undefined || b?.subItems !== undefined) {
+    const settings = await getTenantSettings(g.ws)
+    if (b?.paymentType !== undefined) {
+      nextPaymentType = (b.paymentType ?? '').trim()
+      if (!nextPaymentType || !settings.paymentTypes.includes(nextPaymentType)) {
+        return c.json({ error: 'invalid-tax-type' }, 400)
+      }
+    }
+    if (b?.subItems !== undefined) nextSubItems = cleanSubNotes(b.subItems)
+  }
   await withTenant(g.ws, 'client', async () => {
     const db = sql()
     await db`update items set
       name = coalesce(${b?.name ?? null}, name),
       unit = coalesce(${b?.unit ?? null}, unit),
       unit_price = coalesce(${b?.unitPrice ?? null}, unit_price),
+      payment_type = coalesce(${nextPaymentType}, payment_type),
+      sub_items = coalesce(${nextSubItems ? JSON.stringify(nextSubItems) : null}::jsonb, sub_items),
       is_active = coalesce(${b?.isActive === undefined ? null : Boolean(b.isActive)}, is_active),
       updated_at = now()
       where id = ${c.req.param('id')} and user_id = ${g.ws}`

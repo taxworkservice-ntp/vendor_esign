@@ -26,6 +26,8 @@ export interface ReceiptLine {
   unitPrice?: number
   discount?: number
   amount: number
+  /** Note-only sub-items (snapshot) — printed indented, never priced. */
+  subItems?: string[]
 }
 
 export interface ReceiptPdfInput {
@@ -264,7 +266,8 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
   const items = normalizeItems(input)
   items.forEach((it, i) => {
     const lines = wrap(it.description || '—', regular, 9.5, descW)
-    const rowH = Math.max(20, lines.length * 14 + 6)
+    const subs = (it.subItems ?? []).flatMap((s) => wrap(`• ${s}`, regular, 8.5, descW))
+    const rowH = Math.max(20, (lines.length + subs.length) * 14 + 6)
     if (y - rowH < ITEMS_LIMIT) {
       newPage(true)
       itemsHeader()
@@ -272,6 +275,7 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
     if (i % 2 === 1) page.drawRectangle({ x: M - 6, y: y - rowH + 4, width: maxW + 12, height: rowH - 4, color: ZEBRA })
     text(String(i + 1), M + numW - regular.widthOfTextAtSize(String(i + 1), 9.5), y - 10, 9.5, regular, MUTED)
     lines.forEach((ln, li) => text(ln, descX, y - 10 - li * 14, 9.5, regular, INK))
+    subs.forEach((ln, si) => text(ln, descX + 10, y - 10 - (lines.length + si) * 14, 8.5, regular, MUTED))
     rightText(`${it.quantity ?? 1}`, qtyRight, y - 10, 9.5, regular, INK)
     rightText(`${it.unit || 'รายการ'}`, unitRight, y - 10, 9.5, regular, INK)
     rightText(`${thb(it.unitPrice ?? it.amount)}`, priceRight, y - 10, 9.5, regular, INK)

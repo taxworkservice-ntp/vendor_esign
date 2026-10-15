@@ -32,6 +32,10 @@ export interface LineItem {
   unitPrice?: number
   discount?: number // baht
   amount: number
+  /** Catalog item this line was picked from (absent on legacy free-text lines). */
+  itemId?: string
+  /** Ticked subset of the item's defined sub-notes (snapshot at save time). */
+  subItems?: string[]
 }
 
 export interface PaymentTransaction {

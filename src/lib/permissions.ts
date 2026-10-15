@@ -34,7 +34,7 @@ export interface PermissionMeta {
 export const PERMISSION_META: Record<PermissionKey, PermissionMeta> = {
   canManageVendors: { label: 'จัดการผู้ขาย', desc: 'สร้าง/แก้ไขผู้ขาย อนุมัติคำเชิญ ดูเลขภาษี', group: 'daily' },
   canManageTransactions: { label: 'สร้าง/ส่งธุรกรรม', desc: 'สร้างธุรกรรม ส่งและเพิกถอนลิงก์ ดูหลักฐานการลงนาม', group: 'daily' },
-  canManageCatalog: { label: 'จัดการสินค้า', desc: 'จัดการรายการสินค้าและราคา', group: 'daily' },
+  canManageCatalog: { label: 'จัดการสินค้าและภาษี', desc: 'สร้าง/แก้ไขรายการสินค้า กำหนดประเภทภาษี (WHT) และหมายเหตุย่อยของแต่ละรายการ', group: 'daily' },
   canManageWht: { label: 'ภาษีหัก ณ ที่จ่าย', desc: 'บันทึก ออกหนังสือรับรอง และพิมพ์ WHT', group: 'finance' },
   canManageSettings: { label: 'ตั้งค่าระบบ', desc: 'แก้ไขการตั้งค่าเวิร์กสเปซ (ไม่รวมจัดการทีม)', group: 'finance' },
   canVoidDocuments: { label: 'ยกเลิกเอกสาร', desc: 'ยกเลิกธุรกรรม ใบเสร็จ และ WHT ที่ออกแล้ว', group: 'danger' },
@@ -60,22 +60,22 @@ export function hasPermission(role: string, permissions: Permissions | undefined
   return permissions?.[key] === true
 }
 
-/** Manager default: everything except permanent deletion. */
+/** Manager default: everything except permanent deletion and catalog curation
+ *  (the catalog — and with it every transaction's tax — is owner-managed
+ *  unless explicitly granted). */
 export const DEFAULT_MANAGER_PERMS: Permissions = {
   canManageVendors: true,
   canManageTransactions: true,
-  canManageCatalog: true,
   canManageWht: true,
   canManageSettings: true,
   canVoidDocuments: true,
 }
 
-/** Officer default: daily entry work. WHT, settings, void and delete need an
- *  explicit grant from the owner. */
+/** Officer default: daily entry work (vendors, transactions). WHT, settings,
+ *  catalog, void and delete need an explicit grant from the owner. */
 export const DEFAULT_OFFICER_PERMS: Permissions = {
   canManageVendors: true,
   canManageTransactions: true,
-  canManageCatalog: true,
 }
 
 /** Starting flags for a freshly assigned role (copied, never shared). Legacy
