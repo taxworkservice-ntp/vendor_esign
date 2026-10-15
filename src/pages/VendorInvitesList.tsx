@@ -264,6 +264,9 @@ export function VendorInvitesList() {
                         <Td>
                           <p className="truncate font-semibold">{inviteName(inv)}</p>
                           {inv.label && inv.draft && <p className="text-label text-ink-500">{inv.label}</p>}
+                          {!inv.draft && inv.recipientLine && (
+                            <p className="truncate font-mono text-label text-ink-500">LINE {inv.recipientLine}</p>
+                          )}
                           {isFollowup(inv) && (
                             <p className="mt-0.5 flex items-center gap-1 text-label text-warning">
                               <TriangleAlert size={12} aria-hidden /> {inviteAttention(inv).reason} · {inviteAttention(inv).ageDays} วัน

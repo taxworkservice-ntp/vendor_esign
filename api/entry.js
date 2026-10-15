@@ -68804,6 +68804,25 @@ function decryptToken(stored) {
   return decryptId(stored) ?? stored;
 }
 
+// src/lib/bank-account.ts
+function normalizeBankAccount(v2) {
+  return (v2 ?? "").replace(/\D/g, "");
+}
+function isValidBankAccount(v2) {
+  return normalizeBankAccount(v2).length >= 8;
+}
+var BANK_ACCOUNT_ERROR = "\u0E01\u0E23\u0E38\u0E13\u0E32\u0E01\u0E23\u0E2D\u0E01\u0E40\u0E25\u0E02\u0E17\u0E35\u0E48\u0E1A\u0E31\u0E0D\u0E0A\u0E35\u0E43\u0E2B\u0E49\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07 (\u0E2D\u0E22\u0E48\u0E32\u0E07\u0E19\u0E49\u0E2D\u0E22 8 \u0E2B\u0E25\u0E31\u0E01)";
+var BANK_INCOMPLETE_ERROR = "\u0E01\u0E23\u0E2D\u0E01\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E18\u0E19\u0E32\u0E04\u0E32\u0E23\u0E43\u0E2B\u0E49\u0E04\u0E23\u0E1A\u0E17\u0E31\u0E49\u0E07 3 \u0E0A\u0E48\u0E2D\u0E07 (\u0E18\u0E19\u0E32\u0E04\u0E32\u0E23 \xB7 \u0E40\u0E25\u0E02\u0E17\u0E35\u0E48\u0E1A\u0E31\u0E0D\u0E0A\u0E35 \xB7 \u0E0A\u0E37\u0E48\u0E2D\u0E1A\u0E31\u0E0D\u0E0A\u0E35) \u0E2B\u0E23\u0E37\u0E2D\u0E40\u0E27\u0E49\u0E19\u0E27\u0E48\u0E32\u0E07\u0E17\u0E31\u0E49\u0E07\u0E2B\u0E21\u0E14";
+function bankValidation(f) {
+  const name = (f.bankName ?? "").trim();
+  const account = (f.bankAccount ?? "").trim();
+  const holder = (f.accountHolder ?? "").trim();
+  if (!name && !account && !holder) return null;
+  if (!name || !account || !holder) return BANK_INCOMPLETE_ERROR;
+  if (!isValidBankAccount(account)) return BANK_ACCOUNT_ERROR;
+  return null;
+}
+
 // src/lib/line-items.ts
 var round2 = (n) => Math.round(n * 100) / 100;
 function lineTotal(it2) {
@@ -69009,6 +69028,15 @@ function decryptFull(enc2) {
     return void 0;
   }
 }
+function safeEncryptAccount(v2) {
+  const norm2 = v2.replace(/\D/g, "");
+  if (!norm2) return "";
+  try {
+    return encryptId(norm2);
+  } catch {
+    return "";
+  }
+}
 function parseDocDataUrl(dataUrl) {
   const m2 = /^data:(image\/(png|jpe?g|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
   if (!m2) return null;
@@ -69034,6 +69062,10 @@ function toVendor(r) {
     lineUserId: r.line_user_id ?? void 0,
     phone: r.phone ?? void 0,
     email: r.email ?? void 0,
+    // Bank info from onboarding — shown/edited in full (the client owns it).
+    bankName: r.bank_name ?? void 0,
+    accountHolder: r.account_holder ?? void 0,
+    bankAccount: decryptFull(r.bank_account_encrypted) ?? void 0,
     isVatRegistered: Boolean(r.is_vat_registered),
     isActive: r.is_active === void 0 ? true : Boolean(r.is_active),
     hasIdDoc: Boolean(r.id_doc_path),
@@ -69050,7 +69082,7 @@ dataRoutes.get("/vendors", async (c) => {
     return await db.query(
       `select v.id, v.user_id, v.vendor_no, v.prefix, v.name, v.address, v.id_number_encrypted,
               v.line_user_id, v.phone, v.email, v.is_vat_registered, v.is_active, v.created_at,
-              v.id_doc_path, v.bank_doc_path,
+              v.id_doc_path, v.bank_doc_path, v.bank_name, v.bank_account_encrypted, v.account_holder,
               coalesce(t.outstanding, 0)::numeric as outstanding,
               coalesce(t.txn_count, 0)::int as txn_count,
               to_char(t.last_activity, 'YYYY-MM-DD') as last_activity
@@ -69087,16 +69119,19 @@ dataRoutes.post("/vendors", async (c) => {
   const name = (b2?.name ?? "").trim();
   if (name.length < 2) return c.json({ error: "invalid-body" }, 400);
   if (prefixRequired(name) && !isVendorPrefix(prefix)) return c.json({ error: "invalid-prefix" }, 400);
+  const bankErr = bankValidation({ bankName: b2?.bankName, bankAccount: b2?.bankAccount, accountHolder: b2?.accountHolder });
+  if (bankErr) return c.json({ error: "invalid-bank", message: bankErr }, 400);
   const taxNorm = (b2?.taxId ?? "").replace(/\D/g, "");
   const taxHash = taxNorm ? sha256hex(taxNorm) : null;
   const row = await withTenant(g.ws, "owner", async () => {
     const db = sql();
-    const ins = await db`insert into vendor_payees (user_id, vendor_no, prefix, name, address, id_number_encrypted, id_number_hash, line_user_id, phone, email, is_vat_registered)
+    const ins = await db`insert into vendor_payees (user_id, vendor_no, prefix, name, address, id_number_encrypted, id_number_hash, line_user_id, phone, email, is_vat_registered, bank_name, bank_account_encrypted, account_holder)
       values (${g.ws},
         (select coalesce(max(vendor_no), 0) + 1 from vendor_payees where user_id = ${g.ws}),
         ${isVendorPrefix(prefix) ? prefix : ""}, ${name}, ${(b2?.address ?? "").trim()}, ${safeEncrypt(b2?.taxId ?? "")}, ${taxHash},
-        ${b2?.lineUserId?.trim() ?? null}, ${b2?.phone?.trim() ?? null}, ${b2?.email?.trim() ?? null}, ${Boolean(b2?.isVatRegistered)})
-      returning id, user_id, vendor_no, prefix, name, address, id_number_encrypted, line_user_id, phone, email, is_vat_registered, created_at`;
+        ${b2?.lineUserId?.trim() ?? null}, ${b2?.phone?.trim() ?? null}, ${b2?.email?.trim() ?? null}, ${Boolean(b2?.isVatRegistered)},
+        ${b2?.bankName?.trim() || null}, ${b2?.bankAccount ? safeEncryptAccount(b2.bankAccount) || null : null}, ${b2?.accountHolder?.trim() || null})
+      returning id, user_id, vendor_no, prefix, name, address, id_number_encrypted, line_user_id, phone, email, is_vat_registered, bank_name, bank_account_encrypted, account_holder, created_at`;
     return ins[0];
   });
   return c.json({ ok: true, vendor: toVendor(row) });
@@ -69200,6 +69235,11 @@ dataRoutes.patch("/vendors/:id", async (c) => {
     return c.json({ error: "invalid-prefix" }, 400);
   const nextId = b2?.idNumber !== void 0 ? b2.idNumber.replace(/\D/g, "").slice(0, 13) : void 0;
   if (nextId !== void 0 && nextId && nextId.length !== 13) return c.json({ error: "invalid-body" }, 400);
+  const bankTouched = b2?.bankName !== void 0 || b2?.bankAccount !== void 0 || b2?.accountHolder !== void 0;
+  if (bankTouched) {
+    const bankErr = bankValidation({ bankName: b2?.bankName, bankAccount: b2?.bankAccount, accountHolder: b2?.accountHolder });
+    if (bankErr) return c.json({ error: "invalid-bank", message: bankErr }, 400);
+  }
   await withTenant(g.ws, "owner", async () => {
     const db = sql();
     await db`update vendor_payees set
@@ -69212,6 +69252,9 @@ dataRoutes.patch("/vendors/:id", async (c) => {
       email = coalesce(${b2?.email ?? null}, email),
       is_vat_registered = coalesce(${b2?.isVatRegistered ?? null}, is_vat_registered),
       is_active = coalesce(${b2?.isActive === void 0 ? null : Boolean(b2.isActive)}, is_active),
+      bank_name = coalesce(${b2?.bankName !== void 0 ? b2.bankName.trim() || null : null}, bank_name),
+      bank_account_encrypted = coalesce(${b2?.bankAccount !== void 0 ? safeEncryptAccount(b2.bankAccount) || null : null}, bank_account_encrypted),
+      account_holder = coalesce(${b2?.accountHolder !== void 0 ? b2.accountHolder.trim() || null : null}, account_holder),
       updated_at = now()
       where id = ${c.req.param("id")} and user_id = ${g.ws}`;
   });
@@ -70181,7 +70224,7 @@ function formTypeForVendorType(_t3) {
 }
 
 // src/lib/wht-summary.ts
-var WHT_SORT_FIELDS = ["date", "vendor", "cert", "form", "amount", "wht", "status"];
+var WHT_SORT_FIELDS = ["date", "vendor", "cert", "form", "amount", "rate", "wht", "status"];
 var SORTERS = {
   "date-desc": (a2, b2) => cmp(b2.issueDate, a2.issueDate) || cmp(a2.id, b2.id),
   "date-asc": (a2, b2) => cmp(a2.issueDate, b2.issueDate) || cmp(a2.id, b2.id),
@@ -70193,6 +70236,8 @@ var SORTERS = {
   "form-desc": (a2, b2) => cmp(b2.formType, a2.formType) || cmp(a2.issueDate, b2.issueDate),
   "amount-desc": (a2, b2) => b2.amount - a2.amount || cmp(a2.id, b2.id),
   "amount-asc": (a2, b2) => a2.amount - b2.amount || cmp(a2.id, b2.id),
+  "rate-desc": (a2, b2) => b2.whtRate - a2.whtRate || cmp(a2.id, b2.id),
+  "rate-asc": (a2, b2) => a2.whtRate - b2.whtRate || cmp(a2.id, b2.id),
   "wht-desc": (a2, b2) => b2.whtAmount - a2.whtAmount || cmp(a2.id, b2.id),
   "wht-asc": (a2, b2) => a2.whtAmount - b2.whtAmount || cmp(a2.id, b2.id),
   "status-asc": (a2, b2) => cmp(a2.status, b2.status) || cmp(a2.issueDate, b2.issueDate),
@@ -70259,6 +70304,7 @@ var ORDER_BY2 = {
   cert: "r.certificate_no",
   form: "r.form_type",
   amount: "r.amount",
+  rate: "r.wht_rate",
   wht: "r.wht_amount",
   status: "r.status"
 };
@@ -71128,6 +71174,7 @@ function toInvite(r) {
     tenantId: r.user_id,
     status: expired ? "expired" : storedStatus,
     label: r.label ?? void 0,
+    recipientLine: r.recipient_line ?? void 0,
     createdAt: r.created_at,
     expiresAt: r.expires_at,
     openedAt: r.opened_at ?? void 0,
@@ -71181,8 +71228,8 @@ inviteClientRoutes.post("/vendor-invites", async (c) => {
   const token = randomBytes5(32).toString("base64url");
   const row = await withTenant(g.ws, "owner", async () => {
     const db = sql();
-    const ins = await db`insert into vendor_invites (user_id, token_hash, token, label, created_by, expires_at)
-      values (${g.ws}, ${sha256hex(token)}, ${encryptToken(token)}, ${b2?.label?.trim() ?? null}, ${g.actor}, ${inviteExpiry()})
+    const ins = await db`insert into vendor_invites (user_id, token_hash, token, label, recipient_line, created_by, expires_at)
+      values (${g.ws}, ${sha256hex(token)}, ${encryptToken(token)}, ${b2?.label?.trim() ?? null}, ${b2?.recipientLine?.trim() ?? null}, ${g.actor}, ${inviteExpiry()})
       returning *`;
     return ins[0];
   });
@@ -71294,7 +71341,7 @@ invitePublicRoutes.get("/:token", async (c) => {
   const token = c.req.param("token");
   const db = sql();
   const rows = await db`select id, user_id, status, expires_at, review_note, submitted_at, consent_version,
-      prefix, name, address, phone, email, line_user_id, tax_id_encrypted,
+      prefix, name, address, phone, email, line_user_id, tax_id_encrypted, recipient_line,
       bank_name, bank_account_encrypted, account_holder,
       id_doc_path, bank_doc_path
     from vendor_invites where token_hash = ${sha256hex(token)}`;
@@ -71327,6 +71374,7 @@ invitePublicRoutes.get("/:token", async (c) => {
     clientName: settings.displayName,
     logoUrl,
     ref: onboardRef(String(r.id)),
+    recipientLine: r.recipient_line ?? void 0,
     submittedAt: r.submitted_at ?? void 0,
     consentVersion: r.consent_version ?? void 0,
     docs: { id: !!r.id_doc_path, bank: !!r.bank_doc_path },

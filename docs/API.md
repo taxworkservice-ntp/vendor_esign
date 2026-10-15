@@ -60,7 +60,11 @@ ADMIN_EMAIL=you@taxwork.local npm run db:seed-admin  # bootstrap super_admin (pr
     join, so the register can show what is owed without an N+1.
     `PATCH /vendors/:id` accepts `isActive` to archive or restore, because a
     supplier referenced by any transaction can never be deleted (409
-    `vendor-in-use`).
+    `vendor-in-use`). Rows also carry the vendor's **bank info** captured at
+    onboarding — `bankName`, `accountHolder`, and the decrypted `bankAccount`
+    (the client owns this data, so it is returned in full, like the tax ID).
+    `POST` and `PATCH` accept the three as an **all-or-nothing** set (any field
+    requires all three) — a half bank record returns 400 `invalid-bank`.
   - `GET/POST /api/client/items`, `PATCH/DELETE /api/client/items/:id` — service
     catalogue. `GET /items?includeArchived=1` includes retired entries. Names are
     unique per workspace (migration 015); a clash returns 409 `duplicate-item`
@@ -70,7 +74,9 @@ ADMIN_EMAIL=you@taxwork.local npm run db:seed-admin  # bootstrap super_admin (pr
     `send` returns the one-time `token` and stores it (with its hash) for later link re-copy.
   - `GET /api/client/vendors/:id/tax-id` — decrypted vendor tax ID for form prefill (flag-gated: `canManageVendors`).
   - `GET/POST /api/client/wht/vendors`, `GET/POST /api/client/wht/records`, `PATCH /api/client/wht/records/:id`
-    — WHT storage; certificate number auto-assigned via `generate_wht_certificate_no()`.
+    — WHT storage; certificate number auto-assigned via `generate_wht_certificate_no()`
+    as `WT` + YYMM + series + 3-digit sequence (e.g. `WT26101022`). Only new
+    numbers carry the `WT` prefix; historical numbers stay valid.
   - `GET /api/client/wht/records` is paged, filtered and aggregated:
     `?month=&q=&formType=&status=&sort=&limit=&offset=`. `month` scopes on
     `issue_date` (the certificate period), not `transfer_date`. `sort` ∈

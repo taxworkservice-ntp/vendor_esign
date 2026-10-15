@@ -7,17 +7,17 @@ describe('wht helpers (host parity)', () => {
     expect(formTypeForVendorType('individual')).toBe('pnd3')
   })
 
-  it('generates YYMM + series 1 + 3-digit sequence, incrementing per month', () => {
-    expect(nextWhtCertificateNo([], '2026-09-18')).toBe('26091001')
-    expect(nextWhtCertificateNo(['26091001', '26091002'], '2026-09-22')).toBe('26091003')
-    expect(nextWhtCertificateNo(['2609005'], '2026-10-01')).toBe('26101001') // new month resets
+  it('generates WT + YYMM + series 1 + 3-digit sequence, incrementing per month', () => {
+    expect(nextWhtCertificateNo([], '2026-09-18')).toBe('WT26091001')
+    expect(nextWhtCertificateNo(['WT26091001', 'WT26091002'], '2026-09-22')).toBe('WT26091003')
+    expect(nextWhtCertificateNo(['WT2609005'], '2026-10-01')).toBe('WT26101001') // new month resets
   })
 
-  it('shares one counter between old (7-char) and new (8-char) numbers', () => {
-    // Historical certs issued before the series digit existed still feed the
-    // same per-month sequence — unique and monotonic, never restarted.
-    expect(nextWhtCertificateNo(['2609001', '2609002'], '2026-09-22')).toBe('26091003')
-    expect(nextWhtCertificateNo(['26091005', '2609009'], '2026-09-22')).toBe('26091010')
+  it('shares one counter across prefixed, unprefixed and 7-char legacy numbers', () => {
+    // Historical certs (some without the WT prefix, some without the series
+    // digit) still feed the same per-month sequence — unique and monotonic.
+    expect(nextWhtCertificateNo(['2609001', '2609002'], '2026-09-22')).toBe('WT26091003')
+    expect(nextWhtCertificateNo(['WT26091005', '2609009'], '2026-09-22')).toBe('WT26091010')
   })
 
   it('computes WHT and formats helpers', () => {

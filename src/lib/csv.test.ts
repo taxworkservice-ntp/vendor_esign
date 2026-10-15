@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { exportFilename, sortForExport, toCsv, txnsToCsv, UTF8_BOM, withBom, type CsvColumn } from './csv'
+import { exportFilename, itemsToCsv, receiptsToCsv, sortForExport, toCsv, txnsToCsv, UTF8_BOM, withBom, type CsvColumn } from './csv'
 import type { PaymentTransaction } from './types'
+import type { ReceiptRegisterRow } from './receipts-register'
+import type { CatalogItem } from './items-mock'
 
 function txn(o: Partial<PaymentTransaction> & Pick<PaymentTransaction, 'id'>): PaymentTransaction {
   return {
@@ -137,6 +139,43 @@ describe('txnsToCsv', () => {
     const out = txnsToCsv([txn({ id: 'TX-4', receiptNumber: undefined, voidReason: undefined })])
     const line = out.split('\r\n').find((l) => l.includes('TX-4'))!
     expect(line).not.toContain('undefined')
+  })
+})
+
+describe('receiptsToCsv', () => {
+  const row: ReceiptRegisterRow = {
+    id: 'TX-1', number: 'ABC-R-2569-0001', issueDate: '2026-10-02', transferDate: '2026-09-30',
+    verificationCode: 'ABCD1234', vendorPrefix: 'นาย', vendorName: 'สมชาย การช่าง',
+    grossAmount: 3000, whtRate: 3, whtAmount: 90, netAmount: 2910,
+  }
+  const csv = receiptsToCsv([row])
+
+  it('starts with the BOM and carries the register columns', () => {
+    expect(csv.startsWith(UTF8_BOM)).toBe(true)
+    expect(csv).toContain('เลขที่ใบเสร็จ')
+    expect(csv).toContain('อัตราหัก (%)')
+    expect(csv).toContain('รหัสตรวจสอบ')
+  })
+
+  it('writes the vendor name and bare amounts', () => {
+    const line = csv.split('\r\n').find((l) => l.includes('ABC-R-2569-0001'))!
+    expect(line).toContain('นาย สมชาย การช่าง')
+    expect(line).toContain(',3000,3,90,2910,')
+  })
+})
+
+describe('itemsToCsv', () => {
+  const item: CatalogItem = {
+    id: 'it-1', tenantId: 'ABC', itemNo: 1, name: 'ค่าจ้างทำความสะอาด', unit: 'งาน', unitPrice: 5000,
+    paymentType: 'ค่าจ้างทำของ', subItems: ['ด้านหน้า', 'ด้านหลัง'], isActive: true, createdAt: '2026-09-20T09:00:00+07:00',
+  }
+  const csv = itemsToCsv([item])
+
+  it('registers columns with the tax type and joined sub-notes', () => {
+    expect(csv).toContain('ITM-001')
+    expect(csv).toContain('ค่าจ้างทำของ')
+    expect(csv).toContain('ด้านหน้า · ด้านหลัง')
+    expect(csv).toContain('ใช้งาน')
   })
 })
 

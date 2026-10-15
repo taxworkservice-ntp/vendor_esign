@@ -22,7 +22,7 @@ export function useCreateVendorInvite() {
   const qc = useQueryClient()
   const { activeTenant } = useClientAuth()
   return useMutation({
-    mutationFn: (label?: string) => createVendorInvite(activeTenant, label),
+    mutationFn: (input?: { label?: string; recipientLine?: string }) => createVendorInvite(activeTenant, input),
     onSuccess: () => qc.invalidateQueries({ queryKey: QK }),
   })
 }

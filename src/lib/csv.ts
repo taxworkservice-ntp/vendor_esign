@@ -3,6 +3,9 @@ import { downloadName, stamp } from './download-name'
 import { whtFormLabel } from './wht'
 import type { WhtRecordWithVendor } from './wht'
 import { vendorDisplayName } from './vendor-name'
+import { itemCode } from './ids'
+import type { ReceiptRegisterRow } from './receipts-register'
+import type { CatalogItem } from './items-mock'
 import type { PaymentTransaction, TxnStatus } from './types'
 
 // CSV export of the transaction list. Three details make the difference between
@@ -131,4 +134,39 @@ export const WHT_COLUMNS: CsvColumn<WhtRecordWithVendor>[] = [
 
 export function whtToCsv(records: WhtRecordWithVendor[]): string {
   return withBom(toCsv(records, WHT_COLUMNS))
+}
+
+// ── Receipt register export ───────────────────────────────────────────────
+// Mirrors the on-screen register so a bookkeeper can reconcile the same columns.
+
+export const RECEIPT_COLUMNS: CsvColumn<ReceiptRegisterRow>[] = [
+  { header: 'เลขที่ใบเสร็จ', value: (r) => r.number },
+  { header: 'วันที่รับชำระ', value: (r) => r.transferDate, text: false },
+  { header: 'ออกเมื่อ', value: (r) => r.issueDate, text: false },
+  { header: 'ผู้ขาย', value: (r) => vendorDisplayName(r.vendorPrefix, r.vendorName) },
+  { header: 'ยอดเงิน (ฐานภาษี)', value: (r) => r.grossAmount, text: false },
+  { header: 'อัตราหัก (%)', value: (r) => r.whtRate, text: false },
+  { header: 'ภาษีที่หักไว้', value: (r) => r.whtAmount, text: false },
+  { header: 'สุทธิ', value: (r) => r.netAmount, text: false },
+  { header: 'รหัสตรวจสอบ', value: (r) => r.verificationCode ?? '' },
+]
+
+export function receiptsToCsv(rows: ReceiptRegisterRow[]): string {
+  return withBom(toCsv(rows, RECEIPT_COLUMNS))
+}
+
+// ── Catalog export ────────────────────────────────────────────────────────
+
+export const ITEM_COLUMNS: CsvColumn<CatalogItem>[] = [
+  { header: 'รหัส', value: (i) => itemCode(i.itemNo) },
+  { header: 'ชื่อรายการ', value: (i) => i.name },
+  { header: 'หน่วย', value: (i) => i.unit },
+  { header: 'ราคา/หน่วย', value: (i) => i.unitPrice, text: false },
+  { header: 'ประเภทภาษี', value: (i) => i.paymentType ?? '' },
+  { header: 'หมายเหตุย่อย', value: (i) => (i.subItems ?? []).join(' · ') },
+  { header: 'สถานะ', value: (i) => (i.isActive === false ? 'ปิดใช้งาน' : 'ใช้งาน') },
+]
+
+export function itemsToCsv(items: CatalogItem[]): string {
+  return withBom(toCsv(items, ITEM_COLUMNS))
 }

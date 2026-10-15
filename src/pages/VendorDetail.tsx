@@ -1,11 +1,14 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Archive, ArchiveRestore, ChevronLeft, FileImage, ReceiptText, Users } from 'lucide-react'
+import { Archive, ArchiveRestore, ChevronLeft, Copy, FileImage, ReceiptText, Users } from 'lucide-react'
 import { useDeleteVendor, useForgetVendorId, useSetVendorActive, useUpdateVendor, useVendor } from '../hooks/useVendors'
 import { useTransactions } from '../hooks/useTransactions'
 import { displayTaxId } from '../lib/vendors-mock'
 import { vendorCode } from '../lib/ids'
 import { VENDOR_PREFIXES, isVendorPrefix, prefixRequired, vendorDisplayName } from '../lib/vendor-name'
+import { bankValidation } from '../lib/bank-account'
+import { BankSelect } from '../components/vendors/bank-select'
+import { useToast } from '../components/ui/toast'
 import { emptyFilters } from '../lib/txn-filters'
 import { fmtDateTH, fmtTHB } from '../lib/format'
 import { Card, CardBody } from '../components/ui/card'
@@ -36,7 +39,11 @@ export function VendorDetail() {
   const [lineUserId, setLineUserId] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
+  const [bankName, setBankName] = useState('')
+  const [bankAccount, setBankAccount] = useState('')
+  const [accountHolder, setAccountHolder] = useState('')
   const [editing, setEditing] = useState(false)
+  const toast = useToast()
   const [err, setErr] = useState('')
   const [deleteErr, setDeleteErr] = useState('')
   const [confirmForget, setConfirmForget] = useState(false)
@@ -111,6 +118,8 @@ export function VendorDetail() {
     )
   }
 
+  const hasBank = !!(v.bankName || v.bankAccount || v.accountHolder)
+
   const startEdit = () => {
     setPrefix(v.prefix ?? '')
     setName(v.name)
@@ -119,8 +128,20 @@ export function VendorDetail() {
     setLineUserId(v.lineUserId ?? '')
     setPhone(v.phone ?? '')
     setEmail(v.email ?? '')
+    setBankName(v.bankName ?? '')
+    setBankAccount(v.bankAccount ?? '')
+    setAccountHolder(v.accountHolder ?? '')
     setErr('')
     setEditing(true)
+  }
+
+  const copy = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.show(`คัดลอก${label}แล้ว`)
+    } catch {
+      toast.show('คัดลอกไม่สำเร็จ', 'error')
+    }
   }
 
   const save = async () => {
@@ -145,6 +166,11 @@ export function VendorDetail() {
       setErr('รูปแบบอีเมลไม่ถูกต้อง')
       return
     }
+    const bankErr = bankValidation({ bankName, bankAccount, accountHolder })
+    if (bankErr) {
+      setErr(bankErr)
+      return
+    }
     try {
       await update.mutateAsync({
         prefix: isVendorPrefix(prefix) ? prefix : '',
@@ -153,6 +179,9 @@ export function VendorDetail() {
         lineUserId: lineUserId.trim() || undefined,
         phone: phone.trim() || undefined,
         email: email.trim() || undefined,
+        bankName: bankName.trim() || undefined,
+        bankAccount: bankAccount.trim() || undefined,
+        accountHolder: accountHolder.trim() || undefined,
         ...(newTaxId.trim() ? { idNumber: newTaxId } : {}),
       })
       setEditing(false)
@@ -299,6 +328,44 @@ export function VendorDetail() {
         </CardBody>
       </Card>
 
+      <Card>
+        <CardBody className="space-y-4">
+          <h2 className="font-semibold">ข้อมูลธนาคาร</h2>
+          {editing ? (
+            <>
+              <div>
+                <Label hint="ไม่บังคับ">ธนาคาร</Label>
+                <BankSelect value={bankName} onChange={setBankName} />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label hint="ไม่บังคับ">เลขที่บัญชี</Label>
+                  <Input
+                    value={bankAccount}
+                    onChange={(e) => setBankAccount(e.target.value)}
+                    placeholder="xxx-x-xxxxx-x"
+                    inputMode="numeric"
+                    className="font-mono"
+                  />
+                </div>
+                <div>
+                  <Label hint="ไม่บังคับ">ชื่อบัญชี</Label>
+                  <Input value={accountHolder} onChange={(e) => setAccountHolder(e.target.value)} placeholder="ชื่อตามสมุดบัญชี" />
+                </div>
+              </div>
+            </>
+          ) : hasBank ? (
+            <div className="space-y-2.5">
+              {v.bankName && <BankRow label="ธนาคาร" value={v.bankName} onCopy={copy} />}
+              {v.bankAccount && <BankRow label="เลขที่บัญชี" value={v.bankAccount} mono onCopy={copy} />}
+              {v.accountHolder && <BankRow label="ชื่อบัญชี" value={v.accountHolder} onCopy={copy} />}
+            </div>
+          ) : (
+            <p className="text-body text-ink-500">ยังไม่มีข้อมูลธนาคาร — ได้จากลิงก์เชิญผู้ขาย หรือกด “แก้ไข” เพื่อกรอก</p>
+          )}
+        </CardBody>
+      </Card>
+
       {!editing && (
         <>
           {/* Money context, from the same aggregate the register shows. */}
@@ -438,6 +505,35 @@ export function VendorDetail() {
         onConfirm={remove}
         onCancel={() => setConfirmDelete(false)}
       />
+    </div>
+  )
+}
+
+function BankRow({
+  label,
+  value,
+  mono,
+  onCopy,
+}: {
+  label: string
+  value: string
+  mono?: boolean
+  onCopy: (v: string, label: string) => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-label text-ink-500">{label}</p>
+        <p className={mono ? 'truncate font-mono' : 'truncate'}>{value}</p>
+      </div>
+      <button
+        type="button"
+        onClick={() => onCopy(value, label)}
+        aria-label={`คัดลอก${label}`}
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-control text-ink-400 transition hover:bg-ink-100 hover:text-ink-900"
+      >
+        <Copy size={15} aria-hidden />
+      </button>
     </div>
   )
 }

@@ -15,6 +15,7 @@ const ORDER_BY: Record<WhtSortField, string> = {
   cert: 'r.certificate_no',
   form: 'r.form_type',
   amount: 'r.amount',
+  rate: 'r.wht_rate',
   wht: 'r.wht_amount',
   status: 'r.status',
 }

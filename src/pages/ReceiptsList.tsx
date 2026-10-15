@@ -2,6 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Download, FileSearch, Printer, ReceiptText, Search } from 'lucide-react'
 import { useReceiptRegister } from '../hooks/useReceiptRegister'
+import { useClientAuth } from '../lib/client-auth'
+import { useToast } from '../components/ui/toast'
+import { downloadCsv, receiptsToCsv } from '../lib/csv'
+import { downloadName } from '../lib/download-name'
+import { fetchReceiptRegister } from '../lib/receipts-register'
 import { useGlobalMonth } from '../hooks/useGlobalMonth'
 import { useDebounced } from '../hooks/useDebounced'
 import { formatMonthTH } from '../lib/global-month'
@@ -50,6 +55,8 @@ export function ReceiptsList() {
   const searchRef = useRef<HTMLInputElement>(null)
   const { data: settings } = useSettings()
   const clientCode = (settings ?? defaultSettings()).clientCode
+  const { activeTenant } = useClientAuth()
+  const toast = useToast()
 
   const [month, setMonth] = useState(() => params.get('month') ?? globalMonth)
   const [search, setSearch] = useState(() => params.get('q') ?? '')
@@ -115,6 +122,24 @@ export function ReceiptsList() {
   const filtered = debouncedSearch.trim() !== '' || month !== globalMonth
   const isEmpty = !isLoading && !isError && rows.length === 0
 
+  const exportCsv = async () => {
+    try {
+      // Whole filtered set (limit 0), matching the register's filters.
+      const all = await fetchReceiptRegister(activeTenant, { month, q: debouncedSearch, sort, limit: 0, offset: 0 })
+      if (all.receipts.length === 0) {
+        toast.show('ไม่มีรายการให้ส่งออก', 'error')
+        return
+      }
+      downloadCsv(
+        downloadName({ kind: 'receipts', clientCode, period: month || 'all', ext: 'csv' }),
+        receiptsToCsv(all.receipts),
+      )
+      toast.show(`ส่งออก ${all.receipts.length} ฉบับแล้ว`)
+    } catch {
+      toast.show('ส่งออกไม่สำเร็จ', 'error')
+    }
+  }
+
   const onKey = useCallback((e: React.KeyboardEvent) => {
     if (e.key === '/') {
       e.preventDefault()
@@ -130,6 +155,9 @@ export function ReceiptsList() {
         actions={
           <>
             <HelpLink to="/help#receipt-register" />
+            <Button variant="secondary" onClick={() => void exportCsv()} disabled={total === 0} title="ส่งออกทะเบียนใบเสร็จที่ตรงเงื่อนไขเป็น CSV">
+              ส่งออก CSV
+            </Button>
             <a href={downloadAllHref} target="_blank" rel="noopener noreferrer" aria-disabled={total === 0}>
               <Button disabled={total === 0} title={`ดาวน์โหลดใบเสร็จทั้งหมด ${total} ฉบับที่ตรงเงื่อนไข (PDF แยกต่อฉบับ, รวมเป็น ZIP)`}>
                 <Download size={16} aria-hidden /> ดาวน์โหลดทั้งหมด ({total})

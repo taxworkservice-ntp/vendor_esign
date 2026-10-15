@@ -19,6 +19,8 @@ import { RegistryToolbar } from '../components/ui/registry-toolbar'
 import { LoadingBar, RegistryId, Row, SortableTh, Td, Th, tableCls } from '../components/ui/data-table'
 import { ItemFormDialog } from '../components/items/item-form-dialog'
 import { fmtTHB } from '../lib/format'
+import { downloadCsv, itemsToCsv } from '../lib/csv'
+import { downloadName } from '../lib/download-name'
 import { defaultSettings, whtRateFor } from '../lib/settings'
 import { useSettings } from '../hooks/useSettings'
 import { cn } from '../lib/cn'
@@ -73,6 +75,15 @@ export function ItemsList() {
     setDialogOpen(true)
   }
 
+  const exportCsv = () => {
+    if (items.length === 0) {
+      toast.show('ไม่มีรายการให้ส่งออก', 'error')
+      return
+    }
+    downloadCsv(downloadName({ kind: 'items', clientCode: cfg.clientCode, ext: 'csv' }), itemsToCsv(items))
+    toast.show(`ส่งออก ${items.length} รายการแล้ว`)
+  }
+
   // Archiving hides the entry from the catalogue, and a mis-click would make a
   // service the user still needs quietly disappear from the picker — so that
   // direction asks first. Restoring is trivially reversible, so confirming it
@@ -100,11 +111,16 @@ export function ItemsList() {
         title="สินค้า / บริการ"
         sub="รายการสินค้าและบริการ สำหรับเรียกใช้เมื่อสร้างธุรกรรม (รหัส · ชื่อ · หน่วย · ราคา)"
         actions={
-          can('canManageCatalog') && (
-            <Button onClick={openCreate}>
-              <Plus size={17} /> เพิ่มรายการใหม่
+          <>
+            <Button variant="secondary" onClick={exportCsv} disabled={items.length === 0}>
+              ส่งออก CSV
             </Button>
-          )
+            {can('canManageCatalog') && (
+              <Button onClick={openCreate}>
+                <Plus size={17} /> เพิ่มรายการใหม่
+              </Button>
+            )}
+          </>
         }
       />
 

@@ -8,6 +8,7 @@ import { encryptId } from '../lib/id-crypto'
 import { normalizeTaxId } from '../lib/taxid'
 import { loadTxns } from '../lib/mock'
 import { isVendorPrefix, prefixRequired } from '../lib/vendor-name'
+import { bankValidation } from '../lib/bank-account'
 import { matchesSearch, vendorSearchFields } from '../lib/search-match'
 import { useClientAuth } from '../lib/client-auth'
 
@@ -137,12 +138,17 @@ export function useCreateVendor() {
       lineUserId?: string
       phone?: string
       email?: string
+      bankName?: string
+      bankAccount?: string
+      accountHolder?: string
     }): Promise<ClientVendor> => {
       const prefix = input.prefix.trim()
       const name = input.name.trim()
       if (name.length < 2) throw new Error('กรุณากรอกชื่อผู้ขาย')
       if (prefixRequired(name) && !isVendorPrefix(prefix)) throw new Error('กรุณาเลือกคำนำหน้าชื่อ')
       if (input.address.trim().length < 4) throw new Error('กรุณากรอกที่อยู่ผู้ขาย')
+      const bankErr = bankValidation({ bankName: input.bankName, bankAccount: input.bankAccount, accountHolder: input.accountHolder })
+      if (bankErr) throw new Error(bankErr)
       if (hasServer) {
         const res = await apiSend<{ ok: boolean; vendor: ClientVendor }>('/api/client/vendors', 'POST', { ...input, prefix })
         return res.vendor
@@ -161,6 +167,9 @@ export function useCreateVendor() {
         lineUserId: input.lineUserId?.trim() || undefined,
         phone: input.phone?.trim() || undefined,
         email: input.email?.trim() || undefined,
+        bankName: input.bankName?.trim() || undefined,
+        bankAccount: input.bankAccount?.replace(/\D/g, '') || undefined,
+        accountHolder: input.accountHolder?.trim() || undefined,
         createdAt: new Date().toISOString(),
       }
       saveVendor(row)
@@ -174,7 +183,7 @@ export function useUpdateVendor(id?: string) {
   const qc = useQueryClient()
   const { activeTenant } = useClientAuth()
   return useMutation({
-    mutationFn: async (patch: Partial<Pick<ClientVendor, 'prefix' | 'name' | 'address' | 'lineUserId' | 'phone' | 'email'>> & { idNumber?: string }) => {
+    mutationFn: async (patch: Partial<Pick<ClientVendor, 'prefix' | 'name' | 'address' | 'lineUserId' | 'phone' | 'email' | 'bankName' | 'bankAccount' | 'accountHolder'>> & { idNumber?: string }) => {
       if (patch.name !== undefined) {
         const n = patch.name.trim()
         if (n.length < 2) throw new Error('กรุณากรอกชื่อผู้ขาย')
@@ -185,6 +194,8 @@ export function useUpdateVendor(id?: string) {
         const norm = normalizeTaxId(patch.idNumber)
         if (norm && norm.length !== 13) throw new Error('เลขบัตรประชาชนต้องเป็นเลข 13 หลัก')
       }
+      const bankErr = bankValidation({ bankName: patch.bankName, bankAccount: patch.bankAccount, accountHolder: patch.accountHolder })
+      if (bankErr) throw new Error(bankErr)
       if (hasServer) {
         await apiSend(`/api/client/vendors/${id}`, 'PATCH', patch)
         return { ok: true }
@@ -200,6 +211,9 @@ export function useUpdateVendor(id?: string) {
         lineUserId: patch.lineUserId !== undefined ? (patch.lineUserId.trim() || undefined) : cur.lineUserId,
         phone: patch.phone !== undefined ? (patch.phone.trim() || undefined) : cur.phone,
         email: patch.email !== undefined ? (patch.email.trim() || undefined) : cur.email,
+        bankName: patch.bankName !== undefined ? (patch.bankName.trim() || undefined) : cur.bankName,
+        bankAccount: patch.bankAccount !== undefined ? (patch.bankAccount.replace(/\D/g, '') || undefined) : cur.bankAccount,
+        accountHolder: patch.accountHolder !== undefined ? (patch.accountHolder.trim() || undefined) : cur.accountHolder,
       }
       if (patch.idNumber !== undefined) {
         const norm = normalizeTaxId(patch.idNumber)

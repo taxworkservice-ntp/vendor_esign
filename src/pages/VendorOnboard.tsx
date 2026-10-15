@@ -142,6 +142,7 @@ export function VendorOnboard() {
       <OnboardForm
         token={token as string}
         initial={data.draft}
+        recipientLine={data.recipientLine}
         reviewNote={data.reviewNote}
         onSubmitted={() => {
           setJustSubmitted(true)
@@ -202,11 +203,14 @@ type Doc = { data: string; name: string }
 function OnboardForm({
   token,
   initial,
+  recipientLine,
   reviewNote,
   onSubmitted,
 }: {
   token: string
   initial?: VendorInviteDraft
+  /** LINE id the client recorded when creating the link — a hint, not truth. */
+  recipientLine?: string
   reviewNote?: string
   onSubmitted?: () => void
 }) {
@@ -215,7 +219,9 @@ function OnboardForm({
   const [address, setAddress] = useState(initial?.address ?? '')
   const [phone, setPhone] = useState(initial?.phone ?? '')
   const [email, setEmail] = useState(initial?.email ?? '')
-  const [lineUserId, setLineUserId] = useState(initial?.lineUserId ?? '')
+  // Prefer the vendor's own value; fall back to the payer's hint, editable.
+  const lineFromPayer = !initial?.lineUserId && !!recipientLine
+  const [lineUserId, setLineUserId] = useState(initial?.lineUserId ?? recipientLine ?? '')
   const [taxId, setTaxId] = useState(initial?.taxId ?? '')
   const [bankName, setBankName] = useState(initial?.bankName ?? '')
   const [bankAccount, setBankAccount] = useState(initial?.bankAccount ?? '')
@@ -413,11 +419,14 @@ function OnboardForm({
             <FieldError msg={errors.email} />
           </div>
         </div>
-        <div>
-          <Label htmlFor="ob-line" hint="ไม่บังคับ">LINE user id</Label>
-          <Input id="ob-line" value={lineUserId} autoCapitalize="none" spellCheck={false} enterKeyHint="next"
-            onChange={(e) => setLineUserId(e.target.value)} placeholder="U…" className="font-mono" />
-        </div>
+          <div>
+            <Label htmlFor="ob-line" hint="ไม่บังคับ">LINE user id</Label>
+            <Input id="ob-line" value={lineUserId} autoCapitalize="none" spellCheck={false} enterKeyHint="next"
+              onChange={(e) => setLineUserId(e.target.value)} placeholder="U…" className="font-mono" />
+            {lineFromPayer && (
+              <p className="mt-1.5 text-label text-ink-500">ผู้ว่าจ้างระบุไว้ — โปรดตรวจสอบให้ถูกต้องก่อนส่ง</p>
+            )}
+          </div>
       </Section>
 
       <Section title="2 · ภาษีและการรับเงิน">

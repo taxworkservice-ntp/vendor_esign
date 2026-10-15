@@ -1,7 +1,11 @@
 // WHT (withholding tax) domain — types + pure helpers ported from
 // invoice-system (wht/print.tsx + whtCertificate.ts) so output matches exactly.
-// Certificate number format: YYMM + series digit + 3-digit sequence per
-// workspace/month (e.g. 26091003).
+// Certificate number format: 'WT' + YYMM + series digit + 3-digit sequence per
+// workspace/month (e.g. WT26101022). Only new numbers carry the 'WT' prefix;
+// legacy numbers (without it) stay valid and share the same monthly counter.
+
+/** Prefix on every newly issued certificate number (migration 034). */
+export const WHT_CERT_PREFIX = 'WT'
 
 export type WhtFormType = 'pnd1' | 'pnd1_special' | 'pnd2' | 'pnd3' | 'pnd2a' | 'pnd3a' | 'pnd53'
 
@@ -110,16 +114,23 @@ const round2 = (n: number) => Math.round(n * 100) / 100
 // one counter per month since the sequence always reads the last 3 digits.
 const WHT_SERIES = '1'
 
-// YYMM + series digit + 3-digit sequence, mirroring generate_wht_certificate_no().
+/** Strip the 'WT' prefix so legacy and new numbers compare on the same body. */
+function certBody(no: string): string {
+  return no.startsWith(WHT_CERT_PREFIX) ? no.slice(WHT_CERT_PREFIX.length) : no
+}
+
+// 'WT' + YYMM + series digit + 3-digit sequence, mirroring generate_wht_certificate_no().
 export function nextWhtCertificateNo(existing: (string | undefined)[], issueDate: string): string {
   const yymm = issueDate.slice(2, 7).replace('-', '')
   let maxSeq = 0
   for (const no of existing) {
-    if (!no || !no.startsWith(yymm)) continue
-    const seq = parseInt(no.slice(-3), 10)
+    if (!no) continue
+    const body = certBody(no)
+    if (!body.startsWith(yymm)) continue
+    const seq = parseInt(body.slice(-3), 10)
     if (Number.isFinite(seq) && seq > maxSeq) maxSeq = seq
   }
-  return `${yymm}${WHT_SERIES}${String(maxSeq + 1).padStart(3, '0')}`
+  return `${WHT_CERT_PREFIX}${yymm}${WHT_SERIES}${String(maxSeq + 1).padStart(3, '0')}`
 }
 
 export function calcWhtAmount(amount: number, ratePct: number): number {

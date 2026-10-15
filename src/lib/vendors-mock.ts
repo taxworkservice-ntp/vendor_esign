@@ -15,6 +15,10 @@ export interface ClientVendor {
   lineUserId?: string
   phone?: string
   email?: string
+  /** Bank info captured at onboarding (shown/edited in full on the detail page). */
+  bankName?: string
+  bankAccount?: string
+  accountHolder?: string
   /** Onboarding documents exist (ID card / bank-book page) — shown on detail. */
   hasIdDoc?: boolean
   hasBankDoc?: boolean

@@ -40,6 +40,8 @@ export function vendorSearchFields(v: {
   vendorNo?: number
   taxLast4?: string
   maskedId?: string
+  bankAccount?: string
+  accountHolder?: string
 }): SearchField[] {
   // vendorNo is matched raw, zero-padded, and as the displayed code (VEN-001),
   // so "1", "001" and "VEN-001" all find the same supplier. The title is matched
@@ -61,6 +63,8 @@ export function vendorSearchFields(v: {
     vendorCode(no),
     v.taxLast4,
     v.maskedId,
+    v.bankAccount,
+    v.accountHolder,
   ]
 }
 

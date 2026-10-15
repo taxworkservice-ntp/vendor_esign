@@ -8,6 +8,7 @@ import { readStoredDurable, saveBytesDurable } from './storage'
 import { audit } from './shared'
 import type { SessionUser } from './auth'
 import { isVendorPrefix, prefixRequired } from '../../src/lib/vendor-name'
+import { bankValidation } from '../../src/lib/bank-account'
 import { getVendorMemory } from './vendor-memory'
 import { getTenantSettings } from './settings'
 import { cleanSubNotes } from '../../src/lib/item-tax'
@@ -114,6 +115,17 @@ function decryptFull(enc: string | null | undefined): string | undefined {
   }
 }
 
+// Encrypt a bank account (AES-256-GCM). No 13-digit cap — account lengths vary.
+function safeEncryptAccount(v: string): string {
+  const norm = v.replace(/\D/g, '')
+  if (!norm) return ''
+  try {
+    return encryptId(norm)
+  } catch {
+    return ''
+  }
+}
+
 // Validate an image data URL for a vendor document upload. Same envelope as the
 // onboarding submit route (jpeg/png/webp, non-empty, ≤ 5 MB); exported for tests.
 export function parseDocDataUrl(dataUrl: string): { mime: string; bytes: Uint8Array } | null {
@@ -141,6 +153,10 @@ function toVendor(r: Record<string, unknown>) {  const enc = r.id_number_encrypt
     lineUserId: (r.line_user_id as string | null) ?? undefined,
     phone: (r.phone as string | null) ?? undefined,
     email: (r.email as string | null) ?? undefined,
+    // Bank info from onboarding — shown/edited in full (the client owns it).
+    bankName: (r.bank_name as string | null) ?? undefined,
+    accountHolder: (r.account_holder as string | null) ?? undefined,
+    bankAccount: decryptFull(r.bank_account_encrypted as string | null) ?? undefined,
     isVatRegistered: Boolean(r.is_vat_registered),
     isActive: r.is_active === undefined ? true : Boolean(r.is_active),
     hasIdDoc: Boolean(r.id_doc_path),
@@ -166,7 +182,7 @@ dataRoutes.get('/vendors', async (c) => {
     return (await db.query(
       `select v.id, v.user_id, v.vendor_no, v.prefix, v.name, v.address, v.id_number_encrypted,
               v.line_user_id, v.phone, v.email, v.is_vat_registered, v.is_active, v.created_at,
-              v.id_doc_path, v.bank_doc_path,
+              v.id_doc_path, v.bank_doc_path, v.bank_name, v.bank_account_encrypted, v.account_holder,
               coalesce(t.outstanding, 0)::numeric as outstanding,
               coalesce(t.txn_count, 0)::int as txn_count,
               to_char(t.last_activity, 'YYYY-MM-DD') as last_activity
@@ -200,22 +216,26 @@ dataRoutes.post('/vendors', async (c) => {
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
   if (!canDo(g, 'canManageVendors')) return c.json({ error: 'forbidden' }, 403)
   const b = (await c.req.json().catch(() => null)) as
-    | { prefix?: string; name?: string; address?: string; taxId?: string; lineUserId?: string; phone?: string; email?: string; isVatRegistered?: boolean }
+    | { prefix?: string; name?: string; address?: string; taxId?: string; lineUserId?: string; phone?: string; email?: string; isVatRegistered?: boolean; bankName?: string; bankAccount?: string; accountHolder?: string }
     | null
   const prefix = (b?.prefix ?? '').trim()
   const name = (b?.name ?? '').trim()
   if (name.length < 2) return c.json({ error: 'invalid-body' }, 400)
   if (prefixRequired(name) && !isVendorPrefix(prefix)) return c.json({ error: 'invalid-prefix' }, 400)
+  // Bank info is optional but all-or-nothing (a half record can't be paid).
+  const bankErr = bankValidation({ bankName: b?.bankName, bankAccount: b?.bankAccount, accountHolder: b?.accountHolder })
+  if (bankErr) return c.json({ error: 'invalid-bank', message: bankErr }, 400)
   const taxNorm = (b?.taxId ?? '').replace(/\D/g, '')
   const taxHash = taxNorm ? sha256hex(taxNorm) : null
   const row = await withTenant(g.ws, 'owner', async () => {
     const db = sql()
-    const ins = (await db`insert into vendor_payees (user_id, vendor_no, prefix, name, address, id_number_encrypted, id_number_hash, line_user_id, phone, email, is_vat_registered)
+    const ins = (await db`insert into vendor_payees (user_id, vendor_no, prefix, name, address, id_number_encrypted, id_number_hash, line_user_id, phone, email, is_vat_registered, bank_name, bank_account_encrypted, account_holder)
       values (${g.ws},
         (select coalesce(max(vendor_no), 0) + 1 from vendor_payees where user_id = ${g.ws}),
         ${isVendorPrefix(prefix) ? prefix : ''}, ${name}, ${(b?.address ?? '').trim()}, ${safeEncrypt(b?.taxId ?? '')}, ${taxHash},
-        ${b?.lineUserId?.trim() ?? null}, ${b?.phone?.trim() ?? null}, ${b?.email?.trim() ?? null}, ${Boolean(b?.isVatRegistered)})
-      returning id, user_id, vendor_no, prefix, name, address, id_number_encrypted, line_user_id, phone, email, is_vat_registered, created_at`) as unknown as Record<string, unknown>[]
+        ${b?.lineUserId?.trim() ?? null}, ${b?.phone?.trim() ?? null}, ${b?.email?.trim() ?? null}, ${Boolean(b?.isVatRegistered)},
+        ${b?.bankName?.trim() || null}, ${b?.bankAccount ? safeEncryptAccount(b.bankAccount) || null : null}, ${b?.accountHolder?.trim() || null})
+      returning id, user_id, vendor_no, prefix, name, address, id_number_encrypted, line_user_id, phone, email, is_vat_registered, bank_name, bank_account_encrypted, account_holder, created_at`) as unknown as Record<string, unknown>[]
     return ins[0]
   })
   return c.json({ ok: true, vendor: toVendor(row) })
@@ -334,7 +354,7 @@ dataRoutes.patch('/vendors/:id', async (c) => {
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
   if (!canDo(g, 'canManageVendors')) return c.json({ error: 'forbidden' }, 403)
   const b = (await c.req.json().catch(() => null)) as
-    | { prefix?: string; name?: string; address?: string; lineUserId?: string; phone?: string; email?: string; isVatRegistered?: boolean; idNumber?: string; isActive?: boolean }
+    | { prefix?: string; name?: string; address?: string; lineUserId?: string; phone?: string; email?: string; isVatRegistered?: boolean; idNumber?: string; isActive?: boolean; bankName?: string; bankAccount?: string; accountHolder?: string }
     | null
   const nextName = (b?.name ?? '').trim()
   if (b?.name !== undefined && nextName.length < 2) return c.json({ error: 'invalid-body' }, 400)
@@ -342,6 +362,12 @@ dataRoutes.patch('/vendors/:id', async (c) => {
     return c.json({ error: 'invalid-prefix' }, 400)
   const nextId = b?.idNumber !== undefined ? b.idNumber.replace(/\D/g, '').slice(0, 13) : undefined
   if (nextId !== undefined && nextId && nextId.length !== 13) return c.json({ error: 'invalid-body' }, 400)
+  // Bank fields are edited as a set: if any is sent, all three must be valid.
+  const bankTouched = b?.bankName !== undefined || b?.bankAccount !== undefined || b?.accountHolder !== undefined
+  if (bankTouched) {
+    const bankErr = bankValidation({ bankName: b?.bankName, bankAccount: b?.bankAccount, accountHolder: b?.accountHolder })
+    if (bankErr) return c.json({ error: 'invalid-bank', message: bankErr }, 400)
+  }
   await withTenant(g.ws, 'owner', async () => {
     const db = sql()
     await db`update vendor_payees set
@@ -354,6 +380,9 @@ dataRoutes.patch('/vendors/:id', async (c) => {
       email = coalesce(${b?.email ?? null}, email),
       is_vat_registered = coalesce(${b?.isVatRegistered ?? null}, is_vat_registered),
       is_active = coalesce(${b?.isActive === undefined ? null : Boolean(b.isActive)}, is_active),
+      bank_name = coalesce(${b?.bankName !== undefined ? (b.bankName.trim() || null) : null}, bank_name),
+      bank_account_encrypted = coalesce(${b?.bankAccount !== undefined ? (safeEncryptAccount(b.bankAccount) || null) : null}, bank_account_encrypted),
+      account_holder = coalesce(${b?.accountHolder !== undefined ? (b.accountHolder.trim() || null) : null}, account_holder),
       updated_at = now()
       where id = ${c.req.param('id')} and user_id = ${g.ws}`
   })

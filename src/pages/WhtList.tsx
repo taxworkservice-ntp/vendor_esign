@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react'
 import { useBulkSetWhtStatus, useWhtList, useSetWhtStatus } from '../hooks/useWht'
+import { fetchWhtList } from '../lib/wht-source'
 import { Checkbox } from '../components/ui/checkbox'
 import { useGlobalMonth } from '../hooks/useGlobalMonth'
 import { useDebounced } from '../hooks/useDebounced'
@@ -75,7 +76,7 @@ function readSize(sp: URLSearchParams): number {
 
 export function WhtList() {
   // Display-only mirror of the server gate (hidden actions still 403).
-  const { can } = useClientAuth()
+  const { can, activeTenant } = useClientAuth()
   const { month: globalMonth } = useGlobalMonth()
   const [params, setParams] = useSearchParams()
   const toast = useToast()
@@ -182,17 +183,24 @@ export function WhtList() {
     return `/wht/print?${p.toString()}`
   }
 
-  const exportCsv = useCallback(() => {
-    if (records.length === 0) {
-      toast.show('ไม่มีรายการให้ส่งออก', 'error')
-      return
+  const exportCsv = useCallback(async () => {
+    try {
+      // Whole filtered set (not just the page) — an export is for reconciliation.
+      const scope: WhtListQuery = { ...effective, limit: 0, offset: 0 }
+      const all = await fetchWhtList(activeTenant, scope, whtQueryToParams(scope))
+      if (all.records.length === 0) {
+        toast.show('ไม่มีรายการให้ส่งออก', 'error')
+        return
+      }
+      downloadCsv(
+        downloadName({ kind: 'wht-certificates', clientCode, period: effective.month || 'all', ext: 'csv' }),
+        whtToCsv(all.records),
+      )
+      toast.show(`ส่งออก ${all.records.length} ฉบับแล้ว`)
+    } catch {
+      toast.show('ส่งออกไม่สำเร็จ', 'error')
     }
-    downloadCsv(
-      downloadName({ kind: 'wht-certificates', clientCode, period: effective.month || 'all', ext: 'csv' }),
-      whtToCsv(records),
-    )
-    toast.show(`ส่งออก ${records.length} ฉบับแล้ว (หน้าที่แสดง)`)
-  }, [records, effective.month, toast, clientCode])
+  }, [effective, activeTenant, toast, clientCode])
 
   const onBulkFiled = useCallback(() => {
     if (selected.size === 0) return
@@ -389,7 +397,7 @@ export function WhtList() {
                 </div>
               )}
               <div className="max-h-[70vh] overflow-auto">
-                <table className="w-full min-w-[1040px] border-collapse text-body">
+                <table className="w-full min-w-[1120px] border-collapse text-body">
                   <thead>
                      <tr>
                        <th scope="col" className={cn(thBase, 'w-9 pl-3 pr-0')}>
@@ -410,6 +418,7 @@ export function WhtList() {
                        {th('form', 'แบบยื่น')}
                        {th('amount', 'ยอดเงิน (ฐานภาษี)', 'right')}
                        {th('wht', 'ภาษีที่หักไว้', 'right')}
+                       {th('rate', 'อัตราหัก (%)', 'right')}
                        {th('status', 'สถานะ')}
                        <th scope="col" className={cn(thBase, 'w-24 text-right')}>
                          พิมพ์
@@ -418,7 +427,7 @@ export function WhtList() {
                   </thead>
                   <tbody>
                     {isLoading ? (
-                      <TableSkeleton rows={8} cols={10} />
+                      <TableSkeleton rows={8} cols={11} />
                     ) : (
                       records.map((r) => {
                         const filed = r.status === 'done'
@@ -448,6 +457,7 @@ export function WhtList() {
                             <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold tabular-nums">
                               {r.whtAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
+                            <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-ink-600">{r.whtRate}%</td>
                             <td className="whitespace-nowrap px-3 py-2.5">
                               <span
                                 className={cn(

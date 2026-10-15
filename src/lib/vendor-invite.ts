@@ -39,6 +39,8 @@ export interface VendorInvite {
   token?: string
   /** Where the invite was sent, for the client's reference. */
   label?: string
+  /** Vendor's LINE id the client recorded when creating the link (hint). */
+  recipientLine?: string
   createdAt: string
   expiresAt: string
   openedAt?: string
@@ -76,6 +78,8 @@ export interface VendorInvitePublic {
   logoUrl?: string | null
   /** Short human reference (`VN-…`) printed on the submission evidence. */
   ref?: string
+  /** LINE id hint the client recorded when creating the link (prefills the form). */
+  recipientLine?: string
   /** When the vendor submitted (drives the evidence card). */
   submittedAt?: string
   /** Consent version the vendor accepted. */

@@ -87,10 +87,11 @@ export type WhtSortKey =
   | 'cert-asc' | 'cert-desc'
   | 'form-asc' | 'form-desc'
   | 'amount-desc' | 'amount-asc'
+  | 'rate-desc' | 'rate-asc'
   | 'wht-desc' | 'wht-asc'
   | 'status-asc' | 'status-desc'
 
-export const WHT_SORT_FIELDS = ['date', 'vendor', 'cert', 'form', 'amount', 'wht', 'status'] as const
+export const WHT_SORT_FIELDS = ['date', 'vendor', 'cert', 'form', 'amount', 'rate', 'wht', 'status'] as const
 export type WhtSortField = (typeof WHT_SORT_FIELDS)[number]
 
 const SORTERS: Record<WhtSortKey, (a: WhtRecord & { vendorName?: string }, b: WhtRecord & { vendorName?: string }) => number> = {
@@ -104,6 +105,8 @@ const SORTERS: Record<WhtSortKey, (a: WhtRecord & { vendorName?: string }, b: Wh
   'form-desc': (a, b) => cmp(b.formType, a.formType) || cmp(a.issueDate, b.issueDate),
   'amount-desc': (a, b) => b.amount - a.amount || cmp(a.id, b.id),
   'amount-asc': (a, b) => a.amount - b.amount || cmp(a.id, b.id),
+  'rate-desc': (a, b) => b.whtRate - a.whtRate || cmp(a.id, b.id),
+  'rate-asc': (a, b) => a.whtRate - b.whtRate || cmp(a.id, b.id),
   'wht-desc': (a, b) => b.whtAmount - a.whtAmount || cmp(a.id, b.id),
   'wht-asc': (a, b) => a.whtAmount - b.whtAmount || cmp(a.id, b.id),
   'status-asc': (a, b) => cmp(a.status, b.status) || cmp(a.issueDate, b.issueDate),

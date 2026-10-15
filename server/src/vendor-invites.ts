@@ -67,6 +67,7 @@ function toInvite(r: Row): Record<string, unknown> {
     tenantId: r.user_id,
     status: expired ? 'expired' : storedStatus,
     label: r.label ?? undefined,
+    recipientLine: r.recipient_line ?? undefined,
     createdAt: r.created_at,
     expiresAt: r.expires_at,
     openedAt: r.opened_at ?? undefined,
@@ -122,12 +123,12 @@ inviteClientRoutes.post('/vendor-invites', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
   if (!canDo(g, 'canManageVendors')) return c.json({ error: 'forbidden' }, 403)
-  const b = (await c.req.json().catch(() => null)) as { label?: string } | null
+  const b = (await c.req.json().catch(() => null)) as { label?: string; recipientLine?: string } | null
   const token = randomBytes(32).toString('base64url')
   const row = await withTenant(g.ws, 'owner', async () => {
     const db = sql()
-    const ins = (await db`insert into vendor_invites (user_id, token_hash, token, label, created_by, expires_at)
-      values (${g.ws}, ${sha256hex(token)}, ${encryptToken(token)}, ${b?.label?.trim() ?? null}, ${g.actor}, ${inviteExpiry()})
+    const ins = (await db`insert into vendor_invites (user_id, token_hash, token, label, recipient_line, created_by, expires_at)
+      values (${g.ws}, ${sha256hex(token)}, ${encryptToken(token)}, ${b?.label?.trim() ?? null}, ${b?.recipientLine?.trim() ?? null}, ${g.actor}, ${inviteExpiry()})
       returning *`) as unknown as Row[]
     return ins[0]
   })
@@ -252,7 +253,7 @@ invitePublicRoutes.get('/:token', async (c) => {
   const token = c.req.param('token')
   const db = sql()
   const rows = (await db`select id, user_id, status, expires_at, review_note, submitted_at, consent_version,
-      prefix, name, address, phone, email, line_user_id, tax_id_encrypted,
+      prefix, name, address, phone, email, line_user_id, tax_id_encrypted, recipient_line,
       bank_name, bank_account_encrypted, account_holder,
       id_doc_path, bank_doc_path
     from vendor_invites where token_hash = ${sha256hex(token)}`) as unknown as Row[]
@@ -288,6 +289,7 @@ invitePublicRoutes.get('/:token', async (c) => {
     clientName: settings.displayName,
     logoUrl,
     ref: onboardRef(String(r.id)),
+    recipientLine: r.recipient_line ?? undefined,
     submittedAt: r.submitted_at ?? undefined,
     consentVersion: r.consent_version ?? undefined,
     docs: { id: !!r.id_doc_path, bank: !!r.bank_doc_path },

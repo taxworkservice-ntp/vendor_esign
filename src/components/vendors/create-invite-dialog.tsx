@@ -18,7 +18,8 @@ export function CreateInviteDialog({ open, onClose }: { open: boolean; onClose: 
   const create = useCreateVendorInvite()
   const { data: settings } = useSettings()
   const toast = useToast()
-  const [note, setNote] = useState('')
+  const [recipientName, setRecipientName] = useState('')
+  const [recipientLine, setRecipientLine] = useState('')
   const [created, setCreated] = useState<VendorInvite | null>(null)
   const [message, setMessage] = useState('')
   const [copied, setCopied] = useState<'message' | 'link' | null>(null)
@@ -27,7 +28,8 @@ export function CreateInviteDialog({ open, onClose }: { open: boolean; onClose: 
 
   useEffect(() => {
     if (!open) return
-    setNote('')
+    setRecipientName('')
+    setRecipientLine('')
     setCreated(null)
     setMessage('')
     setCopied(null)
@@ -52,10 +54,13 @@ export function CreateInviteDialog({ open, onClose }: { open: boolean; onClose: 
   }
 
   const doCreate = () => {
-    create.mutate(note.trim() || undefined, {
-      onSuccess: (inv) => setCreated(inv),
-      onError: () => toast.show('สร้างลิงก์ไม่สำเร็จ', 'error'),
-    })
+    create.mutate(
+      { label: recipientName.trim() || undefined, recipientLine: recipientLine.trim() || undefined },
+      {
+        onSuccess: (inv) => setCreated(inv),
+        onError: () => toast.show('สร้างลิงก์ไม่สำเร็จ', 'error'),
+      },
+    )
   }
 
   return (
@@ -68,11 +73,17 @@ export function CreateInviteDialog({ open, onClose }: { open: boolean; onClose: 
 
           {!created ? (
             <>
-              <div>
-                <Label hint="ไม่บังคับ">บันทึกช่วยจำ (ส่งให้ใคร)</Label>
-                <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="เช่น สมชาย การช่าง (LINE)" />
-                <p className="mt-1.5 text-label text-ink-500">ไว้ให้ลูกค้าจำได้ว่าส่งลิงก์นี้ให้ผู้ขายรายใด</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label hint="ไม่บังคับ">ชื่อผู้ขาย</Label>
+                  <Input value={recipientName} onChange={(e) => setRecipientName(e.target.value)} placeholder="เช่น สมชาย การช่าง" />
+                </div>
+                <div>
+                  <Label hint="ไม่บังคับ">LINE ID ของผู้ขาย (ถ้าทราบ)</Label>
+                  <Input value={recipientLine} onChange={(e) => setRecipientLine(e.target.value)} placeholder="U…" className="font-mono" autoCapitalize="none" spellCheck={false} />
+                </div>
               </div>
+              <p className="text-label text-ink-500">ไว้ให้ลูกค้าจำได้ว่าส่งลิงก์นี้ให้ผู้ขายรายใด และใช้เติมช่อง LINE ของผู้ขายให้อัตโนมัติ</p>
               <div className="flex justify-end gap-2">
                 <Button variant="secondary" onClick={onClose}>ยกเลิก</Button>
                 <Button onClick={doCreate} loading={create.isPending}>สร้างลิงก์</Button>

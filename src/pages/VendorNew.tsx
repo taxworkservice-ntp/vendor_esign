@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useCreateVendor } from '../hooks/useVendors'
 import { useClientAuth } from '../lib/client-auth'
 import { VENDOR_PREFIXES, isVendorPrefix, prefixRequired } from '../lib/vendor-name'
+import { bankValidation } from '../lib/bank-account'
+import { BankSelect } from '../components/vendors/bank-select'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
 import { Button } from '../components/ui/button'
@@ -23,6 +25,9 @@ export function VendorNew() {
   const [lineUserId, setLineUserId] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
+  const [bankName, setBankName] = useState('')
+  const [bankAccount, setBankAccount] = useState('')
+  const [accountHolder, setAccountHolder] = useState('')
   const [err, setErr] = useState('')
 
   const submit = async () => {
@@ -47,8 +52,13 @@ export function VendorNew() {
       setErr('รูปแบบอีเมลไม่ถูกต้อง')
       return
     }
+    const bankErr = bankValidation({ bankName, bankAccount, accountHolder })
+    if (bankErr) {
+      setErr(bankErr)
+      return
+    }
     try {
-      const v = await create.mutateAsync({ prefix, name, address, taxId, lineUserId, phone, email })
+      const v = await create.mutateAsync({ prefix, name, address, taxId, lineUserId, phone, email, bankName, bankAccount, accountHolder })
       nav(`/vendors/${v.id}`)
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'บันทึกไม่สำเร็จ')
@@ -126,6 +136,26 @@ export function VendorNew() {
               <Label hint="ไม่บังคับ">อีเมล</Label>
               <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" />
             </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label hint="ไม่บังคับ">ธนาคาร</Label>
+              <BankSelect value={bankName} onChange={setBankName} />
+            </div>
+            <div>
+              <Label hint="ไม่บังคับ">เลขที่บัญชี</Label>
+              <Input
+                value={bankAccount}
+                onChange={(e) => setBankAccount(e.target.value)}
+                placeholder="xxx-x-xxxxx-x"
+                inputMode="numeric"
+                className="font-mono"
+              />
+            </div>
+          </div>
+          <div>
+            <Label hint="ไม่บังคับ · ตามสมุดบัญชี">ชื่อบัญชี</Label>
+            <Input value={accountHolder} onChange={(e) => setAccountHolder(e.target.value)} placeholder="ชื่อตามสมุดบัญชี" />
           </div>
           <FieldError msg={err} />
           <div className="flex gap-2">

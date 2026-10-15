@@ -63,16 +63,20 @@ export async function listVendorInvites(tenantId: string): Promise<VendorInvite[
   return enriched.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
 
-export async function createVendorInvite(tenantId: string, label?: string): Promise<VendorInvite> {
+export async function createVendorInvite(
+  tenantId: string,
+  input?: { label?: string; recipientLine?: string },
+): Promise<VendorInvite> {
   if (hasServer) {
-    return (await apiSend<{ invite: VendorInvite }>('/api/client/vendor-invites', 'POST', { label })).invite
+    return (await apiSend<{ invite: VendorInvite }>('/api/client/vendor-invites', 'POST', input ?? {})).invite
   }
   const invite: VendorInvite = {
     id: newInviteId(),
     tenantId,
     status: 'invited',
     token: newInviteToken(),
-    label: label?.trim() || undefined,
+    label: input?.label?.trim() || undefined,
+    recipientLine: input?.recipientLine?.trim() || undefined,
     createdAt: new Date().toISOString(),
     expiresAt: expiry(),
   }
@@ -104,6 +108,7 @@ export async function getVendorInviteByToken(token: string): Promise<VendorInvit
     // Mock has no R2 proxy; the header falls back to the name/monogram.
     logoUrl: null,
     ref: onboardRef(inv.id),
+    recipientLine: inv.recipientLine,
     submittedAt: inv.submittedAt,
     consentVersion: inv.consentVersion,
     docs: { id: !!inv.idDocData, bank: !!inv.bankDocData },
@@ -232,6 +237,9 @@ async function createVendorFromDraft(tenantId: string, draft: VendorInviteDraft)
     lineUserId: draft.lineUserId?.trim() || undefined,
     phone: draft.phone?.trim() || undefined,
     email: draft.email?.trim() || undefined,
+    bankName: draft.bankName?.trim() || undefined,
+    bankAccount: draft.bankAccount?.replace(/\D/g, '') || undefined,
+    accountHolder: draft.accountHolder?.trim() || undefined,
     createdAt: new Date().toISOString(),
   }
   saveVendor(row)

@@ -24,9 +24,9 @@ function seed(): WhtBundle {
     { id: 'w-demo-1', tenantId: 'DEMO', name: 'บริษัท เดโม ซัพพลาย จำกัด', taxId: '0105566000011', address: '99/1 ถ.สุขุมวิท เขตคลองเตย กรุงเทพฯ 10110', vendorType: 'company', isActive: true, createdAt: at },
   ]
   const records: WhtRecord[] = [
-    { id: 'wr-abc-1', tenantId: 'ABC', vendorId: 'w-abc-2', formType: 'pnd53', issueDate: '2026-09-18', amount: 5000, whtRate: 3, whtAmount: 150, certificateNo: '2609001', description: 'ค่าบริการ', status: 'active', createdAt: at },
-    { id: 'wr-abc-2', tenantId: 'ABC', vendorId: 'w-abc-1', formType: 'pnd3', issueDate: '2026-09-22', amount: 3000, whtRate: 3, whtAmount: 90, certificateNo: '2609002', description: 'ค่าจ้างทำความสะอาด', status: 'active', createdAt: at },
-    { id: 'wr-demo-1', tenantId: 'DEMO', vendorId: 'w-demo-1', formType: 'pnd53', issueDate: '2026-09-19', amount: 18000, whtRate: 3, whtAmount: 540, certificateNo: '2609001', description: 'ค่าซ่อมแซม', status: 'active', createdAt: at },
+    { id: 'wr-abc-1', tenantId: 'ABC', vendorId: 'w-abc-2', formType: 'pnd53', issueDate: '2026-09-18', amount: 5000, whtRate: 3, whtAmount: 150, certificateNo: 'WT26091001', description: 'ค่าบริการ', status: 'active', createdAt: at },
+    { id: 'wr-abc-2', tenantId: 'ABC', vendorId: 'w-abc-1', formType: 'pnd3', issueDate: '2026-09-22', amount: 3000, whtRate: 3, whtAmount: 90, certificateNo: 'WT26091002', description: 'ค่าจ้างทำความสะอาด', status: 'active', createdAt: at },
+    { id: 'wr-demo-1', tenantId: 'DEMO', vendorId: 'w-demo-1', formType: 'pnd53', issueDate: '2026-09-19', amount: 18000, whtRate: 3, whtAmount: 540, certificateNo: 'WT26091001', description: 'ค่าซ่อมแซม', status: 'active', createdAt: at },
   ]
   return { vendors, records }
 }
