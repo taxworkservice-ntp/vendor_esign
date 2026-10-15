@@ -571,7 +571,14 @@ export function TransactionNew() {
               {taxState.status === 'ready' ? (
                 <p className="flex items-center gap-1.5 font-medium">
                   <Lock size={14} className="shrink-0 text-ink-400" aria-hidden />
-                  {taxState.paymentType} · หัก {whtRateFor(taxState.paymentType, cfg)}%
+                  {taxState.paymentType}
+                  {/* Show the effective outcome — the base rate means nothing
+                      when มาตรา 50/1 has waived WHT below the threshold. */}
+                  {effectiveRate > 0
+                    ? ` · หัก ${effectiveRate}%`
+                    : baseRate > 0
+                      ? ' · ไม่หักภาษี (ยอดต่ำกว่าเกณฑ์)'
+                      : ''}
                 </p>
               ) : (
                 <p className="text-body text-ink-500">จะกำหนดอัตโนมัติเมื่อเลือกรายการ</p>
@@ -587,10 +594,12 @@ export function TransactionNew() {
                 <span className="text-ink-500">รวมเป็นเงิน (ฐานภาษี)</span>
                 <span className="font-semibold tabular-nums">{fmtTHB(gross)}</span>
               </div>
-              <div className="flex justify-between py-0.5">
-                <span className="text-ink-500">หัก WHT ({effectiveRate}%)</span>
-                <span className="font-semibold tabular-nums text-ink-500">− {fmtTHB(wht)}</span>
-              </div>
+              {effectiveRate > 0 && (
+                <div className="flex justify-between py-0.5">
+                  <span className="text-ink-500">หัก WHT ({effectiveRate}%)</span>
+                  <span className="font-semibold tabular-nums text-ink-500">− {fmtTHB(wht)}</span>
+                </div>
+              )}
               <div className="mt-1.5 flex justify-between border-t border-card-border pt-2">
                 <span className="font-semibold">ยอดสุทธิที่ผู้ขายได้รับ</span>
                 <span className="text-lg font-semibold tabular-nums">{fmtTHB(net)}</span>
