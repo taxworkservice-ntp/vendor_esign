@@ -45,7 +45,9 @@ export function SubmissionEvidence({ data }: { data: SubmissionEvidenceData }) {
       // Loaded lazily so this component stays light (jsPDF/html-to-image only
       // load when the vendor actually downloads).
       const { elementToA4PdfBytes } = await import('../../lib/receipt-to-a4-pdf')
-      const bytes = await elementToA4PdfBytes(el)
+      // The evidence is a short card, not an A4 sheet — preserve its proportions
+      // instead of stretching it to fill the page.
+      const bytes = await elementToA4PdfBytes(el, { fit: 'contain' })
       await saveFile(new Blob([bytes.slice().buffer], { type: 'application/pdf' }), `vendor-onboard-${data.inviteRef}.pdf`)
     } finally {
       setDownloading(false)

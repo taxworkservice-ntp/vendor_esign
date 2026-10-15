@@ -14,6 +14,7 @@ import { Button } from '../components/ui/button'
 import { Checkbox } from '../components/ui/checkbox'
 import { PdpaNotice } from '../components/consent/pdpa-notice'
 import { SubmissionEvidence } from '../components/vendor/submission-evidence'
+import { BankSelect } from '../components/vendors/bank-select'
 import { ActionBar } from '../components/ui/action-bar'
 import { FieldError, Input, Label, Textarea } from '../components/ui/input'
 import { cn } from '../lib/cn'
@@ -440,8 +441,7 @@ function OnboardForm({
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <Label htmlFor="ob-bankname" required>ธนาคาร</Label>
-            <Input id="ob-bankname" value={bankName} invalid={!!errors.bankName} enterKeyHint="next"
-              onChange={(e) => { setBankName(e.target.value); clearError('bankName') }} placeholder="เช่น กสิกรไทย" />
+            <BankSelect id="ob-bankname" value={bankName} onChange={(v) => { setBankName(v); clearError('bankName') }} />
             <FieldError msg={errors.bankName} />
           </div>
           <div>

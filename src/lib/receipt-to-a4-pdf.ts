@@ -43,11 +43,24 @@ export async function receiptSheetToA4PdfBytes(el: HTMLElement): Promise<Uint8Ar
  * submission evidence. `filter` drops screen-only nodes; `beforePdf` lets the
  * caller composite extra layers (e.g. a signature) before the PDF is written.
  */
+const A4_W = 595.28
+const A4_H = 841.89
+const A4_MARGIN = 36 // 0.5in
+
 export async function elementToA4PdfBytes(
   el: HTMLElement,
   opts: {
     filter?: (node: HTMLElement) => boolean
     beforePdf?: (canvas: HTMLCanvasElement) => void | Promise<void>
+    /**
+     * How the capture fills the A4 page:
+     *  - 'stretch' (default): fills the whole page, ignoring aspect ratio — for
+     *    A4-proportioned sheets (the receipt) where that is intentional.
+     *  - 'contain': preserves the element's aspect ratio, scaled to fit the page
+     *    with a margin and top-centred — for short content (the onboarding
+     *    evidence card) that would otherwise be distorted by stretching.
+     */
+    fit?: 'stretch' | 'contain'
   } = {},
 ): Promise<Uint8Array> {
   const { jsPDF } = await import('jspdf')
@@ -64,7 +77,19 @@ export async function elementToA4PdfBytes(
     })
     if (opts.beforePdf) await opts.beforePdf(canvas)
     const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' })
-    pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 595.28, 841.89)
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.95)
+    if (opts.fit === 'contain' && canvas.width > 0 && canvas.height > 0) {
+      const ratio = canvas.height / canvas.width
+      let w = A4_W - A4_MARGIN * 2
+      let h = w * ratio
+      if (h > A4_H - A4_MARGIN * 2) {
+        h = A4_H - A4_MARGIN * 2
+        w = h / ratio
+      }
+      pdf.addImage(dataUrl, 'JPEG', (A4_W - w) / 2, A4_MARGIN, w, h)
+    } else {
+      pdf.addImage(dataUrl, 'JPEG', 0, 0, A4_W, A4_H)
+    }
     return new Uint8Array(pdf.output('arraybuffer'))
   } finally {
     el.classList.remove('pdf-export')
