@@ -67651,6 +67651,10 @@ var LEGACY_DEFAULT_CONSENT = "\u0E02\u0E49\u0E32\u0E1E\u0E40\u0E08\u0E49\u0E32\u
 function renderConsent(template, vars) {
   return template.replace(/\{\{client\}\}/g, vars.client).replace(/\{\{amount\}\}/g, vars.amount).replace(/\{\{date\}\}/g, vars.date).replace(/\{\{ref\}\}/g, vars.ref).replace(/\{\{version\}\}/g, vars.version);
 }
+function consentVersionLabel(version) {
+  const v2 = String(version ?? "").trim().replace(/^v+/i, "");
+  return v2 ? `v${v2}` : "";
+}
 var CONSENT_VARS = ["{{client}}", "{{amount}}", "{{date}}", "{{ref}}", "{{version}}"];
 function currentBeYear(today = /* @__PURE__ */ new Date()) {
   return today.getFullYear() + 543;
@@ -68185,8 +68189,49 @@ async function deleteTenantArtifacts(tenantId, relPaths) {
   return removed;
 }
 
+// server/src/crypto.ts
+import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+var PREFIX = "enc:v1:";
+function key() {
+  const raw2 = process.env.ID_ENCRYPTION_KEY ?? "";
+  if (!raw2) throw new Error("Missing ID_ENCRYPTION_KEY (32-byte base64). See docs/DB.md.");
+  const k = Buffer.from(raw2, "base64");
+  if (k.length !== 32) throw new Error("ID_ENCRYPTION_KEY must decode to 32 bytes (base64).");
+  return k;
+}
+function encryptId(plain) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key(), iv);
+  const ct2 = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `${PREFIX}${iv.toString("base64")}:${tag.toString("base64")}:${ct2.toString("base64")}`;
+}
+function decryptId(payload) {
+  try {
+    if (!payload.startsWith(PREFIX)) return null;
+    const [ivB64, tagB64, ctB64] = payload.slice(PREFIX.length).split(":");
+    if (!ivB64 || !tagB64 || !ctB64) return null;
+    const decipher = createDecipheriv("aes-256-gcm", key(), Buffer.from(ivB64, "base64"));
+    decipher.setAuthTag(Buffer.from(tagB64, "base64"));
+    return Buffer.concat([decipher.update(Buffer.from(ctB64, "base64")), decipher.final()]).toString("utf8");
+  } catch {
+    return null;
+  }
+}
+function encryptToken(plain) {
+  try {
+    return encryptId(plain);
+  } catch {
+    return plain;
+  }
+}
+function decryptToken(stored) {
+  if (!stored.startsWith(PREFIX)) return stored;
+  return decryptId(stored) ?? stored;
+}
+
 // server/src/auth.ts
-import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes as randomBytes2, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 var scryptAsync = promisify(scryptCb);
 var N = 16384;
@@ -68197,7 +68242,7 @@ function sha256hex(s) {
   return createHash("sha256").update(s).digest("hex");
 }
 async function hashPassword(password) {
-  const salt = randomBytes(16);
+  const salt = randomBytes2(16);
   const key2 = await scryptAsync(password, salt, KEYLEN, { N, r: R, p: P, maxmem: 32 * 1024 * 1024 });
   return `scrypt$${N}$${R}$${P}$${salt.toString("hex")}$${key2.toString("hex")}`;
 }
@@ -68219,11 +68264,11 @@ async function verifyPassword(password, stored) {
 }
 function tempPassword(len = 12) {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-  const bytes = randomBytes(len);
+  const bytes = randomBytes2(len);
   return Array.from(bytes, (b2) => alphabet[b2 % alphabet.length]).join("");
 }
 function sessionToken() {
-  const token = randomBytes(32).toString("base64url");
+  const token = randomBytes2(32).toString("base64url");
   return { token, hash: sha256hex(token) };
 }
 function getCookie(header, name) {
@@ -68763,47 +68808,6 @@ async function saveTenantSettings(tenantId, s) {
     if (s.signaturePlacement !== void 0) await put("signature_placement", s.signaturePlacement);
     if (s.stampPlacement !== void 0) await put("stamp_placement", s.stampPlacement);
   });
-}
-
-// server/src/crypto.ts
-import { createCipheriv, createDecipheriv, randomBytes as randomBytes2 } from "node:crypto";
-var PREFIX = "enc:v1:";
-function key() {
-  const raw2 = process.env.ID_ENCRYPTION_KEY ?? "";
-  if (!raw2) throw new Error("Missing ID_ENCRYPTION_KEY (32-byte base64). See docs/DB.md.");
-  const k = Buffer.from(raw2, "base64");
-  if (k.length !== 32) throw new Error("ID_ENCRYPTION_KEY must decode to 32 bytes (base64).");
-  return k;
-}
-function encryptId(plain) {
-  const iv = randomBytes2(12);
-  const cipher = createCipheriv("aes-256-gcm", key(), iv);
-  const ct2 = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return `${PREFIX}${iv.toString("base64")}:${tag.toString("base64")}:${ct2.toString("base64")}`;
-}
-function decryptId(payload) {
-  try {
-    if (!payload.startsWith(PREFIX)) return null;
-    const [ivB64, tagB64, ctB64] = payload.slice(PREFIX.length).split(":");
-    if (!ivB64 || !tagB64 || !ctB64) return null;
-    const decipher = createDecipheriv("aes-256-gcm", key(), Buffer.from(ivB64, "base64"));
-    decipher.setAuthTag(Buffer.from(tagB64, "base64"));
-    return Buffer.concat([decipher.update(Buffer.from(ctB64, "base64")), decipher.final()]).toString("utf8");
-  } catch {
-    return null;
-  }
-}
-function encryptToken(plain) {
-  try {
-    return encryptId(plain);
-  } catch {
-    return plain;
-  }
-}
-function decryptToken(stored) {
-  if (!stored.startsWith(PREFIX)) return stored;
-  return decryptId(stored) ?? stored;
 }
 
 // src/lib/bank-account.ts
@@ -70837,7 +70841,7 @@ async function buildReceiptPdf(input) {
   const vAddr = wrap(`\u0E17\u0E35\u0E48\u0E2D\u0E22\u0E39\u0E48: ${input.vendor.address}`, regular, 10, halfW);
   vAddr.slice(0, 2).forEach((ln2, i) => text(ln2, M, y - 16 - i * 13, 10, regular, MUTED));
   const idY = y - 16 - Math.min(vAddr.length, 2) * 13;
-  text(`\u0E40\u0E25\u0E02\u0E1A\u0E31\u0E15\u0E23\u0E1B\u0E23\u0E30\u0E0A\u0E32\u0E0A\u0E19: ${input.vendor.maskedId}`, M, idY, 9.5, regular, MUTED);
+  text(`\u0E40\u0E25\u0E02\u0E1A\u0E31\u0E15\u0E23\u0E1B\u0E23\u0E30\u0E0A\u0E32\u0E0A\u0E19: ${input.vendor.taxId ?? input.vendor.maskedId}`, M, idY, 9.5, regular, MUTED);
   let contactY = idY - 12;
   if (input.vendor.phone) {
     text(`\u0E42\u0E17\u0E23: ${input.vendor.phone}`, M, contactY, 9, regular, MUTED);
@@ -70876,13 +70880,11 @@ async function buildReceiptPdf(input) {
   const numW = 20;
   const descX = M + numW + 8;
   const amtW = 82;
-  const discW = 74;
   const priceW = 84;
   const unitW = 52;
   const qtyW = 34;
   const amtRight = right;
-  const discRight = right - amtW - 6;
-  const priceRight = discRight - discW - 6;
+  const priceRight = right - amtW - 6;
   const unitRight = priceRight - priceW - 8;
   const qtyRight = unitRight - unitW - 6;
   const descW = qtyRight - qtyW - 10 - descX;
@@ -70892,7 +70894,6 @@ async function buildReceiptPdf(input) {
     rightText("\u0E08\u0E33\u0E19\u0E27\u0E19", qtyRight, y, 8.5, bold, FAINT);
     rightText("\u0E2B\u0E19\u0E48\u0E27\u0E22", unitRight, y, 8.5, bold, FAINT);
     rightText("\u0E23\u0E32\u0E04\u0E32/\u0E2B\u0E19\u0E48\u0E27\u0E22", priceRight, y, 8.5, bold, FAINT);
-    rightText("\u0E2A\u0E48\u0E27\u0E19\u0E25\u0E14", discRight, y, 8.5, bold, FAINT);
     rightText("\u0E08\u0E33\u0E19\u0E27\u0E19\u0E40\u0E07\u0E34\u0E19", amtRight, y, 8.5, bold, FAINT);
     y -= 8;
     rule(y, INK, 1);
@@ -70915,7 +70916,6 @@ async function buildReceiptPdf(input) {
     rightText(`${it2.quantity ?? 1}`, qtyRight, y - 10, 9.5, regular, INK);
     rightText(`${it2.unit || "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23"}`, unitRight, y - 10, 9.5, regular, INK);
     rightText(`${thb(it2.unitPrice ?? it2.amount)}`, priceRight, y - 10, 9.5, regular, INK);
-    rightText(it2.discount ? `${thb(it2.discount)}` : "\u2014", discRight, y - 10, 9.5, regular, MUTED);
     rightText(`${thb(it2.amount)}`, amtRight, y - 10, 9.5, bold, INK);
     y -= rowH;
     page.drawLine({ start: { x: M, y: y + 4 }, end: { x: right, y: y + 4 }, thickness: 0.5, color: RULE });
@@ -70971,7 +70971,7 @@ async function buildReceiptPdf(input) {
   );
   const footerBits = [`\u0E23\u0E2B\u0E31\u0E2A\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A ${input.verificationCode} \xB7 ${input.verifyUrl}`];
   if (input.authRef) footerBits.push(`\u0E40\u0E25\u0E02\u0E2D\u0E49\u0E32\u0E07\u0E2D\u0E34\u0E07 ${input.authRef}`);
-  if (input.consentVersion) footerBits.push(`\u0E02\u0E49\u0E2D\u0E15\u0E01\u0E25\u0E07 v${input.consentVersion}`);
+  if (input.consentVersion) footerBits.push(`\u0E02\u0E49\u0E2D\u0E15\u0E01\u0E25\u0E07 ${consentVersionLabel(input.consentVersion)}`);
   centerText(footerBits.join(" \xB7 "), 30, 8, regular, FAINT);
   if (input.showVerification) {
     const qrSize = 64;
@@ -71086,6 +71086,15 @@ async function finalizeReceipt(txnId, ip) {
     subItems: Array.isArray(it2.subItems) ? it2.subItems.filter((s) => typeof s === "string") : []
   })).filter((it2) => it2.description.trim() || it2.amount > 0);
   const sig = await readStoredDurable(rowTenant, d2.signature_image_path);
+  let vendorTaxId;
+  try {
+    const enc2 = one(await db`
+      select v.id_number_encrypted from vendor_payables p
+      join vendor_payees v on v.id = p.vendor_id
+      where p.id = ${txnId} and p.user_id = ${rowTenant}`);
+    if (enc2?.id_number_encrypted) vendorTaxId = decryptId(enc2.id_number_encrypted) ?? void 0;
+  } catch {
+  }
   const verifyUrl = `${PUBLIC_BASE}/verify/${code.toUpperCase()}`;
   const { bytes, sha256: sha2562 } = await buildReceiptPdf({
     number,
@@ -71105,6 +71114,7 @@ async function finalizeReceipt(txnId, ip) {
       name: d2.vendor_name,
       address: d2.vendor_address,
       maskedId: d2.vendor_masked_id,
+      taxId: vendorTaxId,
       phone: d2.vendor_phone ?? void 0,
       email: d2.vendor_email ?? void 0
     },
@@ -71591,6 +71601,7 @@ app.get("/api/vendor/:token", async (c) => {
       t.tax_id_hash, t.tax_id_last4,
       v.prefix as vendor_prefix, v.name as vendor_name, v.address as vendor_address,
       v.phone as vendor_phone, v.email as vendor_email,
+      v.id_number_encrypted as vendor_id_encrypted,
       (select client_code from client_profiles where id = vr.user_id) as client_code,
       (select row_to_json(x) from (
          select number, verification_code from vendor_receipts rr
@@ -71628,6 +71639,15 @@ app.get("/api/vendor/:token", async (c) => {
       idLast4: r.tax_id_last4 ?? null
     });
   }
+  let vendorTaxId = null;
+  const encVendor = r.vendor_id_encrypted;
+  if (encVendor) {
+    try {
+      vendorTaxId = decryptId(encVendor);
+    } catch {
+      vendorTaxId = null;
+    }
+  }
   return c.json({
     id: r.id,
     tenantId: rowTenant,
@@ -71655,6 +71675,7 @@ app.get("/api/vendor/:token", async (c) => {
     vendorAddress: r.vendor_address,
     vendorPhone: r.vendor_phone ?? null,
     vendorEmail: r.vendor_email ?? null,
+    vendorTaxId,
     receiptNumber: r.receipt?.number ?? null,
     verificationCode: r.receipt?.verification_code ?? null,
     unlocked: true
@@ -71745,7 +71766,7 @@ app.post("/api/vendor/:token/sign", async (c) => {
   if (await rateLimited(`sign:${ip}`, 10)) return c.json({ error: "too-many-requests" }, 429);
   const token = c.req.param("token");
   const body = await c.req.json().catch(() => null);
-  if (!body?.vendorName || !body?.vendorAddress || !body?.signaturePng || body.consentVersion !== "v1")
+  if (!body?.vendorName || !body?.vendorAddress || !body?.signaturePng || !body.consentVersion)
     return c.json({ error: "invalid-body" }, 400);
   if (!isValidPhone(String(body.vendorPhone ?? ""))) return c.json({ error: "invalid-phone" }, 400);
   if (!isValidEmail(String(body.vendorEmail ?? ""))) return c.json({ error: "invalid-email" }, 400);
@@ -71778,6 +71799,9 @@ app.post("/api/vendor/:token/sign", async (c) => {
     return c.json({ error: "already-signed" }, 409);
   const txnId = String(r.id);
   const rowTenant = String(r.user_id);
+  const settings = await getTenantSettings(rowTenant);
+  if (String(body.consentVersion ?? "") !== settings.consentVersion)
+    return c.json({ error: "consent-version-mismatch" }, 409);
   const signMethod = body.signMethod === "typed-consent" || body.signMethod === "uploaded-signature" ? body.signMethod : "drawn";
   const verificationMethod = signMethod === "drawn" ? "stub-deferred" : signMethod;
   const corrections = [];
@@ -71797,7 +71821,6 @@ app.post("/api/vendor/:token/sign", async (c) => {
     corrections.push({ field: "email", from: String(r.record_email ?? ""), to: subEmail });
   const sigPath = await saveBytesDurable("signatures", `${txnId}.png`, png, rowTenant);
   const authRef = `AUTH-${randomBytes6(4).toString("hex").toUpperCase()}`;
-  const settings = await getTenantSettings(rowTenant);
   const consentVersion = settings.consentVersion;
   const consentText = renderConsent(settings.consentTextV1, {
     client: settings.displayName,
@@ -71842,14 +71865,14 @@ app.post("/api/vendor/:token/sign", async (c) => {
   } catch (e) {
     console.error("[sign] issue-failed", e instanceof Error ? e.message : String(e));
   }
-  const clientProfile = await getTenantSettings(rowTenant).catch(() => null);
   return c.json({
     ok: true,
     transactionId: txnId,
     corrections,
     authRef,
+    consentVersion,
     ...issued,
-    client: clientProfile ? { displayName: clientProfile.displayName, address: clientProfile.address, taxId: clientProfile.taxId } : void 0
+    client: { displayName: settings.displayName, address: settings.address, taxId: settings.taxId }
   });
 });
 app.post("/api/transactions/:id/finalize", async (c) => {

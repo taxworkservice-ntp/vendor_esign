@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { normalizeLineItem } from '../../src/lib/line-items'
 import { vendorDisplayName } from '../../src/lib/vendor-name'
 import { fmtDateTimeTHLong } from '../../src/lib/format'
+import { consentVersionLabel } from '../../src/lib/settings-types'
 
 // Server-side A4 receipt PDF. Embedded Sarabun (SIL OFL) + QR verification.
 //
@@ -43,7 +44,7 @@ export interface ReceiptPdfInput {
   /** The authorization's own reference (evidence line in the footer). */
   authRef?: string
   client: { code: string; display: string } // display = name/addr/taxid line [VERIFY]
-  vendor: { prefix: string; name: string; address: string; maskedId: string; phone?: string; email?: string }
+  vendor: { prefix: string; name: string; address: string; maskedId: string; taxId?: string; phone?: string; email?: string }
   // Line items are the source; a legacy single line is expressed as one item.
   lineItems: ReceiptLine[]
   note?: string
@@ -190,7 +191,7 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
   const vAddr = wrap(`ที่อยู่: ${input.vendor.address}`, regular, 10, halfW)
   vAddr.slice(0, 2).forEach((ln, i) => text(ln, M, y - 16 - i * 13, 10, regular, MUTED))
   const idY = y - 16 - Math.min(vAddr.length, 2) * 13
-  text(`เลขบัตรประชาชน: ${input.vendor.maskedId}`, M, idY, 9.5, regular, MUTED)
+  text(`เลขบัตรประชาชน: ${input.vendor.taxId ?? input.vendor.maskedId}`, M, idY, 9.5, regular, MUTED)
   // Contact lines, only when the vendor supplied them at signing.
   let contactY = idY - 12
   if (input.vendor.phone) {
@@ -236,15 +237,15 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
   // ── Items table ──
   const numW = 20
   const descX = M + numW + 8
-  // Right-anchored columns: amount | discount | unit price | unit | qty | description
+  // Right-anchored columns: amount | unit price | unit | qty | description.
+  // No discount column: the discount is already reflected in the line amount,
+  // and its width is given to the description.
   const amtW = 82
-  const discW = 74
   const priceW = 84
   const unitW = 52
   const qtyW = 34
   const amtRight = right
-  const discRight = right - amtW - 6
-  const priceRight = discRight - discW - 6
+  const priceRight = right - amtW - 6
   const unitRight = priceRight - priceW - 8
   const qtyRight = unitRight - unitW - 6
   const descW = qtyRight - qtyW - 10 - descX
@@ -255,7 +256,6 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
     rightText('จำนวน', qtyRight, y, 8.5, bold, FAINT)
     rightText('หน่วย', unitRight, y, 8.5, bold, FAINT)
     rightText('ราคา/หน่วย', priceRight, y, 8.5, bold, FAINT)
-    rightText('ส่วนลด', discRight, y, 8.5, bold, FAINT)
     rightText('จำนวนเงิน', amtRight, y, 8.5, bold, FAINT)
     y -= 8
     rule(y, INK, 1)
@@ -279,7 +279,6 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
     rightText(`${it.quantity ?? 1}`, qtyRight, y - 10, 9.5, regular, INK)
     rightText(`${it.unit || 'รายการ'}`, unitRight, y - 10, 9.5, regular, INK)
     rightText(`${thb(it.unitPrice ?? it.amount)}`, priceRight, y - 10, 9.5, regular, INK)
-    rightText(it.discount ? `${thb(it.discount)}` : '—', discRight, y - 10, 9.5, regular, MUTED)
     rightText(`${thb(it.amount)}`, amtRight, y - 10, 9.5, bold, INK)
     y -= rowH
     page.drawLine({ start: { x: M, y: y + 4 }, end: { x: right, y: y + 4 }, thickness: 0.5, color: RULE })
@@ -351,7 +350,7 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
   // consent version ride along so the paper itself points at its evidence.
   const footerBits = [`รหัสตรวจสอบ ${input.verificationCode} · ${input.verifyUrl}`]
   if (input.authRef) footerBits.push(`เลขอ้างอิง ${input.authRef}`)
-  if (input.consentVersion) footerBits.push(`ข้อตกลง v${input.consentVersion}`)
+  if (input.consentVersion) footerBits.push(`ข้อตกลง ${consentVersionLabel(input.consentVersion)}`)
   centerText(footerBits.join(' · '), 30, 8, regular, FAINT)
 
   // ── Verification QR (audit copy only) ──

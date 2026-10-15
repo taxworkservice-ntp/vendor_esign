@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CONSENT_SUMMARY, DEFAULT_CONSENT, DEFAULT_CONSENT_VERSION, PDPA_STATEMENT, renderConsent } from './settings-types'
+import { CONSENT_SUMMARY, DEFAULT_CONSENT, DEFAULT_CONSENT_VERSION, PDPA_STATEMENT, consentVersionLabel, renderConsent } from './settings-types'
 
 describe('vendor consent statement', () => {
   it('substitutes every variable and leaves no placeholder', () => {
@@ -26,5 +26,19 @@ describe('vendor consent statement', () => {
   it('has a short summary distinct from the full statement', () => {
     expect(CONSENT_SUMMARY).toContain('{{client}}')
     expect(CONSENT_SUMMARY.length).toBeLessThan(DEFAULT_CONSENT.length)
+  })
+})
+
+describe('consentVersionLabel', () => {
+  it('normalises to exactly one leading v (never "vv1")', () => {
+    expect(consentVersionLabel('2')).toBe('v2')
+    expect(consentVersionLabel('v1')).toBe('v1')
+    expect(consentVersionLabel('V2')).toBe('v2')
+    expect(consentVersionLabel('vv1')).toBe('v1')
+    expect(consentVersionLabel(' 3 ')).toBe('v3')
+  })
+  it('renders nothing for a missing version', () => {
+    expect(consentVersionLabel('')).toBe('')
+    expect(consentVersionLabel(undefined)).toBe('')
   })
 })

@@ -13,7 +13,6 @@ import { TransactionList } from './pages/TransactionList'
 import { TransactionNew } from './pages/TransactionNew'
 import { TransactionDetail } from './pages/TransactionDetail'
 import { VendorSign } from './pages/VendorSign'
-import { VendorReceipt } from './pages/VendorReceipt'
 import { ReceiptView } from './pages/ReceiptView'
 import { ReceiptsList } from './pages/ReceiptsList'
 import { ReceiptsDownload } from './pages/ReceiptsDownload'
@@ -88,7 +87,6 @@ export default function App() {
         <Routes>
           {/* Vendor + public verify + receipt copy: no account, standalone */}
           <Route path="/v/:token" element={<VendorSign />} />
-          <Route path="/v/receipt/:id" element={<VendorReceipt />} />
           <Route path="/onboard/:token" element={<VendorOnboard />} />
           <Route path="/verify/:code" element={<AuthShell><VerifyPage /></AuthShell>} />
 

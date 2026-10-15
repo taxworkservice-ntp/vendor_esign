@@ -116,6 +116,14 @@ export function renderConsent(template: string, vars: ConsentVars): string {
     .replace(/\{\{version\}\}/g, vars.version)
 }
 
+// Render an accepted-consent version for display on the receipt. Versions are
+// stored inconsistently across the codebase (a bare "2" or a prefixed "v1"), so
+// normalise to exactly one leading "v" — otherwise a stored "v1" prints "vv1".
+export function consentVersionLabel(version?: string): string {
+  const v = String(version ?? '').trim().replace(/^v+/i, '')
+  return v ? `v${v}` : ''
+}
+
 // Every variable the renderer fills. A consent text that drops one silently
 // degrades the evidence (an agreement without the amount is worth little),
 // so a changed text must keep all five.

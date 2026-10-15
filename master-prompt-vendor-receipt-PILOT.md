@@ -264,9 +264,99 @@ replace, or remove the ID/bank-book images (`POST`/`DELETE
 /api/client/vendors/:id/document/:kind`, audited; `parseDocDataUrl` validates).
 Uploads reuse the onboarding downscale/transcode.
 
+**Receipt numbering (as built — corrects §6).** The receipt is the vendor's own
+document, so its number is `RCT-{VENDORNO}-{BEYEAR}-{SEQ}` (3-digit sequence per
+vendor per BE year), **not** `{CLIENTCODE}-R-{BEYEAR}-{NNNN}`. `{CLIENTCODE}` is the
+buyer/prefix brand only. The counter is keyed `(user_id, doc_type, be_year,
+vendor_no)` with a row lock (`generate_doc_number`); each vendor has its own book.
+
+**Catalog is the tax source (item-driven WHT).** Catalog items carry a WHT payment
+type and optional one-level, **note-only** sub-items (migration 033). A transaction
+is built **only from catalog items**; the server derives the payment type and rate
+from the chosen items (`src/lib/item-tax.ts`) and blocks mixed tax types, items with
+no tax type, and sub-notes not defined on the item. The officer picks items, edits
+quantity + unit price, ticks sub-notes (all pre-ticked), and chooses the date — tax
+is never typed. Supersedes the free-text line items in §2/§4. Sub-notes print
+indented on the receipt sheet and PDF. The item form is a focused modal; the catalog
+list shows a "ประเภทภาษี" column and a **CSV export**.
+
+**Permission flags (RBAC, enforced).** Seven workspace flags (`src/lib/permissions.ts`,
+migration 032) with **owner implicit** (nothing stored). A new `canManageCatalog`
+covers item + tax configuration. Member management is split: the **operator** owns
+identity (create/roles/disable), the **owner** manages flags in Settings → Team
+(`GET/PATCH /api/client/team`). Every mutating portal route gates on `canDo()`;
+reads stay open, PII reads are flag-gated. Migration 033 strips `canManageCatalog`
+from existing staff (owner re-grants).
+
+**Vendor bank info.** Bank name / account / holder captured at onboarding now surface
+across the app: shown (full, unmasked) and editable on the vendor detail page, on the
+create form, in vendor search, with copy buttons, and in the vendors CSV. Bank is
+edited **all-or-nothing** (or cleared via `clearBank`); a `BankSelect` dropdown
+(curated Thai banks + "อื่น ๆ") is used on onboarding, create, and edit.
+
+**WHT certificate numbering + register.** New certificate numbers are prefixed
+**`WT`** — `WT` + YYMM + series + 3-digit sequence, e.g. `WT26101022` (migration 034);
+historical numbers keep their shape. The register gains a sortable **"อัตราหัก (%)"**
+column.
+
+**Exports.** CSV export added for the **receipts register** and the **catalog**; the
+WHT CSV now exports the **whole filtered set**, not just the visible page.
+
+**Onboarding form (as built).** Phone + email are **required**; the **prefix** is
+required (person-only vendors). The 13-digit Tax ID moved into **Section 1**
+(identity) ahead of the address; the name field hints "ตามบัตรประชาชน". A
+**"ใช้ชื่อตามบัตรประชาชน"** option mirrors the vendor name into ชื่อบัญชี. The
+bank-book page is now a **per-workspace toggle** (`onboardBankDoc` config key,
+default **off** = only the ID card is requested); the review page and evidence only
+show the bank page when one exists. Migration 035 adds `vendor_invites.recipient_line`;
+the create-link dialog records **recipient name + LINE id**, and the LINE id prefills
+the vendor's LINE field (editable). The submission-evidence PDF renders at its true
+aspect ratio instead of being stretched to A4.
+
+**Auth hardening.** Per-email login lockout persisted in Postgres (migration 030,
+shared by client + admin logins, with a `*.login.locked` audit event); changing a
+password revokes other sessions; logout cookies carry `Secure`; production refuses to
+boot without `ALLOWED_ORIGINS` and an encryption secret; security headers added in
+`vercel.json`.
+
+**Consent evidence.** Authorizations store the **exact rendered consent text +
+SHA-256** (migration 031); tenants' legacy short consent is upgraded in place; editing
+the consent wording without bumping the version is rejected (client + server).
+
+**Operator: reset workspace to fresh.** A 3-step wizard on the operator client page
+wipes a trial workspace's operational data (transactions, receipts, vendors, WHT,
+items, invites, files) while keeping users, profile, settings, and audit, restarts the
+document series, and writes a `tenant.reset` audit event. `POST
+/api/admin/tenants/:id/reset`.
+
+**Help as a modal.** The contextual "?" (HelpLink) opens the guide section in a modal
+instead of navigating away from the current page.
+
+**Vendor document actions.** The editable vendor documents use formal wording
+(**เปลี่ยนเอกสาร** / **ลบเอกสาร**) with a **confirmation dialog** before replacing and
+before removing (replaces the old inline two-step delete).
+
+**Vendor signing — one-page copy + receipt fidelity.** The success screen (`/v/:token`)
+opens the receipt copy **inline in a modal** instead of navigating away, so the vendor
+never leaves the signed page. The old `/v/receipt/:id` route (+ its session-flagged
+client view) is **retired** — it rendered the client receipt and dropped the vendor onto
+the client portal → `/login`. Just-signed, the modal renders the same receipt sheet as
+the client; on a return visit it embeds the archived server PDF. The vendor's copy now
+matches the client's exactly: the buyer block comes from the workspace profile (the
+**mock** sign response previously returned no buyer, so previews showed the client code),
+and the vendor's **full 13-digit ID** prints on every copy — revealed to the vendor only
+after the gate passes, and read decrypted (`vendor_payees.id_number_encrypted`) for the
+server PDF. The signature block keeps the signing time/method + legal line; the footer
+holds the verification code, signing reference, and consent version. The consent version
+is normalised to a single leading `v` (fixes a `vv1` print), and signing is rejected with
+`consent-version-mismatch` if the workspace wording changed while the page was open.
+The receipt item table **drops the ส่วนลด column** (the discount still applies to the
+line amount); its width goes to **รายละเอียด** — on screen and in both PDF paths.
+
 **Still deferred.** LINE Login/LIFF verification (vendor signs via versioned consent +
 signature for now); automated reminders (email/LINE OA); invite funnel analytics;
 gross-up re-enable (with a corrected receipt presentation); credit notes (plain
 receipts only); auto-emailing the vendor after signing — full plan in
 `docs/email-auto-send-plan.md` (Resend, platform domain + client name sender,
-receipt-on-sign v1).
+receipt-on-sign v1); and a global smart search (⌘K command palette across
+transactions/vendors/receipts/WHT/items — designed, deferred).

@@ -7,6 +7,7 @@ import { renderConsent } from '../../src/lib/settings-types'
 import { fmtDateTH, fmtTHB } from '../../src/lib/format'
 import { isoDay } from './dates'
 import { saveBytesDurable, readStoredDurable, readTenantAsset } from './storage'
+import { decryptId } from './crypto'
 import { sha256hex } from './auth'
 import { authRoutes } from './client-auth'
 import { corsMw } from './cors'
@@ -140,6 +141,7 @@ app.get('/api/vendor/:token', async (c) => {
       t.tax_id_hash, t.tax_id_last4,
       v.prefix as vendor_prefix, v.name as vendor_name, v.address as vendor_address,
       v.phone as vendor_phone, v.email as vendor_email,
+      v.id_number_encrypted as vendor_id_encrypted,
       (select client_code from client_profiles where id = vr.user_id) as client_code,
       (select row_to_json(x) from (
          select number, verification_code from vendor_receipts rr
@@ -181,6 +183,13 @@ app.get('/api/vendor/:token', async (c) => {
       idLast4: (r as Record<string, unknown>).tax_id_last4 ?? null,
     })
   }
+  // The vendor's own full ID, revealed only after identity is proven (the gate),
+  // so their signed copy prints the number just like the client portal does.
+  let vendorTaxId: string | null = null
+  const encVendor = (r as Record<string, unknown>).vendor_id_encrypted as string | null
+  if (encVendor) {
+    try { vendorTaxId = decryptId(encVendor) } catch { vendorTaxId = null }
+  }
   return c.json({
     id: r.id, tenantId: rowTenant, clientCode: (r as Record<string, unknown>).client_code ?? null,
     clientName: settings.displayName,
@@ -196,6 +205,7 @@ app.get('/api/vendor/:token', async (c) => {
     vendorPrefix: r.vendor_prefix, vendorName: r.vendor_name, vendorAddress: r.vendor_address,
     vendorPhone: (r as Record<string, unknown>).vendor_phone ?? null,
     vendorEmail: (r as Record<string, unknown>).vendor_email ?? null,
+    vendorTaxId,
     receiptNumber: ((r as Record<string, unknown>).receipt as { number?: string } | null)?.number ?? null,
     verificationCode: ((r as Record<string, unknown>).receipt as { verification_code?: string } | null)?.verification_code ?? null,
     unlocked: true,
@@ -307,7 +317,7 @@ app.post('/api/vendor/:token/sign', async (c) => {
     idNumberEncrypted?: string; idLast4?: string; signaturePng?: string; consentVersion?: string; lineUserId?: string;
     signMethod?: string;
   } | null
-  if (!body?.vendorName || !body?.vendorAddress || !body?.signaturePng || body.consentVersion !== 'v1')
+  if (!body?.vendorName || !body?.vendorAddress || !body?.signaturePng || !body.consentVersion)
     return c.json({ error: 'invalid-body' }, 400)
   // Contacts are required at signing: the receipt prints them and the payer
   // needs a real channel to the payee. Same rule as the form (shared helper).
@@ -346,6 +356,12 @@ app.post('/api/vendor/:token/sign', async (c) => {
 
   const txnId = String(r.id)
   const rowTenant = String(r.user_id)
+  // The vendor must have consented to the workspace's CURRENT wording. A page
+  // left open across a consent change is rejected rather than signing stale
+  // wording, so the stored evidence always matches what the vendor accepted.
+  const settings = await getTenantSettings(rowTenant)
+  if (String(body.consentVersion ?? '') !== settings.consentVersion)
+    return c.json({ error: 'consent-version-mismatch' }, 409)
   // How the vendor authorized. Allowlisted (never free text); a drawn signature
   // keeps the historical 'stub-deferred' value, the fallbacks store their method.
   const signMethod: 'drawn' | 'typed-consent' | 'uploaded-signature' =
@@ -380,7 +396,6 @@ app.post('/api/vendor/:token/sign', async (c) => {
   // here with the same shared helpers as the signing form, so the stored text
   // is byte-identical to what the vendor read — not a version string that
   // merely points at wording that may later change.
-  const settings = await getTenantSettings(rowTenant)
   const consentVersion = settings.consentVersion
   const consentText = renderConsent(settings.consentTextV1, {
     client: settings.displayName,
@@ -423,18 +438,17 @@ app.post('/api/vendor/:token/sign', async (c) => {
   } catch (e) {
     console.error('[sign] issue-failed', e instanceof Error ? e.message : String(e))
   }
-  // The buyer (client) profile, so the vendor can render the same receipt sheet
-  // locally and download it — the vendor has no client session to fetch settings.
-  const clientProfile = await getTenantSettings(rowTenant).catch(() => null)
+  // The buyer (client) profile + the consent version, so the vendor can render
+  // the same receipt sheet locally and download it — the vendor has no client
+  // session to fetch settings.
   return c.json({
     ok: true,
     transactionId: txnId,
     corrections,
     authRef,
+    consentVersion,
     ...issued,
-    client: clientProfile
-      ? { displayName: clientProfile.displayName, address: clientProfile.address, taxId: clientProfile.taxId }
-      : undefined,
+    client: { displayName: settings.displayName, address: settings.address, taxId: settings.taxId },
   })
 })
 

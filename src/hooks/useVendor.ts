@@ -6,7 +6,7 @@ import { normalizeTaxId, taxIdHash } from '../lib/taxid'
 import { putSignature } from '../lib/sig-store'
 import { nextReceiptNumber } from '../lib/receipt-number'
 import { generateWhtForTxn } from '../lib/wht-mock'
-import { currentBeYear } from '../lib/settings'
+import { currentBeYear, loadSettings } from '../lib/settings'
 import { hasServer } from '../lib/api-client'
 import { API_BASE } from '../lib/api-base'
 
@@ -38,7 +38,8 @@ export interface VendorAuthMeta {
   vendorEmail?: string
   /** How the vendor authorized: drawn (default), typed name, or uploaded image. */
   verificationMethod: 'stub-deferred' | 'typed-consent' | 'uploaded-signature'
-  consentVersion: 'v1'
+  /** The consent wording the vendor accepted (the workspace's current version). */
+  consentVersion: string
   signedAt: string
   corrections: VendorCorrection[] // vendor edits to prefilled info, reported to client
 }
@@ -111,6 +112,7 @@ interface ServerVendor {
   vendorAddress?: string
   vendorPhone?: string | null
   vendorEmail?: string | null
+  vendorTaxId?: string | null
   receiptNumber?: string | null
   verificationCode?: string | null
   unlocked?: boolean
@@ -145,6 +147,7 @@ async function fetchServerVendor(token: string): Promise<PaymentTransaction | un
       prefix: j.vendorPrefix ?? '',
       name: j.vendorName ?? '',
       address: j.vendorAddress ?? '',
+      taxId: j.vendorTaxId ?? undefined,
       maskedId: maskFromLast4(j.idLast4),
       phone: j.vendorPhone ?? undefined,
       email: j.vendorEmail ?? undefined,
@@ -289,6 +292,7 @@ export function useVendorActions() {
       pdfSha256?: string
       pdfBase64?: string
       client?: { displayName: string; address: string; taxId: string }
+      consentVersion?: string
     }> {
       if (hasServer) {
         if (!token) return { ok: false, error: 'invalid-link' }
@@ -303,7 +307,7 @@ export function useVendorActions() {
             vendorEmail: auth.vendorEmail ?? '',
             idLast4: auth.vendorIdLast4,
             signaturePng: auth.signaturePng,
-            consentVersion: 'v1',
+            consentVersion: auth.consentVersion,
             // 'drawn' is the default; the fallbacks store their own method.
             signMethod: auth.verificationMethod === 'stub-deferred' ? 'drawn' : auth.verificationMethod,
           }),
@@ -316,6 +320,7 @@ export function useVendorActions() {
           pdfSha256?: string
           pdfBase64?: string
           client?: { displayName: string; address: string; taxId: string }
+          consentVersion?: string
         } | null
         if (!r.ok) return { ok: false, error: j?.error ?? 'sign-failed' }
         // Issuance runs at signing: the response carries the real receipt number
@@ -328,6 +333,7 @@ export function useVendorActions() {
           pdfSha256: j?.pdfSha256,
           pdfBase64: j?.pdfBase64,
           client: j?.client,
+          consentVersion: j?.consentVersion,
         }
       }
 
@@ -395,7 +401,20 @@ export function useVendorActions() {
       // The client receipt view (same browser in mock mode) caches the
       // authorization; drop it so the just-signed signature is picked up.
       void qc.invalidateQueries({ queryKey: ['receipt-auth'] })
-      return { ok: true, number }
+      // Mirror the server response: the buyer profile + consent version, so the
+      // vendor's downloaded receipt matches the client's (in production the
+      // server returns these; in mock mode they come from workspace settings).
+      const settings = loadSettings(issued?.tenantId ?? 'ABC')
+      return {
+        ok: true,
+        number,
+        consentVersion: auth.consentVersion,
+        client: {
+          displayName: issued?.clientName || settings.displayName,
+          address: settings.address,
+          taxId: settings.taxId,
+        },
+      }
     },
   }
 }

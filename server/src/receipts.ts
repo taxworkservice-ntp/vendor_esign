@@ -152,6 +152,19 @@ export async function finalizeReceipt(txnId: string, ip: string): Promise<Finali
   // Read the vendor's signature through the storage seam so it comes from R2
   // when configured — a serverless instance rarely has the file on local disk.
   const sig = await readStoredDurable(rowTenant, d.signature_image_path)
+  // The vendor's own full ID (decrypted), so the receipt prints it exactly as the
+  // client portal does rather than only the mask. Falls back to the mask when the
+  // encryption key is absent or the ID was never stored.
+  let vendorTaxId: string | undefined
+  try {
+    const enc = one<{ id_number_encrypted: string | null }>(await db`
+      select v.id_number_encrypted from vendor_payables p
+      join vendor_payees v on v.id = p.vendor_id
+      where p.id = ${txnId} and p.user_id = ${rowTenant}`)
+    if (enc?.id_number_encrypted) vendorTaxId = decryptId(enc.id_number_encrypted) ?? undefined
+  } catch {
+    /* key absent — fall back to the mask */
+  }
   const verifyUrl = `${PUBLIC_BASE}/verify/${code.toUpperCase()}`
   const { bytes, sha256 } = await buildReceiptPdf({
     number,
@@ -168,6 +181,7 @@ export async function finalizeReceipt(txnId: string, ip: string): Promise<Finali
     client: { code: prof.code, display: prof.display },
     vendor: {
       prefix: d.vendor_prefix, name: d.vendor_name, address: d.vendor_address, maskedId: d.vendor_masked_id,
+      taxId: vendorTaxId,
       phone: d.vendor_phone ?? undefined, email: d.vendor_email ?? undefined,
     },
     lineItems,

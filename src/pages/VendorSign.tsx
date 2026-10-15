@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { CheckCircle2, Download, Eraser, Lock, ShieldAlert } from 'lucide-react'
 import { GATE_MAX_TRIES, gateRemaining, isGateUnlocked, tryGateUnlock, useVendorActions, useVendorTxn, type VendorAuth } from '../hooks/useVendor'
 import { apiDownload, hasServer, saveFile } from '../lib/api-client'
@@ -8,8 +8,9 @@ import { normalizeLineItem } from '../lib/line-items'
 import { renderTypedSignature, SIGNATURE_FONT, signMethodLabel } from '../lib/typed-signature'
 import { cn } from '../lib/cn'
 import { ReceiptSheet, type ReceiptSheetData } from '../components/receipt/receipt-sheet'
+import { ReceiptCopyDialog } from '../components/receipt/receipt-copy-dialog'
 import { maskTaxId } from '../lib/taxid'
-import { loadSettings, renderConsent, CONSENT_SUMMARY, PDPA_STATEMENT } from '../lib/settings'
+import { loadSettings, renderConsent, CONSENT_SUMMARY, PDPA_STATEMENT, consentVersionLabel } from '../lib/settings'
 import type { PaymentTransaction } from '../lib/types'
 import { fmtTHB, fmtDateTH, fmtDateTimeTHLong } from '../lib/format'
 import { amountToThaiWords } from '../lib/thai-words'
@@ -124,11 +125,11 @@ export function VendorSign() {
   const [signMode, setSignMode] = useState<'draw' | 'type'>('draw')
   const [typedName, setTypedName] = useState('')
   const [done, setDone] = useState(false)
-  const [signedId, setSignedId] = useState<string>()
   const [tried, setTried] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitErr, setSubmitErr] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [copyOpen, setCopyOpen] = useState(false)
 
   const brand: Brand = { clientName: t?.clientName, logoUrl: t?.logoUrl }
 
@@ -201,9 +202,10 @@ export function VendorSign() {
   // lookup can return the receipt state on a return visit — keep a snapshot id
   // so the success state still renders if the lookup lags.
   if (done || t?.status === 'signed' || t?.status === 'issued') {
-    const receiptId = t?.id ?? signedId
     const number = receipt?.number ?? t?.receiptNumber
     const successClient = vendorData?.client?.displayName || t?.clientName || 'ลูกค้าผู้จ่าย'
+    const copyPdfUrl = token && hasServer ? `/api/vendor/${encodeURIComponent(token)}/receipt.pdf` : undefined
+    const consentLabel = consentVersionLabel(vendorData?.consentVersion ?? t?.consentVersion)
     return (
       <>
       <StateCard
@@ -243,15 +245,14 @@ export function VendorSign() {
                   <Download size={15} aria-hidden /> {downloading ? 'กำลังดาวน์โหลด…' : 'ดาวน์โหลดใบเสร็จ (PDF)'}
                 </Button>
               )}
-              {receiptId && (
-                <Link to={`/v/receipt/${receiptId}`}>
-                  <Button variant="secondary">ดูสำเนาใบเสร็จ</Button>
-                </Link>
+              {(vendorData || copyPdfUrl) && (
+                <Button variant="secondary" onClick={() => setCopyOpen(true)}>ดูสำเนาใบเสร็จ</Button>
               )}
             </div>
             {submitErr && <FieldError msg={submitErr} />}
             <p className="mx-auto max-w-sm text-label leading-relaxed text-ink-400">
-              ลายมือชื่ออิเล็กทรอนิกส์ตาม พ.ร.บ.ว่าด้วยธุรกรรมทางอิเล็กทรอนิกส์ พ.ศ. 2544 · ข้อตกลง v1
+              ลายมือชื่ออิเล็กทรอนิกส์ตาม พ.ร.บ.ว่าด้วยธุรกรรมทางอิเล็กทรอนิกส์ พ.ศ. 2544
+              {consentLabel ? ` · ข้อตกลง ${consentLabel}` : ''}
             </p>
             <p className="mx-auto max-w-sm text-label leading-relaxed text-ink-400">
               เก็บลิงก์นี้ไว้ใช้อ้างอิง — ท่านกลับมาดาวน์โหลดใบเสร็จซ้ำได้ภายในอายุของลิงก์
@@ -265,6 +266,7 @@ export function VendorSign() {
           <ReceiptSheet ref={vendorSheetRef} data={vendorData} />
         </div>
       )}
+      <ReceiptCopyDialog open={copyOpen} data={vendorData} pdfUrl={copyPdfUrl} onClose={() => setCopyOpen(false)} />
       </>
     )
   }
@@ -385,7 +387,7 @@ export function VendorSign() {
         vendorIdLast4: tid.replace(/\D/g, '').slice(-4) || (t.taxIdLast4 ?? ''),
         signaturePng,
         verificationMethod: signMode === 'type' ? 'typed-consent' : 'stub-deferred',
-        consentVersion: 'v1',
+        consentVersion: consentInfo.version,
         signedAt: new Date().toISOString(),
         corrections: [], // computed at submit (diff vs client records)
       }
@@ -396,11 +398,13 @@ export function VendorSign() {
             ? 'ยังไม่ได้ยืนยันตัวตน — โปรดยืนยันเลขบัตรประชาชนก่อนลงนาม'
             : res.error === 'already-signed'
               ? 'ลิงก์นี้ถูกลงนามไปแล้ว'
-              : res.error === 'invalid-phone'
-                ? PHONE_REQUIRED_ERROR
-                : res.error === 'invalid-email'
-                  ? EMAIL_REQUIRED_ERROR
-                  : 'ส่งข้อมูลไม่สำเร็จ โปรดลองอีกครั้งหรือติดต่อลูกค้าผู้จ่าย',
+              : res.error === 'consent-version-mismatch'
+                ? 'ข้อความให้ความยินยอมมีการแก้ไข — โปรดรีเฟรชหน้านี้แล้วตรวจสอบอีกครั้งก่อนลงนาม'
+                : res.error === 'invalid-phone'
+                  ? PHONE_REQUIRED_ERROR
+                  : res.error === 'invalid-email'
+                    ? EMAIL_REQUIRED_ERROR
+                    : 'ส่งข้อมูลไม่สำเร็จ โปรดลองอีกครั้งหรือติดต่อลูกค้าผู้จ่าย',
         )
         return
       }
@@ -408,7 +412,10 @@ export function VendorSign() {
       const number = res.number ?? t.receiptNumber ?? 'ยังไม่ออกเลข'
       if (res.number) setReceipt({ number: res.number, verificationCode: res.verificationCode ?? '' })
       // Snapshot the sheet now: the invite token is consumed, so the transaction
-      // cannot be fetched again to render the receipt later.
+      // cannot be fetched again to render the receipt later. Buyer + consent
+      // version come from the sign response when present (server), falling back
+      // to workspace settings so the vendor's copy matches the client's.
+      const s = loadSettings(t.tenantId)
       setVendorData({
         number,
         transferDate: t.transferDate,
@@ -422,31 +429,28 @@ export function VendorSign() {
         whtAmount: t.whtAmount,
         netAmount: t.netAmount,
         note: t.note,
-        client: res.client ?? { displayName: t.clientCode ?? '', address: '', taxId: '' },
+        client: res.client ?? {
+          displayName: t.clientName || s.displayName,
+          address: s.address,
+          taxId: s.taxId,
+        },
         vendor: {
           prefix: auth.vendorPrefix,
           name: auth.vendorName,
           address: auth.vendorAddress,
           phone: auth.vendorPhone || undefined,
           email: auth.vendorEmail || undefined,
+          taxId: t.vendor.taxId,
           maskedId: t.vendor.maskedId,
         },
         sig: { kind: 'ready', png: auth.signaturePng },
         signedAt: auth.signedAt,
         sigMethod: auth.verificationMethod,
         authRef: res.authRef,
-        consentVersion: auth.consentVersion,
+        consentVersion: res.consentVersion ?? auth.consentVersion,
         verificationCode: res.verificationCode ?? undefined,
         verifyUrl: res.verificationCode ? `${window.location.origin}/verify/${res.verificationCode}` : undefined,
       })
-      // Allow this browser to open the receipt copy right after signing (the
-      // single-use invite token is consumed, so a URL flag is the only handle).
-      try {
-        sessionStorage.setItem(`taxwork-vendor-signed-${t.id}`, '1')
-      } catch {
-        /* private mode */
-      }
-      setSignedId(t.id)
       setDone(true)
       window.scrollTo(0, 0)
     } finally {

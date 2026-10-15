@@ -1,6 +1,7 @@
 import { forwardRef, type CSSProperties, type ReactNode } from 'react'
 import { FileText } from 'lucide-react'
 import { SIGNATURE_COPY, type SignatureState } from '../../lib/signature-state'
+import { consentVersionLabel } from '../../lib/settings-types'
 import { amountToThaiWords } from '../../lib/thai-words'
 import { fmtDateTH, fmtDateTimeTHLong, fmtTHB } from '../../lib/format'
 import { lineTotal } from '../../lib/line-items'
@@ -59,6 +60,23 @@ export const ReceiptSheet = forwardRef<
   const { number, items, client, vendor, sig } = data
   const isVoid = data.isVoid
   const whtRate = data.whtRate
+
+  // Footer evidence line: the verification code, the signing reference and the
+  // accepted consent version, shown as one line joined by " · ".
+  const evidence: { key: string; node: ReactNode }[] = []
+  if (data.verificationCode) {
+    evidence.push({
+      key: 'verify',
+      node: (
+        <>
+          รหัสตรวจสอบ <span className="font-mono font-semibold">{data.verificationCode}</span>
+        </>
+      ),
+    })
+  }
+  if (data.verifyUrl) evidence.push({ key: 'url', node: <span className="break-all">{data.verifyUrl}</span> })
+  if (data.authRef) evidence.push({ key: 'authRef', node: <>เลขอ้างอิง <span className="font-mono">{data.authRef}</span></> })
+  if (data.consentVersion) evidence.push({ key: 'consent', node: <>ข้อตกลง {consentVersionLabel(data.consentVersion)}</> })
 
   return (
     <div
@@ -141,7 +159,6 @@ export const ReceiptSheet = forwardRef<
           <span className={`${label} ml-auto w-14 shrink-0 text-right`}>จำนวน</span>
           <span className={`${label} w-16 shrink-0 text-right`}>หน่วย</span>
           <span className={`${label} w-24 shrink-0 text-right`}>ราคา/หน่วย</span>
-          <span className={`${label} w-20 shrink-0 text-right`}>ส่วนลด</span>
           <span className={`${label} w-24 shrink-0 text-right`}>จำนวนเงิน</span>
         </div>
         {items.map((it, i) => (
@@ -156,9 +173,6 @@ export const ReceiptSheet = forwardRef<
             <span className="w-14 shrink-0 text-right tabular-nums">{it.quantity ?? 1}</span>
             <span className="w-16 shrink-0 text-right text-ink-600">{it.unit || 'รายการ'}</span>
             <span className="w-24 shrink-0 text-right tabular-nums">{fmtTHB(it.unitPrice ?? it.amount)}</span>
-            <span className="w-20 shrink-0 text-right tabular-nums text-ink-500">
-              {it.discount ? `${fmtTHB(it.discount)}` : '—'}
-            </span>
             <span className="w-24 shrink-0 text-right font-semibold tabular-nums">{fmtTHB(lineTotal(it))}</span>
           </div>
         ))}
@@ -241,23 +255,22 @@ export const ReceiptSheet = forwardRef<
                 ออกในนามผู้รับเงินโดยได้รับมอบอำนาจ · ลายมือชื่ออิเล็กทรอนิกส์ตาม พ.ร.บ.ว่าด้วยธุรกรรมทางอิเล็กทรอนิกส์ พ.ศ. 2544
               </p>
             )}
-            {data.authRef && (
-              <p className="mt-0.5 text-micro leading-tight text-ink-400">
-                เลขอ้างอิง <span className="font-mono">{data.authRef}</span>
-                {data.consentVersion && <span> · ข้อตกลง v{data.consentVersion}</span>}
-              </p>
-            )}
           </div>
         )}
       </div>
 
-      {/* Document footer — the public verification record, kept out of the
-          signature block so the signature stays clean and the page compact. */}
-      {data.verificationCode && (
+      {/* Document footer — the evidence record (verification code, signing
+          reference, consent version), kept out of the signature block so the
+          signature stays clean and the page compact. Mirrors the server PDF. */}
+      {evidence.length > 0 && (
         <div className="mt-3 border-t border-card-border pt-2 text-center text-micro leading-tight text-ink-400">
           <p>
-            รหัสตรวจสอบ <span className="font-mono font-semibold">{data.verificationCode}</span>
-            {data.verifyUrl && <span className="break-all"> · {data.verifyUrl}</span>}
+            {evidence.map((e, i) => (
+              <span key={e.key}>
+                {i > 0 ? ' · ' : ''}
+                {e.node}
+              </span>
+            ))}
           </p>
         </div>
       )}
