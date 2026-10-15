@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
-import { Archive, ArchiveRestore, Package, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
-import { useDeleteItem, useItems, useSaveItem, useSetItemActive } from '../hooks/useItems'
+import { useMemo, useRef, useState } from 'react'
+import { Archive, ArchiveRestore, Package, Pencil, Plus, Search, Trash2 } from 'lucide-react'
+import { useDeleteItem, useItems, useSetItemActive } from '../hooks/useItems'
 import { useClientAuth } from '../lib/client-auth'
 import { useColumnSort } from '../hooks/useColumnSort'
 import { sortRows, type SortAccessor } from '../lib/sort'
@@ -9,8 +9,6 @@ import { useDebounced } from '../hooks/useDebounced'
 import { itemCode } from '../lib/ids'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
-import { FieldError, Input, Label } from '../components/ui/input'
-import { Select } from '../components/ui/select'
 import { Button } from '../components/ui/button'
 import { ConfirmDialog } from '../components/ui/confirm-dialog'
 import { EmptyState } from '../components/ui/empty-state'
@@ -19,6 +17,7 @@ import { TableSkeleton } from '../components/ui/table-skeleton'
 import { useToast } from '../components/ui/toast'
 import { RegistryToolbar } from '../components/ui/registry-toolbar'
 import { LoadingBar, RegistryId, Row, SortableTh, Td, Th, tableCls } from '../components/ui/data-table'
+import { ItemFormDialog } from '../components/items/item-form-dialog'
 import { fmtTHB } from '../lib/format'
 import { defaultSettings, whtRateFor } from '../lib/settings'
 import { useSettings } from '../hooks/useSettings'
@@ -43,26 +42,18 @@ const ITEM_SORT: Record<string, SortAccessor<CatalogItem>> = {
   unitPrice: (it) => it.unitPrice,
 }
 
-const empty = {
-  id: '' as string | undefined, itemNo: 0, name: '', unit: 'รายการ', unitPrice: '',
-  paymentType: '', subItems: [] as string[],
-}
-
 export function ItemsList() {
   // Display-only mirrors of the server gates (hidden actions still 403).
   const { can } = useClientAuth()
   const [search, setSearch] = useState('')
   const [showArchived, setShowArchived] = useState(false)
-  const [showForm, setShowForm] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editItem, setEditItem] = useState<CatalogItem | null>(null)
   const { key: sortKey, dir: sortDir, onSort } = useColumnSort('code', 'asc')
   const debouncedSearch = useDebounced(search, 250)
   const { data, isLoading, isFetching, isError, error, refetch } = useItems(debouncedSearch, 'recent', showArchived)
-  const save = useSaveItem()
   const del = useDeleteItem()
   const setActive = useSetItemActive()
-  const [form, setForm] = useState(empty)
-  const [subDraft, setSubDraft] = useState('')
-  const [err, setErr] = useState('')
   const { data: settings } = useSettings()
   const cfg = settings ?? defaultSettings()
   const rateOf = (paymentType?: string) => whtRateFor(paymentType ?? '', cfg)
@@ -72,51 +63,14 @@ export function ItemsList() {
   const searchRef = useRef<HTMLInputElement>(null)
 
   const items = useMemo(() => sortRows(data ?? [], sortKey, sortDir, ITEM_SORT), [data, sortKey, sortDir])
-  const editing = !!form.id
 
-  const closeForm = useCallback(() => {
-    setForm(empty)
-    setSubDraft('')
-    setErr('')
-    setShowForm(false)
-  }, [])
-
-  const addSubNote = () => {
-    const s = subDraft.trim()
-    if (!s || form.subItems.some((x) => x === s) || form.subItems.length >= 10) return
-    setForm({ ...form, subItems: [...form.subItems, s] })
-    setSubDraft('')
+  const openCreate = () => {
+    setEditItem(null)
+    setDialogOpen(true)
   }
-
-  const submit = async () => {
-    setErr('')
-    if (!form.paymentType) {
-      setErr('กรุณาเลือกประเภทภาษีของรายการ')
-      return
-    }
-    try {
-      await save.mutateAsync({
-        id: form.id,
-        name: form.name,
-        unit: form.unit,
-        unitPrice: Number(form.unitPrice) || 0,
-        paymentType: form.paymentType,
-        subItems: form.subItems,
-      })
-      toast.show(editing ? `บันทึก “${form.name.trim()}” แล้ว` : `เพิ่ม “${form.name.trim()}” แล้ว`)
-      closeForm()
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'บันทึกไม่สำเร็จ')
-    }
-  }
-
-  const startEdit = (it: { id: string; itemNo: number; name: string; unit: string; unitPrice: number; paymentType?: string; subItems?: string[] }) => {
-    setForm({
-      id: it.id, itemNo: it.itemNo, name: it.name, unit: it.unit, unitPrice: String(it.unitPrice),
-      paymentType: it.paymentType ?? '', subItems: [...(it.subItems ?? [])],
-    })
-    setErr('')
-    setShowForm(true)
+  const openEdit = (it: CatalogItem) => {
+    setEditItem(it)
+    setDialogOpen(true)
   }
 
   // Archiving hides the entry from the catalogue, and a mis-click would make a
@@ -146,127 +100,13 @@ export function ItemsList() {
         title="สินค้า / บริการ"
         sub="รายการสินค้าและบริการ สำหรับเรียกใช้เมื่อสร้างธุรกรรม (รหัส · ชื่อ · หน่วย · ราคา)"
         actions={
-          !showForm && can('canManageCatalog') && (
-            <Button onClick={() => setShowForm(true)}>
+          can('canManageCatalog') && (
+            <Button onClick={openCreate}>
               <Plus size={17} /> เพิ่มรายการใหม่
             </Button>
           )
         }
       />
-
-      {showForm && can('canManageCatalog') && (
-        <Card>
-          <CardBody className="space-y-4">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="grid h-7 w-7 place-items-center rounded-control bg-primary text-white">
-                  {editing ? <Pencil size={14} aria-hidden /> : <Plus size={16} aria-hidden />}
-                </span>
-                <h2 className="font-semibold">{editing ? 'แก้ไขรายการ' : 'เพิ่มรายการใหม่'}</h2>
-                {editing && form.itemNo > 0 && <RegistryId code={itemCode(form.itemNo)} />}
-              </div>
-              <button
-                type="button"
-                onClick={closeForm}
-                aria-label="ปิดแบบฟอร์ม"
-                className="grid h-8 w-8 place-items-center rounded-control text-ink-500 transition hover:bg-ink-100"
-              >
-                <X size={15} aria-hidden />
-              </button>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-[1fr_140px_160px_auto]">
-              <div>
-                <Label required hint="ห้ามซ้ำ">ชื่อรายการ</Label>
-                <Input
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') void submit()
-                  }}
-                  placeholder="เช่น ค่าจ้างทำความสะอาด"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <Label>หน่วย</Label>
-                <Input
-                  value={form.unit}
-                  onChange={(e) => setForm({ ...form, unit: e.target.value })}
-                  placeholder="รายการ"
-                />
-              </div>
-              <div>
-                <Label>ราคา (บาท)</Label>
-                <Input
-                  value={form.unitPrice}
-                  onChange={(e) => setForm({ ...form, unitPrice: e.target.value })}
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  className="text-right tabular-nums"
-                />
-              </div>
-              <div className="flex items-end gap-2">
-                <Button onClick={submit} loading={save.isPending} disabled={!form.name.trim()}>
-                  {save.isPending ? 'กำลังบันทึก…' : editing ? 'บันทึก' : 'เพิ่ม'}
-                </Button>
-                {editing && (
-                  <Button variant="ghost" onClick={closeForm}>
-                    ยกเลิก
-                  </Button>
-                )}
-              </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <Label required hint="กำหนดภาษีของธุรกรรมที่ใช้รายการนี้">ประเภทภาษี (WHT)</Label>
-                <Select value={form.paymentType} onChange={(e) => setForm({ ...form, paymentType: e.target.value })}>
-                  <option value="">— เลือกประเภท —</option>
-                  {cfg.whtRates.map((r) => (
-                    <option key={r.paymentType} value={r.paymentType}>
-                      {r.paymentType}{r.value > 0 ? ` (${r.value}%)` : ' (ไม่หักภาษี)'}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div>
-                <Label hint="ไม่คิดราคา · แสดงใต้บรรทัดบนใบเสร็จ">รายการย่อย (หมายเหตุ)</Label>
-                {form.subItems.length > 0 && (
-                  <ul className="mb-1.5 space-y-1">
-                    {form.subItems.map((s) => (
-                      <li key={s} className="flex items-center gap-2 text-body">
-                        <span className="min-w-0 flex-1 truncate">• {s}</span>
-                        <button
-                          type="button"
-                          onClick={() => setForm({ ...form, subItems: form.subItems.filter((x) => x !== s) })}
-                          aria-label={`ลบหมายเหตุ ${s}`}
-                          className="grid h-7 w-7 shrink-0 place-items-center rounded-control text-ink-400 transition hover:bg-ink-100 hover:text-danger"
-                        >
-                          <X size={13} aria-hidden />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <div className="flex gap-2">
-                  <Input
-                    value={subDraft}
-                    onChange={(e) => setSubDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') addSubNote()
-                    }}
-                    placeholder="เช่น ด้านหน้า"
-                    maxLength={120}
-                  />
-                  <Button variant="secondary" onClick={addSubNote} disabled={!subDraft.trim()}>
-                    เพิ่ม
-                  </Button>
-                </div>
-              </div>
-            </div>
-            <FieldError msg={err} />
-          </CardBody>
-        </Card>
-      )}
 
       <Card>
         <CardBody>
@@ -357,7 +197,7 @@ export function ItemsList() {
                                 {can('canManageCatalog') && (
                                   <button
                                     type="button"
-                                    onClick={() => startEdit(it)}
+                                    onClick={() => openEdit(it)}
                                     className="grid h-8 w-8 place-items-center rounded-control text-ink-500 transition hover:bg-ink-100 hover:text-ink-900"
                                     title="แก้ไข"
                                     aria-label={`แก้ไข ${it.name}`}
@@ -406,7 +246,7 @@ export function ItemsList() {
                   description="เพิ่มรายการเพื่อเรียกใช้เมื่อสร้างธุรกรรม"
                   action={
                     can('canManageCatalog') && (
-                      <Button onClick={() => setShowForm(true)}>
+                      <Button onClick={openCreate}>
                         <Plus size={17} /> เพิ่มรายการใหม่
                       </Button>
                     )
@@ -468,6 +308,8 @@ export function ItemsList() {
         }}
         onCancel={() => setPendingDelete(null)}
       />
+
+      <ItemFormDialog open={dialogOpen} item={editItem} onClose={() => setDialogOpen(false)} />
     </div>
   )
 }
