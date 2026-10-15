@@ -16,6 +16,7 @@ import { PageHeader } from '../components/ui/page-header'
 import { Button } from '../components/ui/button'
 import { FieldError, Input, Label } from '../components/ui/input'
 import { Select } from '../components/ui/select'
+import { Checkbox } from '../components/ui/checkbox'
 import { ConfirmDialog } from '../components/ui/confirm-dialog'
 import { EmptyState } from '../components/ui/empty-state'
 import { ErrorState } from '../components/ui/error-state'
@@ -43,7 +44,10 @@ export function VendorDetail() {
   const [bankAccount, setBankAccount] = useState('')
   const [accountHolder, setAccountHolder] = useState('')
   const [bankCleared, setBankCleared] = useState(false)
+  const [sameAsName, setSameAsName] = useState(false)
   const [editing, setEditing] = useState(false)
+  // The submitted account-holder value: mirrors the vendor name when toggled on.
+  const sameHolder = sameAsName ? name.trim() : accountHolder.trim()
   const toast = useToast()
   const [err, setErr] = useState('')
   const [deleteErr, setDeleteErr] = useState('')
@@ -133,6 +137,7 @@ export function VendorDetail() {
     setBankAccount(v.bankAccount ?? '')
     setAccountHolder(v.accountHolder ?? '')
     setBankCleared(false)
+    setSameAsName(!!v.accountHolder && v.accountHolder === v.name)
     setErr('')
     setEditing(true)
   }
@@ -176,7 +181,7 @@ export function VendorDetail() {
       return
     }
     if (!bankCleared) {
-      const bankErr = bankValidation({ bankName, bankAccount, accountHolder })
+      const bankErr = bankValidation({ bankName, bankAccount, accountHolder: sameHolder })
       if (bankErr) {
         setErr(bankErr)
         return
@@ -195,7 +200,7 @@ export function VendorDetail() {
           : {
               bankName: bankName.trim() || undefined,
               bankAccount: bankAccount.trim() || undefined,
-              accountHolder: accountHolder.trim() || undefined,
+              accountHolder: sameHolder || undefined,
             }),
         ...(newTaxId.trim() ? { idNumber: newTaxId } : {}),
       })
@@ -365,9 +370,14 @@ export function VendorDetail() {
                 </div>
                 <div>
                   <Label hint="ไม่บังคับ">ชื่อบัญชี</Label>
-                  <Input value={accountHolder} onChange={(e) => setAccountHolder(e.target.value)} placeholder="ชื่อตามสมุดบัญชี" />
+                  <Input value={sameAsName ? name : accountHolder} disabled={sameAsName} onChange={(e) => setAccountHolder(e.target.value)} placeholder="ชื่อตามสมุดบัญชี" />
                 </div>
               </div>
+              <Checkbox
+                checked={sameAsName}
+                onChange={(e) => setSameAsName(e.target.checked)}
+                label="ใช้ชื่อผู้ขายเป็นชื่อบัญชี"
+              />
               {bankCleared ? (
                 <p className="text-label text-warning">ข้อมูลธนาคารจะถูกลบเมื่อกดบันทึก</p>
               ) : (

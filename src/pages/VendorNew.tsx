@@ -10,6 +10,7 @@ import { PageHeader } from '../components/ui/page-header'
 import { Button } from '../components/ui/button'
 import { FieldError, Input, Label } from '../components/ui/input'
 import { Select } from '../components/ui/select'
+import { Checkbox } from '../components/ui/checkbox'
 import { ErrorState } from '../components/ui/error-state'
 
 export function VendorNew() {
@@ -28,7 +29,10 @@ export function VendorNew() {
   const [bankName, setBankName] = useState('')
   const [bankAccount, setBankAccount] = useState('')
   const [accountHolder, setAccountHolder] = useState('')
+  const [sameAsName, setSameAsName] = useState(false)
   const [err, setErr] = useState('')
+
+  const sameHolder = sameAsName ? name.trim() : accountHolder.trim()
 
   const submit = async () => {
     setErr('')
@@ -52,13 +56,13 @@ export function VendorNew() {
       setErr('รูปแบบอีเมลไม่ถูกต้อง')
       return
     }
-    const bankErr = bankValidation({ bankName, bankAccount, accountHolder })
+    const bankErr = bankValidation({ bankName, bankAccount, accountHolder: sameHolder })
     if (bankErr) {
       setErr(bankErr)
       return
     }
     try {
-      const v = await create.mutateAsync({ prefix, name, address, taxId, lineUserId, phone, email, bankName, bankAccount, accountHolder })
+      const v = await create.mutateAsync({ prefix, name, address, taxId, lineUserId, phone, email, bankName, bankAccount, accountHolder: sameHolder })
       nav(`/vendors/${v.id}`)
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'บันทึกไม่สำเร็จ')
@@ -155,7 +159,13 @@ export function VendorNew() {
           </div>
           <div>
             <Label hint="ไม่บังคับ · ตามสมุดบัญชี">ชื่อบัญชี</Label>
-            <Input value={accountHolder} onChange={(e) => setAccountHolder(e.target.value)} placeholder="ชื่อตามสมุดบัญชี" />
+            <Input value={sameAsName ? name : accountHolder} disabled={sameAsName} onChange={(e) => setAccountHolder(e.target.value)} placeholder="ชื่อตามสมุดบัญชี" />
+            <Checkbox
+              className="mt-2"
+              checked={sameAsName}
+              onChange={(e) => setSameAsName(e.target.checked)}
+              label="ใช้ชื่อผู้ขายเป็นชื่อบัญชี"
+            />
           </div>
           <FieldError msg={err} />
           <div className="flex gap-2">

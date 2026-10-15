@@ -227,6 +227,8 @@ function OnboardForm({
   const [bankName, setBankName] = useState(initial?.bankName ?? '')
   const [bankAccount, setBankAccount] = useState(initial?.bankAccount ?? '')
   const [accountHolder, setAccountHolder] = useState(initial?.accountHolder ?? '')
+  // "Account holder = my name": default on when a resumed draft already matches.
+  const [sameAsName, setSameAsName] = useState(() => !!initial?.accountHolder && initial.accountHolder === initial?.name)
   const [idDoc, setIdDoc] = useState<Doc | null>(null)
   const [bankDoc, setBankDoc] = useState<Doc | null>(null)
   const [docBusy, setDocBusy] = useState<'id' | 'bank' | null>(null)
@@ -237,15 +239,19 @@ function OnboardForm({
   const [submitErr, setSubmitErr] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // The value actually submitted for account holder: mirrors the vendor name
+  // when the "same as name" option is on.
+  const sameHolder = sameAsName ? name.trim() : accountHolder.trim()
+
   const progress = useMemo(() => {
     const steps = [
       name.trim().length >= 2 && address.trim().length >= 4,
       normalizeTaxId(taxId).length === 13,
-      !!bankName.trim() && bankAccount.trim().length >= 8 && !!accountHolder.trim(),
+      !!bankName.trim() && bankAccount.trim().length >= 8 && !!sameHolder,
       !!idDoc && consent,
     ]
     return Math.round((steps.filter(Boolean).length / steps.length) * 100)
-  }, [name, address, taxId, bankName, bankAccount, accountHolder, idDoc, consent])
+  }, [name, address, taxId, bankName, bankAccount, sameHolder, idDoc, consent])
 
   const clearError = (k: OnboardField) =>
     setErrors((prev) => (prev[k] ? { ...prev, [k]: undefined } : prev))
@@ -286,7 +292,7 @@ function OnboardForm({
       taxId,
       bankName,
       bankAccount,
-      accountHolder,
+      accountHolder: sameHolder,
       hasIdDoc: !!idDoc,
       consent,
     })
@@ -302,7 +308,7 @@ function OnboardForm({
     try {
       const res = await submitVendorInvite(
         token,
-        { prefix, name, address, phone, email, lineUserId, taxId: normalizeTaxId(taxId), bankName, bankAccount, accountHolder },
+        { prefix, name, address, phone, email, lineUserId, taxId: normalizeTaxId(taxId), bankName, bankAccount, accountHolder: sameHolder },
         { idDocData: idDoc!.data, idDocName: idDoc!.name, bankDocData: bankDoc?.data, bankDocName: bankDoc?.name },
       )
       if (!res.ok) {
@@ -454,9 +460,15 @@ function OnboardForm({
         </div>
         <div>
           <Label htmlFor="ob-accountholder" required>ชื่อบัญชี</Label>
-          <Input id="ob-accountholder" value={accountHolder} invalid={!!errors.accountHolder}
+          <Input id="ob-accountholder" value={sameAsName ? name : accountHolder} disabled={sameAsName} invalid={!sameAsName && !!errors.accountHolder}
             onChange={(e) => { setAccountHolder(e.target.value); clearError('accountHolder') }} placeholder="ชื่อตามสมุดบัญชี" />
-          <FieldError msg={errors.accountHolder} />
+          <Checkbox
+            className="mt-2"
+            checked={sameAsName}
+            onChange={(e) => { setSameAsName(e.target.checked); clearError('accountHolder') }}
+            label="ใช้ชื่อผู้ขายเป็นชื่อบัญชี"
+          />
+          {!sameAsName && <FieldError msg={errors.accountHolder} />}
         </div>
       </Section>
 
