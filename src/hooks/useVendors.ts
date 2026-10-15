@@ -183,7 +183,7 @@ export function useUpdateVendor(id?: string) {
   const qc = useQueryClient()
   const { activeTenant } = useClientAuth()
   return useMutation({
-    mutationFn: async (patch: Partial<Pick<ClientVendor, 'prefix' | 'name' | 'address' | 'lineUserId' | 'phone' | 'email' | 'bankName' | 'bankAccount' | 'accountHolder'>> & { idNumber?: string }) => {
+    mutationFn: async (patch: Partial<Pick<ClientVendor, 'prefix' | 'name' | 'address' | 'lineUserId' | 'phone' | 'email' | 'bankName' | 'bankAccount' | 'accountHolder'>> & { idNumber?: string; clearBank?: boolean }) => {
       if (patch.name !== undefined) {
         const n = patch.name.trim()
         if (n.length < 2) throw new Error('กรุณากรอกชื่อผู้ขาย')
@@ -194,8 +194,10 @@ export function useUpdateVendor(id?: string) {
         const norm = normalizeTaxId(patch.idNumber)
         if (norm && norm.length !== 13) throw new Error('เลขบัตรประชาชนต้องเป็นเลข 13 หลัก')
       }
-      const bankErr = bankValidation({ bankName: patch.bankName, bankAccount: patch.bankAccount, accountHolder: patch.accountHolder })
-      if (bankErr) throw new Error(bankErr)
+      if (!patch.clearBank) {
+        const bankErr = bankValidation({ bankName: patch.bankName, bankAccount: patch.bankAccount, accountHolder: patch.accountHolder })
+        if (bankErr) throw new Error(bankErr)
+      }
       if (hasServer) {
         await apiSend(`/api/client/vendors/${id}`, 'PATCH', patch)
         return { ok: true }
@@ -211,9 +213,9 @@ export function useUpdateVendor(id?: string) {
         lineUserId: patch.lineUserId !== undefined ? (patch.lineUserId.trim() || undefined) : cur.lineUserId,
         phone: patch.phone !== undefined ? (patch.phone.trim() || undefined) : cur.phone,
         email: patch.email !== undefined ? (patch.email.trim() || undefined) : cur.email,
-        bankName: patch.bankName !== undefined ? (patch.bankName.trim() || undefined) : cur.bankName,
-        bankAccount: patch.bankAccount !== undefined ? (patch.bankAccount.replace(/\D/g, '') || undefined) : cur.bankAccount,
-        accountHolder: patch.accountHolder !== undefined ? (patch.accountHolder.trim() || undefined) : cur.accountHolder,
+        bankName: patch.clearBank ? undefined : patch.bankName !== undefined ? (patch.bankName.trim() || undefined) : cur.bankName,
+        bankAccount: patch.clearBank ? undefined : patch.bankAccount !== undefined ? (patch.bankAccount.replace(/\D/g, '') || undefined) : cur.bankAccount,
+        accountHolder: patch.clearBank ? undefined : patch.accountHolder !== undefined ? (patch.accountHolder.trim() || undefined) : cur.accountHolder,
       }
       if (patch.idNumber !== undefined) {
         const norm = normalizeTaxId(patch.idNumber)

@@ -42,6 +42,7 @@ export function VendorDetail() {
   const [bankName, setBankName] = useState('')
   const [bankAccount, setBankAccount] = useState('')
   const [accountHolder, setAccountHolder] = useState('')
+  const [bankCleared, setBankCleared] = useState(false)
   const [editing, setEditing] = useState(false)
   const toast = useToast()
   const [err, setErr] = useState('')
@@ -131,8 +132,16 @@ export function VendorDetail() {
     setBankName(v.bankName ?? '')
     setBankAccount(v.bankAccount ?? '')
     setAccountHolder(v.accountHolder ?? '')
+    setBankCleared(false)
     setErr('')
     setEditing(true)
+  }
+
+  const clearBankFields = () => {
+    setBankName('')
+    setBankAccount('')
+    setAccountHolder('')
+    setBankCleared(true)
   }
 
   const copy = async (text: string, label: string) => {
@@ -166,10 +175,12 @@ export function VendorDetail() {
       setErr('รูปแบบอีเมลไม่ถูกต้อง')
       return
     }
-    const bankErr = bankValidation({ bankName, bankAccount, accountHolder })
-    if (bankErr) {
-      setErr(bankErr)
-      return
+    if (!bankCleared) {
+      const bankErr = bankValidation({ bankName, bankAccount, accountHolder })
+      if (bankErr) {
+        setErr(bankErr)
+        return
+      }
     }
     try {
       await update.mutateAsync({
@@ -179,9 +190,13 @@ export function VendorDetail() {
         lineUserId: lineUserId.trim() || undefined,
         phone: phone.trim() || undefined,
         email: email.trim() || undefined,
-        bankName: bankName.trim() || undefined,
-        bankAccount: bankAccount.trim() || undefined,
-        accountHolder: accountHolder.trim() || undefined,
+        ...(bankCleared
+          ? { clearBank: true }
+          : {
+              bankName: bankName.trim() || undefined,
+              bankAccount: bankAccount.trim() || undefined,
+              accountHolder: accountHolder.trim() || undefined,
+            }),
         ...(newTaxId.trim() ? { idNumber: newTaxId } : {}),
       })
       setEditing(false)
@@ -353,6 +368,15 @@ export function VendorDetail() {
                   <Input value={accountHolder} onChange={(e) => setAccountHolder(e.target.value)} placeholder="ชื่อตามสมุดบัญชี" />
                 </div>
               </div>
+              {bankCleared ? (
+                <p className="text-label text-warning">ข้อมูลธนาคารจะถูกลบเมื่อกดบันทึก</p>
+              ) : (
+                hasBank && (
+                  <Button variant="ghost" className="h-9 px-3 text-body" onClick={clearBankFields} disabled={update.isPending}>
+                    ลบข้อมูลธนาคาร
+                  </Button>
+                )
+              )}
             </>
           ) : hasBank ? (
             <div className="space-y-2.5">

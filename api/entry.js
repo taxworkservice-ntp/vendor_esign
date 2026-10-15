@@ -69235,10 +69235,13 @@ dataRoutes.patch("/vendors/:id", async (c) => {
     return c.json({ error: "invalid-prefix" }, 400);
   const nextId = b2?.idNumber !== void 0 ? b2.idNumber.replace(/\D/g, "").slice(0, 13) : void 0;
   if (nextId !== void 0 && nextId && nextId.length !== 13) return c.json({ error: "invalid-body" }, 400);
-  const bankTouched = b2?.bankName !== void 0 || b2?.bankAccount !== void 0 || b2?.accountHolder !== void 0;
-  if (bankTouched) {
-    const bankErr = bankValidation({ bankName: b2?.bankName, bankAccount: b2?.bankAccount, accountHolder: b2?.accountHolder });
-    if (bankErr) return c.json({ error: "invalid-bank", message: bankErr }, 400);
+  const bankClear = b2?.clearBank === true;
+  if (!bankClear) {
+    const bankTouched = b2?.bankName !== void 0 || b2?.bankAccount !== void 0 || b2?.accountHolder !== void 0;
+    if (bankTouched) {
+      const bankErr = bankValidation({ bankName: b2?.bankName, bankAccount: b2?.bankAccount, accountHolder: b2?.accountHolder });
+      if (bankErr) return c.json({ error: "invalid-bank", message: bankErr }, 400);
+    }
   }
   await withTenant(g.ws, "owner", async () => {
     const db = sql();
@@ -69252,9 +69255,9 @@ dataRoutes.patch("/vendors/:id", async (c) => {
       email = coalesce(${b2?.email ?? null}, email),
       is_vat_registered = coalesce(${b2?.isVatRegistered ?? null}, is_vat_registered),
       is_active = coalesce(${b2?.isActive === void 0 ? null : Boolean(b2.isActive)}, is_active),
-      bank_name = coalesce(${b2?.bankName !== void 0 ? b2.bankName.trim() || null : null}, bank_name),
-      bank_account_encrypted = coalesce(${b2?.bankAccount !== void 0 ? safeEncryptAccount(b2.bankAccount) || null : null}, bank_account_encrypted),
-      account_holder = coalesce(${b2?.accountHolder !== void 0 ? b2.accountHolder.trim() || null : null}, account_holder),
+      bank_name = case when ${bankClear} then null else coalesce(${b2?.bankName !== void 0 ? b2.bankName.trim() || null : null}, bank_name) end,
+      bank_account_encrypted = case when ${bankClear} then null else coalesce(${b2?.bankAccount !== void 0 ? safeEncryptAccount(b2.bankAccount) || null : null}, bank_account_encrypted) end,
+      account_holder = case when ${bankClear} then null else coalesce(${b2?.accountHolder !== void 0 ? b2.accountHolder.trim() || null : null}, account_holder) end,
       updated_at = now()
       where id = ${c.req.param("id")} and user_id = ${g.ws}`;
   });

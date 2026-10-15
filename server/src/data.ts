@@ -354,7 +354,7 @@ dataRoutes.patch('/vendors/:id', async (c) => {
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
   if (!canDo(g, 'canManageVendors')) return c.json({ error: 'forbidden' }, 403)
   const b = (await c.req.json().catch(() => null)) as
-    | { prefix?: string; name?: string; address?: string; lineUserId?: string; phone?: string; email?: string; isVatRegistered?: boolean; idNumber?: string; isActive?: boolean; bankName?: string; bankAccount?: string; accountHolder?: string }
+    | { prefix?: string; name?: string; address?: string; lineUserId?: string; phone?: string; email?: string; isVatRegistered?: boolean; idNumber?: string; isActive?: boolean; bankName?: string; bankAccount?: string; accountHolder?: string; clearBank?: boolean }
     | null
   const nextName = (b?.name ?? '').trim()
   if (b?.name !== undefined && nextName.length < 2) return c.json({ error: 'invalid-body' }, 400)
@@ -362,11 +362,14 @@ dataRoutes.patch('/vendors/:id', async (c) => {
     return c.json({ error: 'invalid-prefix' }, 400)
   const nextId = b?.idNumber !== undefined ? b.idNumber.replace(/\D/g, '').slice(0, 13) : undefined
   if (nextId !== undefined && nextId && nextId.length !== 13) return c.json({ error: 'invalid-body' }, 400)
-  // Bank fields are edited as a set: if any is sent, all three must be valid.
-  const bankTouched = b?.bankName !== undefined || b?.bankAccount !== undefined || b?.accountHolder !== undefined
-  if (bankTouched) {
-    const bankErr = bankValidation({ bankName: b?.bankName, bankAccount: b?.bankAccount, accountHolder: b?.accountHolder })
-    if (bankErr) return c.json({ error: 'invalid-bank', message: bankErr }, 400)
+  // Bank is edited all-or-nothing, or wiped outright with `clearBank`.
+  const bankClear = b?.clearBank === true
+  if (!bankClear) {
+    const bankTouched = b?.bankName !== undefined || b?.bankAccount !== undefined || b?.accountHolder !== undefined
+    if (bankTouched) {
+      const bankErr = bankValidation({ bankName: b?.bankName, bankAccount: b?.bankAccount, accountHolder: b?.accountHolder })
+      if (bankErr) return c.json({ error: 'invalid-bank', message: bankErr }, 400)
+    }
   }
   await withTenant(g.ws, 'owner', async () => {
     const db = sql()
@@ -380,9 +383,9 @@ dataRoutes.patch('/vendors/:id', async (c) => {
       email = coalesce(${b?.email ?? null}, email),
       is_vat_registered = coalesce(${b?.isVatRegistered ?? null}, is_vat_registered),
       is_active = coalesce(${b?.isActive === undefined ? null : Boolean(b.isActive)}, is_active),
-      bank_name = coalesce(${b?.bankName !== undefined ? (b.bankName.trim() || null) : null}, bank_name),
-      bank_account_encrypted = coalesce(${b?.bankAccount !== undefined ? (safeEncryptAccount(b.bankAccount) || null) : null}, bank_account_encrypted),
-      account_holder = coalesce(${b?.accountHolder !== undefined ? (b.accountHolder.trim() || null) : null}, account_holder),
+      bank_name = case when ${bankClear} then null else coalesce(${b?.bankName !== undefined ? (b.bankName.trim() || null) : null}, bank_name) end,
+      bank_account_encrypted = case when ${bankClear} then null else coalesce(${b?.bankAccount !== undefined ? (safeEncryptAccount(b.bankAccount) || null) : null}, bank_account_encrypted) end,
+      account_holder = case when ${bankClear} then null else coalesce(${b?.accountHolder !== undefined ? (b.accountHolder.trim() || null) : null}, account_holder) end,
       updated_at = now()
       where id = ${c.req.param('id')} and user_id = ${g.ws}`
   })
