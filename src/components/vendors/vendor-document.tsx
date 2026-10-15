@@ -11,6 +11,7 @@ import {
 import { prepareUpload } from '../../lib/image-upload'
 import { Spinner } from '../ui/spinner'
 import { FieldError } from '../ui/input'
+import { ConfirmDialog } from '../ui/confirm-dialog'
 
 // One vendor document thumbnail, loaded on demand (never in a list payload),
 // owner-only on the server, click to enlarge. Used by both the invite review and
@@ -42,7 +43,8 @@ export function VendorDocument({
   const [zoom, setZoom] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [confirmChange, setConfirmChange] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const qc = useQueryClient()
   const key = ['vendor-doc', owner.kind, owner.id, doc]
@@ -65,7 +67,6 @@ export function VendorDocument({
     try {
       const prepared = await prepareUpload(file, { name: `${doc}.jpg` })
       await uploadVendorDoc({ kind: 'vendor', id: owner.id }, doc, prepared.dataUrl)
-      setConfirmingDelete(false)
       refresh()
     } catch (e) {
       setErr(
@@ -78,17 +79,19 @@ export function VendorDocument({
     }
   }
 
+  const replace = () => {
+    // Replacing overwrites an existing document — confirm first.
+    if (hasDoc && src) setConfirmChange(true)
+    else fileRef.current?.click()
+  }
+
   const onDelete = async () => {
-    if (!confirmingDelete) {
-      setConfirmingDelete(true)
-      return
-    }
+    setConfirmDelete(false)
     if (owner.kind !== 'vendor') return
     setErr('')
     setBusy(true)
     try {
       await removeVendorDoc({ kind: 'vendor', id: owner.id }, doc)
-      setConfirmingDelete(false)
       refresh()
     } catch {
       setErr('ลบเอกสารไม่สำเร็จ — กรุณาลองใหม่อีกครั้ง')
@@ -119,26 +122,20 @@ export function VendorDocument({
           <button
             type="button"
             disabled={busy}
-            onClick={() => fileRef.current?.click()}
+            onClick={replace}
             className="flex h-9 items-center gap-1.5 rounded-control border border-card-border bg-white px-3 text-label font-medium text-ink-700 transition hover:border-ink-300 disabled:opacity-50"
           >
             {busy ? <Spinner /> : <Upload size={14} aria-hidden />}
-            {hasDoc && src ? 'เปลี่ยนรูป' : 'อัปโหลด'}
+            {hasDoc && src ? 'เปลี่ยนเอกสาร' : 'อัปโหลดเอกสาร'}
           </button>
           {hasDoc && src && allowRemove && (
             <button
               type="button"
               disabled={busy}
-              onClick={() => void onDelete()}
-              onBlur={() => setConfirmingDelete(false)}
-              className={
-                confirmingDelete
-                  ? 'flex h-9 items-center gap-1.5 rounded-control bg-danger px-3 text-label font-medium text-white transition disabled:opacity-50'
-                  : 'flex h-9 items-center gap-1.5 rounded-control px-3 text-label font-medium text-ink-400 transition hover:bg-danger-soft hover:text-danger disabled:opacity-50'
-              }
+              onClick={() => setConfirmDelete(true)}
+              className="flex h-9 items-center gap-1.5 rounded-control px-3 text-label font-medium text-ink-400 transition hover:bg-danger-soft hover:text-danger disabled:opacity-50"
             >
-              <Trash2 size={14} aria-hidden />
-              {confirmingDelete ? 'ยืนยันลบ?' : 'ลบ'}
+              <Trash2 size={14} aria-hidden /> ลบเอกสาร
             </button>
           )}
           <input
@@ -174,6 +171,25 @@ export function VendorDocument({
           <img src={src} alt={label} className="max-h-[90vh] max-w-[90vw] rounded-card object-contain" />
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmChange}
+        tone="primary"
+        title="ยืนยันการเปลี่ยนเอกสาร"
+        message={<>เอกสารเดิม (<b>{label}</b>) จะถูกแทนที่ด้วยไฟล์ใหม่ และไม่สามารถกู้คืนได้</>}
+        confirmLabel="เลือกไฟล์ใหม่"
+        onConfirm={() => { setConfirmChange(false); fileRef.current?.click() }}
+        onCancel={() => setConfirmChange(false)}
+      />
+      <ConfirmDialog
+        open={confirmDelete}
+        title="ยืนยันการลบเอกสาร"
+        message={<>ต้องการลบ <b>{label}</b> ออกหรือไม่ — เอกสารนี้จะไม่แสดงในรายการและบนเอกสารอีก</>}
+        confirmLabel="ลบเอกสาร"
+        busy={busy}
+        onConfirm={() => void onDelete()}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   )
 }
