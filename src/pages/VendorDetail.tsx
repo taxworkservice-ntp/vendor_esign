@@ -376,7 +376,7 @@ export function VendorDetail() {
               <Checkbox
                 checked={sameAsName}
                 onChange={(e) => setSameAsName(e.target.checked)}
-                label="ใช้ชื่อผู้ขายเป็นชื่อบัญชี"
+                label="ใช้ชื่อตามบัตรประชาชน"
               />
               {bankCleared ? (
                 <p className="text-label text-warning">ข้อมูลธนาคารจะถูกลบเมื่อกดบันทึก</p>

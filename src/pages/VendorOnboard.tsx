@@ -396,7 +396,7 @@ function OnboardForm({
             <FieldError msg={errors.prefix} />
           </div>
           <div>
-            <Label htmlFor="ob-name" required>ชื่อ-นามสกุล</Label>
+            <Label htmlFor="ob-name" required hint="ตามบัตรประชาชน">ชื่อ-นามสกุล</Label>
             <Input id="ob-name" value={name} autoComplete="name" enterKeyHint="next" invalid={!!errors.name}
               onChange={(e) => { setName(e.target.value); clearError('name') }} placeholder="เช่น สมชาย ใจดี" />
             <FieldError msg={errors.name} />
@@ -426,17 +426,14 @@ function OnboardForm({
             <FieldError msg={errors.email} />
           </div>
         </div>
-          <div>
-            <Label htmlFor="ob-line" hint="ไม่บังคับ">LINE user id</Label>
-            <Input id="ob-line" value={lineUserId} autoCapitalize="none" spellCheck={false} enterKeyHint="next"
-              onChange={(e) => setLineUserId(e.target.value)} placeholder="U…" className="font-mono" />
-            {lineFromPayer && (
-              <p className="mt-1.5 text-label text-ink-500">ผู้ว่าจ้างระบุไว้ — โปรดตรวจสอบให้ถูกต้องก่อนส่ง</p>
-            )}
-          </div>
-      </Section>
-
-      <Section title="2 · ภาษีและการรับเงิน">
+        <div>
+          <Label htmlFor="ob-line" hint="ไม่บังคับ">LINE user id</Label>
+          <Input id="ob-line" value={lineUserId} autoCapitalize="none" spellCheck={false} enterKeyHint="next"
+            onChange={(e) => setLineUserId(e.target.value)} placeholder="U…" className="font-mono" />
+          {lineFromPayer && (
+            <p className="mt-1.5 text-label text-ink-500">ผู้ว่าจ้างระบุไว้ — โปรดตรวจสอบให้ถูกต้องก่อนส่ง</p>
+          )}
+        </div>
         <div>
           <Label htmlFor="ob-taxid" hint="13 หลัก" required>เลขบัตรประชาชน / เลขผู้เสียภาษี</Label>
           <Input id="ob-taxid" value={taxId} inputMode="numeric" autoCapitalize="none" spellCheck={false} invalid={!!errors.taxId}
@@ -444,6 +441,9 @@ function OnboardForm({
             placeholder="0xxxxxxxxxxxx" className="font-mono" />
           <FieldError msg={errors.taxId} />
         </div>
+      </Section>
+
+      <Section title="2 · การรับเงิน">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <Label htmlFor="ob-bankname" required>ธนาคาร</Label>
@@ -466,7 +466,7 @@ function OnboardForm({
             className="mt-2"
             checked={sameAsName}
             onChange={(e) => { setSameAsName(e.target.checked); clearError('accountHolder') }}
-            label="ใช้ชื่อผู้ขายเป็นชื่อบัญชี"
+            label="ใช้ชื่อตามบัตรประชาชน"
           />
           {!sameAsName && <FieldError msg={errors.accountHolder} />}
         </div>

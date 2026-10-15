@@ -164,7 +164,7 @@ export function VendorNew() {
               className="mt-2"
               checked={sameAsName}
               onChange={(e) => setSameAsName(e.target.checked)}
-              label="ใช้ชื่อผู้ขายเป็นชื่อบัญชี"
+              label="ใช้ชื่อตามบัตรประชาชน"
             />
           </div>
           <FieldError msg={err} />
