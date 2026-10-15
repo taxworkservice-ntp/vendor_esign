@@ -9,6 +9,7 @@ import { getTenantSettings } from './settings'
 import { decryptId, decryptToken, encryptId, encryptToken } from './crypto'
 import { INVITE_TTL_DAYS, CONSENT_VERSION } from '../../src/lib/vendor-invite'
 import { onboardRef } from '../../src/lib/vendor-onboard'
+import { isValidEmail, isValidPhone } from '../../src/lib/vendor-contact'
 
 // Vendor self-onboarding: a client mints an invite link; the vendor submits
 // identity/tax/bank + documents; the client reviews and approves, creating a
@@ -310,6 +311,10 @@ invitePublicRoutes.post('/:token/submit', async (c) => {
   const accountHolder = String(b.accountHolder ?? '').trim()
   const bankAccount = String(b.bankAccount ?? '').replace(/\D/g, '')
   if (name.length < 2 || address.length < 4) return c.json({ error: 'invalid-body' }, 400)
+  // Contacts are required (same rule as signing): the payer needs a real
+  // channel to the payee, and the form enforces it client-side too.
+  if (!isValidPhone(String(b.phone ?? ''))) return c.json({ error: 'invalid-phone' }, 400)
+  if (!isValidEmail(String(b.email ?? ''))) return c.json({ error: 'invalid-email' }, 400)
   if (!validTaxIdChecksum(taxId)) return c.json({ error: 'invalid-taxid' }, 400)
   if (bankAccount.length < 8 || !accountHolder) return c.json({ error: 'invalid-body' }, 400)
   const idBytes = dataUrlBytes(String(b.idDocData ?? ''))

@@ -5,6 +5,8 @@ const valid: OnboardInput = {
   prefix: 'นาย',
   name: 'สมชาย ใจดี',
   address: '123 ถนนทดสอบ ตำบลทดสอบ',
+  phone: '0812345678',
+  email: 'somchai@example.com',
   taxId: '1101700230708',
   bankName: 'กสิกรไทย',
   bankAccount: '1234567890',
@@ -34,9 +36,20 @@ describe('validateOnboard', () => {
     expect(validateOnboard({ ...valid, consent: false }).consent).toBeTruthy()
   })
 
+  it('requires a valid phone and email', () => {
+    expect(validateOnboard({ ...valid, phone: '' }).phone).toBeTruthy()
+    expect(validateOnboard({ ...valid, phone: '08123456' }).phone).toBeTruthy()
+    expect(validateOnboard({ ...valid, phone: '+66812345678' }).phone).toBeTruthy()
+    expect(validateOnboard({ ...valid, phone: '021234567' }).phone).toBeUndefined()
+    expect(validateOnboard({ ...valid, email: '' }).email).toBeTruthy()
+    expect(validateOnboard({ ...valid, email: 'not-an-email' }).email).toBeTruthy()
+    expect(validateOnboard({ ...valid, email: 'a@b.co.th' }).email).toBeUndefined()
+  })
+
   it('reports the first invalid field in visual order', () => {
     const errors = validateOnboard({ ...valid, name: '', consent: false })
     expect(firstInvalidField(errors)).toBe('name')
+    expect(firstInvalidField(validateOnboard({ ...valid, phone: '' }))).toBe('phone')
     expect(firstInvalidField({})).toBeNull()
   })
 })

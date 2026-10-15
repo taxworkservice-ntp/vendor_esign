@@ -1,5 +1,6 @@
 import { isVendorPrefix, prefixRequired } from './vendor-name'
 import { isValidTaxIdChecksum, normalizeTaxId } from './taxid'
+import { EMAIL_REQUIRED_ERROR, PHONE_REQUIRED_ERROR, isValidEmail, isValidPhone } from './vendor-contact'
 
 // Pure validation for the vendor self-onboarding form. Extracted from the page
 // so the rules are unit-testable and the UI can show one error per field
@@ -9,6 +10,8 @@ export type OnboardField =
   | 'name'
   | 'prefix'
   | 'address'
+  | 'phone'
+  | 'email'
   | 'taxId'
   | 'bankName'
   | 'bankAccount'
@@ -22,6 +25,9 @@ export interface OnboardInput {
   prefix: string
   name: string
   address: string
+  /** Required: the payer needs a real channel to reach the payee. */
+  phone: string
+  email: string
   taxId: string
   bankName: string
   bankAccount: string
@@ -36,6 +42,8 @@ export const ONBOARD_FIELD_ORDER: OnboardField[] = [
   'name',
   'prefix',
   'address',
+  'phone',
+  'email',
   'taxId',
   'bankName',
   'bankAccount',
@@ -49,6 +57,9 @@ export function validateOnboard(v: OnboardInput): OnboardErrors {
   if (v.name.trim().length < 2) errors.name = 'กรุณากรอกชื่อ-นามสกุล'
   if (prefixRequired(v.name) && !isVendorPrefix(v.prefix)) errors.prefix = 'กรุณาเลือกคำนำหน้าชื่อ'
   if (v.address.trim().length < 4) errors.address = 'กรุณากรอกที่อยู่'
+  // Contacts are required at onboarding — same rule as the signing form.
+  if (!isValidPhone(v.phone)) errors.phone = PHONE_REQUIRED_ERROR
+  if (!isValidEmail(v.email)) errors.email = EMAIL_REQUIRED_ERROR
 
   const id = normalizeTaxId(v.taxId)
   if (id.length !== 13) errors.taxId = 'เลขบัตรประชาชนต้องเป็นเลข 13 หลัก'

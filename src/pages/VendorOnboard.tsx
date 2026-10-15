@@ -8,6 +8,7 @@ import { VENDOR_PREFIXES } from '../lib/vendor-name'
 import { normalizeTaxId } from '../lib/taxid'
 import { prepareUpload } from '../lib/image-upload'
 import { firstInvalidField, validateOnboard, type OnboardErrors, type OnboardField } from '../lib/vendor-onboard'
+import { EMAIL_REQUIRED_ERROR, PHONE_REQUIRED_ERROR } from '../lib/vendor-contact'
 import { Card, CardBody } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Checkbox } from '../components/ui/checkbox'
@@ -28,6 +29,8 @@ const FIELD_IDS: Record<OnboardField, string> = {
   name: 'ob-name',
   prefix: 'ob-prefix',
   address: 'ob-address',
+  phone: 'ob-phone',
+  email: 'ob-email',
   taxId: 'ob-taxid',
   bankName: 'ob-bankname',
   bankAccount: 'ob-bankaccount',
@@ -271,6 +274,8 @@ function OnboardForm({
       prefix,
       name,
       address,
+      phone,
+      email,
       taxId,
       bankName,
       bankAccount,
@@ -298,6 +303,12 @@ function OnboardForm({
         if (err === 'invalid-taxid') {
           setErrors({ taxId: 'เลขบัตรประชาชนไม่ถูกต้อง' })
           focusField('taxId')
+        } else if (err === 'invalid-phone') {
+          setErrors({ phone: PHONE_REQUIRED_ERROR })
+          focusField('phone')
+        } else if (err === 'invalid-email') {
+          setErrors({ email: EMAIL_REQUIRED_ERROR })
+          focusField('email')
         } else if (err === 'invalid-document') {
           setErrors({ idDoc: 'รูปบัตรประชาชนไม่ถูกต้อง กรุณาแนบใหม่' })
           focusField('idDoc')
@@ -387,14 +398,16 @@ function OnboardForm({
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <Label htmlFor="ob-phone" hint="ไม่บังคับ">เบอร์โทรศัพท์</Label>
-            <Input id="ob-phone" value={phone} autoComplete="tel" inputMode="tel" enterKeyHint="next"
-              onChange={(e) => setPhone(e.target.value)} placeholder="08x-xxx-xxxx" />
+            <Label htmlFor="ob-phone" required>เบอร์โทรศัพท์</Label>
+            <Input id="ob-phone" value={phone} autoComplete="tel" inputMode="tel" enterKeyHint="next" invalid={!!errors.phone}
+              onChange={(e) => { setPhone(e.target.value); clearError('phone') }} placeholder="08x-xxx-xxxx" />
+            <FieldError msg={errors.phone} />
           </div>
           <div>
-            <Label htmlFor="ob-email" hint="ไม่บังคับ">อีเมล</Label>
-            <Input id="ob-email" type="email" value={email} autoComplete="email" enterKeyHint="next"
-              onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" />
+            <Label htmlFor="ob-email" required>อีเมล</Label>
+            <Input id="ob-email" type="email" value={email} autoComplete="email" enterKeyHint="next" invalid={!!errors.email}
+              onChange={(e) => { setEmail(e.target.value); clearError('email') }} placeholder="name@example.com" />
+            <FieldError msg={errors.email} />
           </div>
         </div>
         <div>
