@@ -10,6 +10,7 @@ import { decryptId, decryptToken, encryptId, encryptToken } from './crypto'
 import { INVITE_TTL_DAYS, CONSENT_VERSION } from '../../src/lib/vendor-invite'
 import { onboardRef } from '../../src/lib/vendor-onboard'
 import { isValidEmail, isValidPhone } from '../../src/lib/vendor-contact'
+import { isVendorPrefix } from '../../src/lib/vendor-name'
 
 // Vendor self-onboarding: a client mints an invite link; the vendor submits
 // identity/tax/bank + documents; the client reviews and approves, creating a
@@ -311,6 +312,8 @@ invitePublicRoutes.post('/:token/submit', async (c) => {
   const accountHolder = String(b.accountHolder ?? '').trim()
   const bankAccount = String(b.bankAccount ?? '').replace(/\D/g, '')
   if (name.length < 2 || address.length < 4) return c.json({ error: 'invalid-body' }, 400)
+  // Prefix is required on onboarding (the form is person-centric).
+  if (!isVendorPrefix(String(b.prefix ?? '').trim())) return c.json({ error: 'invalid-prefix' }, 400)
   // Contacts are required (same rule as signing): the payer needs a real
   // channel to the payee, and the form enforces it client-side too.
   if (!isValidPhone(String(b.phone ?? ''))) return c.json({ error: 'invalid-phone' }, 400)

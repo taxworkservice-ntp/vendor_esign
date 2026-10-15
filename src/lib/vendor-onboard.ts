@@ -1,4 +1,4 @@
-import { isVendorPrefix, prefixRequired } from './vendor-name'
+import { isVendorPrefix } from './vendor-name'
 import { isValidTaxIdChecksum, normalizeTaxId } from './taxid'
 import { EMAIL_REQUIRED_ERROR, PHONE_REQUIRED_ERROR, isValidEmail, isValidPhone } from './vendor-contact'
 
@@ -55,7 +55,7 @@ export const ONBOARD_FIELD_ORDER: OnboardField[] = [
 export function validateOnboard(v: OnboardInput): OnboardErrors {
   const errors: OnboardErrors = {}
   if (v.name.trim().length < 2) errors.name = 'กรุณากรอกชื่อ-นามสกุล'
-  if (prefixRequired(v.name) && !isVendorPrefix(v.prefix)) errors.prefix = 'กรุณาเลือกคำนำหน้าชื่อ'
+  if (!isVendorPrefix(v.prefix)) errors.prefix = 'กรุณาเลือกคำนำหน้าชื่อ'
   if (v.address.trim().length < 4) errors.address = 'กรุณากรอกที่อยู่'
   // Contacts are required at onboarding — same rule as the signing form.
   if (!isValidPhone(v.phone)) errors.phone = PHONE_REQUIRED_ERROR

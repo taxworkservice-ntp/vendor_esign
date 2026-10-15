@@ -20,10 +20,11 @@ describe('validateOnboard', () => {
     expect(validateOnboard(valid)).toEqual({})
   })
 
-  it('requires a title for individuals but not for entities', () => {
+  it('requires a title prefix on onboarding (person-centric form)', () => {
     expect(validateOnboard({ ...valid, prefix: '' }).prefix).toBeTruthy()
+    expect(validateOnboard({ ...valid, prefix: 'คุณ' }).prefix).toBeTruthy()
     const entity = { ...valid, prefix: '', name: 'บริษัท ทดสอบ จำกัด' }
-    expect(validateOnboard(entity).prefix).toBeUndefined()
+    expect(validateOnboard(entity).prefix).toBeTruthy()
   })
 
   it('validates the tax ID length and checksum', () => {

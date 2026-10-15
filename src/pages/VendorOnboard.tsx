@@ -303,6 +303,9 @@ function OnboardForm({
         if (err === 'invalid-taxid') {
           setErrors({ taxId: 'เลขบัตรประชาชนไม่ถูกต้อง' })
           focusField('taxId')
+        } else if (err === 'invalid-prefix') {
+          setErrors({ prefix: 'กรุณาเลือกคำนำหน้าชื่อ' })
+          focusField('prefix')
         } else if (err === 'invalid-phone') {
           setErrors({ phone: PHONE_REQUIRED_ERROR })
           focusField('phone')
@@ -370,7 +373,7 @@ function OnboardForm({
       <Section title="1 · ข้อมูลผู้ขาย">
         <div className="grid gap-4 sm:grid-cols-[9rem_1fr]">
           <div>
-            <Label htmlFor="ob-prefix">คำนำหน้าชื่อ</Label>
+            <Label htmlFor="ob-prefix" required>คำนำหน้าชื่อ</Label>
             <Select id="ob-prefix" value={prefix} invalid={!!errors.prefix} onChange={(e) => { setPrefix(e.target.value); clearError('prefix') }}>
               <option value="">—</option>
               {VENDOR_PREFIXES.map((p) => (

@@ -71347,6 +71347,7 @@ invitePublicRoutes.post("/:token/submit", async (c) => {
   const accountHolder = String(b2.accountHolder ?? "").trim();
   const bankAccount = String(b2.bankAccount ?? "").replace(/\D/g, "");
   if (name.length < 2 || address.length < 4) return c.json({ error: "invalid-body" }, 400);
+  if (!isVendorPrefix(String(b2.prefix ?? "").trim())) return c.json({ error: "invalid-prefix" }, 400);
   if (!isValidPhone(String(b2.phone ?? ""))) return c.json({ error: "invalid-phone" }, 400);
   if (!isValidEmail(String(b2.email ?? ""))) return c.json({ error: "invalid-email" }, 400);
   if (!validTaxIdChecksum(taxId)) return c.json({ error: "invalid-taxid" }, 400);
