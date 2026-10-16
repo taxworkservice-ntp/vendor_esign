@@ -57,6 +57,8 @@ export interface ReceiptPdfInput {
   transferDate: string
   slipReference: string
   signaturePng?: Uint8Array // vendor signature; representative signs on paper
+  /** Page 2: the payee's ID-card photo (JPEG/PNG bytes), attached to the receipt. */
+  idPhoto?: Uint8Array
   // Vendor-facing receipts omit the verification block. Set true only for the
   // internal/audit copy (kept for officers, not printed for the vendor).
   showVerification?: boolean
@@ -143,6 +145,21 @@ function drawQr(page: PDFPage, data: string, x: number, y: number, size: number,
       }
     }
   }
+}
+
+// Embed the payee's ID photo by sniffing its magic bytes — the onboarding form
+// stores JPEG bytes under a `.png` filename, so the extension cannot be trusted.
+// Returns null for unsupported formats (e.g. WebP) so the receipt still issues.
+async function embedPhoto(doc: PDFDocument, bytes: Uint8Array) {
+  const jpeg = bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+  const png = bytes.length > 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+  try {
+    if (png) return await doc.embedPng(bytes)
+    if (jpeg) return await doc.embedJpg(bytes)
+  } catch {
+    /* corrupt image — leave the page off rather than fail issuance */
+  }
+  return null
 }
 
 function normalizeItems(input: ReceiptPdfInput): ReceiptLine[] {
@@ -359,6 +376,39 @@ export async function buildReceiptPdf(input: ReceiptPdfInput): Promise<{ bytes: 
   if (input.showVerification) {
     const qrSize = 64
     drawQr(page, input.verifyUrl, right - qrSize, M - 6, qrSize, INK)
+  }
+
+  // ── Attachment page 2: the payee's ID-card photo ──
+  // Kept out of `pages` so page numbering still reflects the receipt's own
+  // content only (a normal receipt stays unnumbered).
+  if (input.idPhoto) {
+    const img = await embedPhoto(doc, input.idPhoto)
+    if (img) {
+      page = doc.addPage([A4.w, A4.h])
+      let ay = A4.h - M
+      text('เอกสารแนบ', M, ay, 9, bold, FAINT)
+      ay -= 24
+      text('รูปบัตรประชาชนผู้รับเงิน', M, ay, 15, bold, INK)
+      ay -= 20
+      text(
+        `ใบเสร็จเลขที่ ${input.number} · ${vendorDisplayName(input.vendor.prefix, input.vendor.name)}`,
+        M,
+        ay,
+        10,
+        regular,
+        MUTED,
+      )
+      ay -= 16
+      rule(ay, INK, 1)
+      ay -= 24
+      const boxH = ay - M
+      if (boxH > 40) {
+        const scale = Math.min(maxW / img.width, boxH / img.height)
+        const w = img.width * scale
+        const h = img.height * scale
+        page.drawImage(img, { x: M + (maxW - w) / 2, y: ay - h, width: w, height: h })
+      }
+    }
   }
 
   // ── Page numbers ──

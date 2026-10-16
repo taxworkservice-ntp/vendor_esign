@@ -7,8 +7,10 @@ import { fetchReceiptAuthorization } from '../hooks/useReceiptAuthorization'
 import { defaultSettings } from '../lib/settings'
 import { signatureState } from '../lib/signature-state'
 import { normalizeLineItem } from '../lib/line-items'
+import { fetchVendorDoc } from '../lib/vendor-doc-source'
 import { receiptSheetToA4PdfBytes } from '../lib/receipt-to-a4-pdf'
 import { ReceiptSheet, type ReceiptSheetData } from '../components/receipt/receipt-sheet'
+import { ReceiptAttachmentPage } from '../components/receipt/receipt-attachment'
 import { apiDownload, apiGet, hasServer, saveFile } from '../lib/api-client'
 import { documentFileName, stamp } from '../lib/download-name'
 import { chunk, EXPORT_CHUNK_SIZE } from '../lib/export-chunk'
@@ -28,6 +30,8 @@ interface Prepared {
   row: ReceiptRegisterRow
   data: ReceiptSheetData
   missingSig: boolean
+  /** Page 2: the payee's ID-card photo (object URL), or null when unavailable. */
+  idPhotoSrc: string | null
 }
 
 async function fetchTxn(id: string): Promise<PaymentTransaction | undefined> {
@@ -77,6 +81,7 @@ export function ReceiptsDownload() {
   const [failed, setFailed] = useState<string[]>([])
   const [err, setErr] = useState('')
   const refs = useRef<(HTMLDivElement | null)[]>([])
+  const attachRefs = useRef<(HTMLDivElement | null)[]>([])
   const started = useRef(false)
 
   // Fetch each receipt's authorization + transaction, bounded to 4 in flight.
@@ -110,7 +115,12 @@ export function ReceiptsDownload() {
               fetchReceiptAuthorization(row.id).catch(() => null),
               fetchTxn(row.id).catch(() => undefined),
             ])
-            out.push(build(row, auth, txn, client))
+            // Page 2: the payee's ID-card photo. Owner-only + audit-logged on the
+            // server; absent when the vendor has no ID doc (or no permission).
+            const idPhotoSrc = txn?.vendor.id
+              ? await fetchVendorDoc({ kind: 'vendor', id: txn.vendor.id }, 'id').catch(() => null)
+              : null
+            out.push(build(row, auth, txn, client, idPhotoSrc))
           }
         }
         await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker))
@@ -160,7 +170,10 @@ export function ReceiptsDownload() {
             files[name] = new Uint8Array(await blob.arrayBuffer())
             fell++
           } else if (el) {
-            files[name] = await receiptSheetToA4PdfBytes(el)
+            files[name] = await receiptSheetToA4PdfBytes(
+              el,
+              p.idPhotoSrc ? attachRefs.current[i] ?? undefined : undefined,
+            )
           } else if (hasServer) {
             const { blob } = await apiDownload(`/api/client/transactions/${p.row.id}/receipt.pdf`)
             files[name] = new Uint8Array(await blob.arrayBuffer())
@@ -299,6 +312,24 @@ export function ReceiptsDownload() {
           />
         ))}
       </div>
+
+      {/* Offscreen page-2 attachments (the payee's ID card) — captured per row. */}
+      <div aria-hidden style={{ position: 'absolute', left: '-10000px', top: 0, width: '210mm' }}>
+        {prepared?.map((p, i) =>
+          p.idPhotoSrc ? (
+            <ReceiptAttachmentPage
+              key={p.row.id}
+              ref={(el) => {
+                attachRefs.current[i] = el
+              }}
+              number={p.row.number}
+              prefix={p.data.vendor.prefix}
+              vendorName={p.data.vendor.name || p.row.vendorName || ''}
+              src={p.idPhotoSrc}
+            />
+          ) : null,
+        )}
+      </div>
     </div>
   )
 }
@@ -308,6 +339,7 @@ function build(
   auth: ReceiptAuthorization | null,
   txn: PaymentTransaction | undefined,
   client: { displayName: string; address: string; taxId: string },
+  idPhotoSrc: string | null,
 ): Prepared {
   const rawItems = txn?.lineItems ?? []
   const items: LineItem[] = (rawItems.some((it) => it.description || it.amount)
@@ -320,6 +352,7 @@ function build(
     // A failed authorization fetch or a null image must not produce a
     // signature-less raster; the archived server PDF embeds the signature.
     missingSig: !auth || sig.kind === 'missing',
+    idPhotoSrc,
     data: {
       number: row.number,
       transferDate: txn?.transferDate ?? row.transferDate,

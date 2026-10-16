@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { Download, Info } from 'lucide-react'
 import { useTransaction } from '../hooks/useTransactions'
 import { useReceiptAuthorization } from '../hooks/useReceiptAuthorization'
@@ -8,10 +9,12 @@ import { defaultSettings } from '../lib/settings'
 import { mockReceiptNumber } from '../lib/receipt'
 import { signatureState, isSigned } from '../lib/signature-state'
 import { apiDownload, hasServer, saveFile } from '../lib/api-client'
+import { fetchVendorDoc } from '../lib/vendor-doc-source'
 import { documentFileName } from '../lib/download-name'
 import { receiptSheetToA4PdfBytes, sha256Hex } from '../lib/receipt-to-a4-pdf'
 import { normalizeLineItem } from '../lib/line-items'
 import { ReceiptSheet, type ReceiptSheetData } from '../components/receipt/receipt-sheet'
+import { ReceiptAttachmentPage } from '../components/receipt/receipt-attachment'
 import { Button } from '../components/ui/button'
 import { StatusBadge } from '../components/ui/badge'
 import { Breadcrumb } from '../components/ui/page-header'
@@ -33,6 +36,16 @@ export function ReceiptView() {
   const [issuedFile, setIssuedFile] = useState<{ sha: string; code: string } | null>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const attachRef = useRef<HTMLDivElement>(null)
+
+  // Page 2: the payee's ID-card photo, attached to every receipt PDF. Loaded on
+  // demand (never in a list payload); owner-only + audit-logged on the server.
+  const { data: idDocSrc } = useQuery({
+    queryKey: ['receipt-id-doc', t?.vendor.id],
+    enabled: !!t?.vendor.id && (t?.status === 'signed' || t?.status === 'issued'),
+    staleTime: 5 * 60_000,
+    queryFn: () => (t?.vendor.id ? fetchVendorDoc({ kind: 'vendor', id: t.vendor.id }, 'id') : Promise.resolve(null)),
+  })
 
   // Fit the fixed A4 sheet to the available width (never scale up past 100%).
   useEffect(() => {
@@ -149,7 +162,10 @@ export function ReceiptView() {
     }
     setBusy(true)
     try {
-      const bytes = await receiptSheetToA4PdfBytes(sheetRef.current)
+      const bytes = await receiptSheetToA4PdfBytes(
+        sheetRef.current,
+        idDocSrc ? attachRef.current ?? undefined : undefined,
+      )
       const name = documentFileName({ number, vendorName: t.vendor.name, amount: t.grossAmount })
       await saveFile(new Blob([bytes.slice().buffer], { type: 'application/pdf' }), name)
       // The digest shown is of the file just downloaded, not the server artifact.
@@ -224,6 +240,16 @@ export function ReceiptView() {
             }
           />
         </div>
+        {idDocSrc && (
+          <ReceiptAttachmentPage
+            ref={attachRef}
+            style={{ zoom }}
+            number={number}
+            prefix={data.vendor.prefix}
+            vendorName={data.vendor.name}
+            src={idDocSrc}
+          />
+        )}
       </div>
     </div>
   )

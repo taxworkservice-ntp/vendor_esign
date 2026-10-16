@@ -17,7 +17,10 @@ import { drawContain, loadImage, type OverlayImage } from './raster-image'
  * download did not. Drawing it ourselves removes that engine behaviour from the
  * path, so every browser produces the same PDF.
  */
-export async function receiptSheetToA4PdfBytes(el: HTMLElement): Promise<Uint8Array> {
+export async function receiptSheetToA4PdfBytes(
+  el: HTMLElement,
+  attachmentEl?: HTMLElement,
+): Promise<Uint8Array> {
   return elementToA4PdfBytes(el, {
     // Screen-only affordances (e.g. the fallback download button) and the
     // signature overlay must not appear in the captured SVG.
@@ -34,6 +37,9 @@ export async function receiptSheetToA4PdfBytes(el: HTMLElement): Promise<Uint8Ar
         // caller falls back to the server-archived PDF instead.
       }
     },
+    // Page 2: the payee's ID-card photo, captured from the same on-screen page
+    // that prints, so screen/print/download stay identical.
+    extraPages: attachmentEl ? [attachmentEl] : undefined,
   })
 }
 
@@ -61,39 +67,84 @@ export async function elementToA4PdfBytes(
      *    evidence card) that would otherwise be distorted by stretching.
      */
     fit?: 'stretch' | 'contain'
+    /**
+     * Additional pages appended after the first, each captured from its own
+     * on-screen element and stretched to a full A4 page (used for the receipt's
+     * ID-card attachment page). Overlay images are composited the same way.
+     */
+    extraPages?: HTMLElement[]
   } = {},
 ): Promise<Uint8Array> {
   const { jsPDF } = await import('jspdf')
-  // Neutralise the on-screen fit-to-width zoom and screen chrome for the capture.
-  const prevZoom = el.style.zoom
-  el.style.zoom = '1'
-  el.classList.add('pdf-export')
-  try {
-    await readyForCapture(el)
-    const canvas = await captureElement(el, {
-      pixelRatio: 2,
-      backgroundColor: '#ffffff',
-      filter: opts.filter ?? ((node) => !node.classList?.contains('no-print')),
-    })
-    if (opts.beforePdf) await opts.beforePdf(canvas)
-    const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' })
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.95)
-    if (opts.fit === 'contain' && canvas.width > 0 && canvas.height > 0) {
-      const ratio = canvas.height / canvas.width
-      let w = A4_W - A4_MARGIN * 2
-      let h = w * ratio
-      if (h > A4_H - A4_MARGIN * 2) {
-        h = A4_H - A4_MARGIN * 2
-        w = h / ratio
-      }
-      pdf.addImage(dataUrl, 'JPEG', (A4_W - w) / 2, A4_MARGIN, w, h)
-    } else {
-      pdf.addImage(dataUrl, 'JPEG', 0, 0, A4_W, A4_H)
+  const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' })
+
+  // Capture one A4-proportioned element to a canvas, neutralising the on-screen
+  // fit-to-width zoom + chrome, and compositing any overlay images.
+  const capturePage = async (target: HTMLElement, compose: (c: HTMLCanvasElement) => void | Promise<void>) => {
+    const prevZoom = target.style.zoom
+    target.style.zoom = '1'
+    target.classList.add('pdf-export')
+    try {
+      await readyForCapture(target)
+      const canvas = await captureElement(target, {
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        filter: opts.filter ?? ((node) => !node.classList?.contains('no-print')),
+      })
+      await compose(canvas)
+      return canvas
+    } finally {
+      target.classList.remove('pdf-export')
+      target.style.zoom = prevZoom
     }
-    return new Uint8Array(pdf.output('arraybuffer'))
-  } finally {
-    el.classList.remove('pdf-export')
-    el.style.zoom = prevZoom
+  }
+
+  const canvas = await capturePage(
+    el,
+    opts.beforePdf ?? ((c) => compositeOverlays(c, el)),
+  )
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.95)
+  if (opts.fit === 'contain' && canvas.width > 0 && canvas.height > 0) {
+    const ratio = canvas.height / canvas.width
+    let w = A4_W - A4_MARGIN * 2
+    let h = w * ratio
+    if (h > A4_H - A4_MARGIN * 2) {
+      h = A4_H - A4_MARGIN * 2
+      w = h / ratio
+    }
+    pdf.addImage(dataUrl, 'JPEG', (A4_W - w) / 2, A4_MARGIN, w, h)
+  } else {
+    pdf.addImage(dataUrl, 'JPEG', 0, 0, A4_W, A4_H)
+  }
+  for (const extra of opts.extraPages ?? []) {
+    const c = await capturePage(extra, (cv) => compositeOverlays(cv, extra))
+    pdf.addPage('a4', 'portrait')
+    pdf.addImage(c.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, A4_W, A4_H)
+  }
+  return new Uint8Array(pdf.output('arraybuffer'))
+}
+
+/** Draw every `img[data-role="overlay"]` in `target` onto the captured canvas,
+ *  positioned by its on-screen box (object-fit: contain). */
+async function compositeOverlays(canvas: HTMLCanvasElement, target: HTMLElement): Promise<void> {
+  const imgs = Array.from(target.querySelectorAll<HTMLImageElement>('img[data-role="overlay"]'))
+  if (!imgs.length) return
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  const base = target.getBoundingClientRect()
+  if (!base.width || !base.height) return
+  const sx = canvas.width / base.width
+  const sy = canvas.height / base.height
+  for (const img of imgs) {
+    if (!img.src) continue
+    const r = img.getBoundingClientRect()
+    if (!r.width || !r.height) continue
+    try {
+      const loaded = await loadImage(img.src)
+      drawContain(ctx, loaded, { src: img.src, x: (r.left - base.left) * sx, y: (r.top - base.top) * sy, w: r.width * sx, h: r.height * sy }, 1)
+    } catch {
+      /* broken attachment image: leave the page without it */
+    }
   }
 }
 

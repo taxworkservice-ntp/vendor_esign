@@ -84,9 +84,11 @@ export async function finalizeReceipt(txnId: string, ip: string): Promise<Finali
       t.transfer_date, t.slip_reference,
       a.vendor_prefix, a.vendor_name, a.vendor_address, a.vendor_masked_id, a.vendor_phone, a.vendor_email,
       a.auth_ref, a.signature_image_path,
-      a.signed_at, a.verification_method, a.consent_text_version
+      a.signed_at, a.verification_method, a.consent_text_version,
+      v.id_number_encrypted, v.id_doc_path
     from vendor_payables t
     join vendor_authorizations a on a.transaction_id = t.id
+    join vendor_payees v on v.id = t.vendor_id
     where t.id = ${txnId} and t.user_id = ${rowTenant}`
   const d = one<{
     description: string; note: string; payment_type: string | null; line_items: unknown;
@@ -96,6 +98,7 @@ export async function finalizeReceipt(txnId: string, ip: string): Promise<Finali
     vendor_phone: string | null; vendor_email: string | null; auth_ref: string | null;
     signature_image_path: string; signed_at: string;
     verification_method: string; consent_text_version: string;
+    id_number_encrypted: string | null; id_doc_path: string | null;
   }>(rows)
   if (!d) return { ok: false, error: 'not-signed' }
 
@@ -109,11 +112,7 @@ export async function finalizeReceipt(txnId: string, ip: string): Promise<Finali
       if (already) return
       let taxId = ''
       try {
-        const enc = one<{ id_number_encrypted: string | null }>(await db`
-          select v.id_number_encrypted from vendor_payables p
-          join vendor_payees v on v.id = p.vendor_id
-          where p.id = ${txnId} and p.user_id = ${rowTenant}`)
-        if (enc?.id_number_encrypted) taxId = decryptId(enc.id_number_encrypted) ?? ''
+        if (d.id_number_encrypted) taxId = decryptId(d.id_number_encrypted) ?? ''
       } catch {
         /* key absent — certificate still issues without tax id */
       }
@@ -157,14 +156,13 @@ export async function finalizeReceipt(txnId: string, ip: string): Promise<Finali
   // encryption key is absent or the ID was never stored.
   let vendorTaxId: string | undefined
   try {
-    const enc = one<{ id_number_encrypted: string | null }>(await db`
-      select v.id_number_encrypted from vendor_payables p
-      join vendor_payees v on v.id = p.vendor_id
-      where p.id = ${txnId} and p.user_id = ${rowTenant}`)
-    if (enc?.id_number_encrypted) vendorTaxId = decryptId(enc.id_number_encrypted) ?? undefined
+    if (d.id_number_encrypted) vendorTaxId = decryptId(d.id_number_encrypted) ?? undefined
   } catch {
     /* key absent — fall back to the mask */
   }
+  // Page 2: the payee's ID-card photo, read through the storage seam so it comes
+  // from R2 when configured. Absent when the vendor has no ID document.
+  const idPhoto = d.id_doc_path ? await readStoredDurable(rowTenant, d.id_doc_path) : undefined
   const verifyUrl = `${PUBLIC_BASE}/verify/${code.toUpperCase()}`
   const { bytes, sha256 } = await buildReceiptPdf({
     number,
@@ -195,6 +193,7 @@ export async function finalizeReceipt(txnId: string, ip: string): Promise<Finali
     transferDate: isoDay(d.transfer_date),
     slipReference: d.slip_reference,
     signaturePng: sig,
+    idPhoto,
   })
   const pdfPath = await saveBytesDurable('pdfs', `${number}.pdf`, bytes, rowTenant)
   await db`update vendor_receipts set pdf_path = ${pdfPath}, pdf_sha256 = ${sha256}

@@ -88,6 +88,25 @@ body {
   box-shadow: none !important;
 }
 
+/* Page 2 of a receipt: the payee's ID-card attachment. Same A4 geometry as the
+   sheet so screen, print and the PDF download are identical. */
+.receipt-attachment {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 18mm;
+  margin-top: 1rem;
+}
+
+.receipt-attachment.pdf-export {
+  width: 210mm !important;
+  min-height: 297mm !important;
+  padding: 18mm !important;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
 /* A4 receipt printing.
    Margins come from the @page box; the sheet fills the printable area and pins
    the signature to the bottom via flex + mt-auto. We never size the sheet to a
@@ -135,6 +154,20 @@ body {
     border-radius: 0 !important;
     box-shadow: none !important;
     overflow: visible;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  /* Page 2 (ID-card attachment) starts on its own A4 page, matching the download. */
+  .receipt-attachment {
+    width: 100% !important;
+    min-height: 271mm !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    overflow: visible;
+    break-before: page;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

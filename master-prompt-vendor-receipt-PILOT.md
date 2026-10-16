@@ -360,6 +360,18 @@ The receipt item table **drops the ส่วนลด column** (the discount sti
 line amount); its width goes to **รายละเอียด** — on screen and in both PDF paths. The
 pdf-lib artifact's header band was recoloured from teal to the brand blue (#0075de).
 
+**Receipt PDFs: ID-card attachment (page 2).** Every client-side receipt download now
+attaches the payee's **ID-card photo as page 2**, so each transaction's document is two
+pages. The single receipt (`/receipts/:id`) renders page 2 as a real on-screen A4 page
+(`ReceiptAttachmentPage`); the browser print (Ctrl+P) prints both pages with a page break,
+and the download captures that **same on-screen page**, so screen == print == PDF. The
+batch export (`/receipts/download`) attaches it per receipt inside the ZIP. The
+server-archived PDF (`server/src/pdf.ts`) also appends the page (magic-byte sniffed —
+onboarding stores JPEG bytes under a `.png` name; WebP is skipped), covering the
+"ฉบับออกจริง" fallback and the vendor return copy. The photo is the vendor's `id` document
+(owner-only, `canManageVendors`); no photo or no permission → a clean 1-page receipt.
+Existing archived PDFs are not retrofitted.
+
 **Still deferred.** LINE Login/LIFF verification (vendor signs via versioned consent +
 signature for now); automated reminders (email/LINE OA); invite funnel analytics;
 gross-up re-enable (with a corrected receipt presentation); credit notes (plain

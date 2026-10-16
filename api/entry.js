@@ -70804,6 +70804,16 @@ function drawQr(page, data, x2, y, size, color) {
     }
   }
 }
+async function embedPhoto(doc, bytes) {
+  const jpeg = bytes.length > 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
+  const png = bytes.length > 8 && bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71;
+  try {
+    if (png) return await doc.embedPng(bytes);
+    if (jpeg) return await doc.embedJpg(bytes);
+  } catch {
+  }
+  return null;
+}
 function normalizeItems(input) {
   const items = (input.lineItems ?? []).map((it2) => normalizeLineItem(it2)).filter((it2) => it2.description || it2.amount > 0);
   if (items.length > 0) return items;
@@ -70977,6 +70987,35 @@ async function buildReceiptPdf(input) {
     const qrSize = 64;
     drawQr(page, input.verifyUrl, right - qrSize, M - 6, qrSize, INK);
   }
+  if (input.idPhoto) {
+    const img = await embedPhoto(doc, input.idPhoto);
+    if (img) {
+      page = doc.addPage([A4.w, A4.h]);
+      let ay = A4.h - M;
+      text("\u0E40\u0E2D\u0E01\u0E2A\u0E32\u0E23\u0E41\u0E19\u0E1A", M, ay, 9, bold, FAINT);
+      ay -= 24;
+      text("\u0E23\u0E39\u0E1B\u0E1A\u0E31\u0E15\u0E23\u0E1B\u0E23\u0E30\u0E0A\u0E32\u0E0A\u0E19\u0E1C\u0E39\u0E49\u0E23\u0E31\u0E1A\u0E40\u0E07\u0E34\u0E19", M, ay, 15, bold, INK);
+      ay -= 20;
+      text(
+        `\u0E43\u0E1A\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E40\u0E25\u0E02\u0E17\u0E35\u0E48 ${input.number} \xB7 ${vendorDisplayName(input.vendor.prefix, input.vendor.name)}`,
+        M,
+        ay,
+        10,
+        regular,
+        MUTED
+      );
+      ay -= 16;
+      rule(ay, INK, 1);
+      ay -= 24;
+      const boxH2 = ay - M;
+      if (boxH2 > 40) {
+        const scale = Math.min(maxW / img.width, boxH2 / img.height);
+        const w = img.width * scale;
+        const h = img.height * scale;
+        page.drawImage(img, { x: M + (maxW - w) / 2, y: ay - h, width: w, height: h });
+      }
+    }
+  }
   if (pages.length > 1) {
     pages.forEach((p2, i) => {
       const t = `\u0E2B\u0E19\u0E49\u0E32 ${i + 1} / ${pages.length}`;
@@ -71037,9 +71076,11 @@ async function finalizeReceipt(txnId, ip) {
       t.transfer_date, t.slip_reference,
       a.vendor_prefix, a.vendor_name, a.vendor_address, a.vendor_masked_id, a.vendor_phone, a.vendor_email,
       a.auth_ref, a.signature_image_path,
-      a.signed_at, a.verification_method, a.consent_text_version
+      a.signed_at, a.verification_method, a.consent_text_version,
+      v.id_number_encrypted, v.id_doc_path
     from vendor_payables t
     join vendor_authorizations a on a.transaction_id = t.id
+    join vendor_payees v on v.id = t.vendor_id
     where t.id = ${txnId} and t.user_id = ${rowTenant}`;
   const d2 = one(rows);
   if (!d2) return { ok: false, error: "not-signed" };
@@ -71052,11 +71093,7 @@ async function finalizeReceipt(txnId, ip) {
       if (already) return;
       let taxId = "";
       try {
-        const enc2 = one(await db`
-          select v.id_number_encrypted from vendor_payables p
-          join vendor_payees v on v.id = p.vendor_id
-          where p.id = ${txnId} and p.user_id = ${rowTenant}`);
-        if (enc2?.id_number_encrypted) taxId = decryptId(enc2.id_number_encrypted) ?? "";
+        if (d2.id_number_encrypted) taxId = decryptId(d2.id_number_encrypted) ?? "";
       } catch {
       }
       const vName = vendorDisplayName(d2.vendor_prefix, d2.vendor_name);
@@ -71088,13 +71125,10 @@ async function finalizeReceipt(txnId, ip) {
   const sig = await readStoredDurable(rowTenant, d2.signature_image_path);
   let vendorTaxId;
   try {
-    const enc2 = one(await db`
-      select v.id_number_encrypted from vendor_payables p
-      join vendor_payees v on v.id = p.vendor_id
-      where p.id = ${txnId} and p.user_id = ${rowTenant}`);
-    if (enc2?.id_number_encrypted) vendorTaxId = decryptId(enc2.id_number_encrypted) ?? void 0;
+    if (d2.id_number_encrypted) vendorTaxId = decryptId(d2.id_number_encrypted) ?? void 0;
   } catch {
   }
+  const idPhoto = d2.id_doc_path ? await readStoredDurable(rowTenant, d2.id_doc_path) : void 0;
   const verifyUrl = `${PUBLIC_BASE}/verify/${code.toUpperCase()}`;
   const { bytes, sha256: sha2562 } = await buildReceiptPdf({
     number,
@@ -71128,7 +71162,8 @@ async function finalizeReceipt(txnId, ip) {
     amountWords: amountToThaiWords(Number(d2.net_amount)),
     transferDate: isoDay(d2.transfer_date),
     slipReference: d2.slip_reference,
-    signaturePng: sig
+    signaturePng: sig,
+    idPhoto
   });
   const pdfPath = await saveBytesDurable("pdfs", `${number}.pdf`, bytes, rowTenant);
   await db`update vendor_receipts set pdf_path = ${pdfPath}, pdf_sha256 = ${sha2562}
