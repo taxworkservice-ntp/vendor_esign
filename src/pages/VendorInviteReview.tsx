@@ -4,7 +4,6 @@ import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { useVendorInvites, useReviewVendorInvite } from '../hooks/useVendorInvites'
 import { INVITE_STATUS_LABEL } from '../lib/vendor-invite'
 import { onboardRef } from '../lib/vendor-onboard'
-import { maskTaxId } from '../lib/taxid'
 import { Card, CardBody } from '../components/ui/card'
 import { Breadcrumb, PageHeader } from '../components/ui/page-header'
 import { Button } from '../components/ui/button'
@@ -90,7 +89,7 @@ export function VendorInviteReview() {
             <CardBody className="space-y-3">
               <Row label="ชื่อผู้ขาย" value={`${d.prefix} ${d.name}`.trim()} />
               <Row label="ที่อยู่" value={d.address} />
-              <Row label="เลขบัตรประชาชน" value={maskTaxId(taxId.slice(-4))} mono />
+              <Row label="เลขบัตรประชาชน" value={taxId || '—'} mono />
               <Row label="ธนาคาร" value={d.bankName} />
               <Row label="เลขที่บัญชี" value={d.bankAccount} mono />
               <Row label="ชื่อบัญชี" value={d.accountHolder} />

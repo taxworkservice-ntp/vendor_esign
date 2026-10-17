@@ -269,7 +269,7 @@ export function TransactionDetail() {
               <p className="font-mono text-body text-ink-500">{t.id}</p>
               <h1 className="mt-1 text-xl font-semibold">{t.description}</h1>
               <p className="mt-1 text-body text-ink-500">
-                {vendorDisplayName(t.vendor.prefix, t.vendor.name)} · {t.vendor.address} · ID {t.vendor.taxId ?? t.vendor.maskedId}
+                {vendorDisplayName(t.vendor.prefix, t.vendor.name)} · {t.vendor.address} · ID {t.vendor.taxId || '—'}
               </p>
               {t.receiptNumber && (
                 <p className="mt-2 text-body">
@@ -370,7 +370,7 @@ export function TransactionDetail() {
                 <h2 className="flex items-center gap-2 font-semibold"><ShieldCheck size={16} /> หลักฐานการลงนาม</h2>
                 <div className="space-y-1.5 text-body">
                   <EvidenceRow label="ผู้ลงนาม" value={vendorDisplayName(auth.vendorPrefix, auth.vendorName)} />
-                  <EvidenceRow label="เลขบัตรประชาชน" value={auth.maskedId || '—'} mono />
+                  <EvidenceRow label="เลขบัตรประชาชน" value={t.vendor.taxId || '—'} mono />
                   <EvidenceRow label="ลงนามเมื่อ" value={auth.signedAt ? fmtDateTimeTH(auth.signedAt) : '—'} />
                   <EvidenceRow label="วิธีการลงนาม" value={signMethodLabel(auth.verificationMethod)} />
                   {auth.authRef && <EvidenceRow label="เลขอ้างอิงการลงนาม" value={auth.authRef} mono />}

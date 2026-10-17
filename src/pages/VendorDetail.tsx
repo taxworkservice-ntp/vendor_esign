@@ -324,7 +324,7 @@ export function VendorDetail() {
             {v.encryptedId ? (
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="font-mono">
-                  {v.taxLast4 ? `x-xxxx-xxxxx-${v.taxLast4.slice(0, 2)}-${v.taxLast4.slice(2)}` : 'บันทึกไว้'}
+                  {displayTaxId(v)}
                   <span className="ml-2 font-sans text-body text-success">เข้ารหัส (AES-256-GCM)</span>
                 </p>
                 {can('canManageVendors') && (

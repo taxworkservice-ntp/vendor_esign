@@ -9,7 +9,7 @@ import { normalizeTaxId } from '../lib/taxid'
 import { loadTxns } from '../lib/mock'
 import { isVendorPrefix, prefixRequired } from '../lib/vendor-name'
 import { bankValidation } from '../lib/bank-account'
-import { matchesSearch, vendorSearchFields } from '../lib/search-match'
+import { vendorMatches } from '../lib/search-match'
 import { useClientAuth } from '../lib/client-auth'
 
 const QK = ['vendors'] as const
@@ -57,7 +57,7 @@ export function useVendors(search = '', sort: VendorSort = 'recent', includeArch
     queryKey: [...QK, activeTenant, search, sort, includeArchived],
     queryFn: async (): Promise<ClientVendor[]> => {
       const all = await fetchVendors(activeTenant, includeArchived)
-      return sortVendors(all.filter((v) => matchesSearch(vendorSearchFields(v), search)), sort)
+      return sortVendors(all.filter((v) => vendorMatches(v, search)), sort)
     },
   })
 }

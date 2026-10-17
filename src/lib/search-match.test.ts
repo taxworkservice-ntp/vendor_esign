@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isDuplicateItemName, itemSearchFields, matchesSearch, normalizeSearch, vendorSearchFields } from './search-match'
+import { isDuplicateItemName, itemSearchFields, matchesSearch, normalizeSearch, vendorMatches } from './search-match'
 
 describe('matchesSearch', () => {
   it('matches everything on an empty query', () => {
@@ -41,50 +41,62 @@ describe('normalizeSearch', () => {
   })
 })
 
-describe('vendorSearchFields', () => {
+describe('vendorMatches (register + picker share this)', () => {
   const v = {
+    prefix: 'นาย',
     name: 'สมชาย การช่าง',
     address: '123/4 ถนนสุขุมวิท',
     phone: '081-234-5678',
     email: 'somchai@example.com',
-    lineUserId: 'U1234567890',
+    lineUserId: 'U999000',
     vendorNo: 7,
-    taxLast4: '6789',
+    taxId: '12345678906789', // 13 digits, ends 6789
+    bankAccount: '5555555',
+    accountHolder: 'บัญชีพิเศษ',
   }
 
-  it('finds by name', () => {
-    expect(matchesSearch(vendorSearchFields(v), 'การช่าง')).toBe(true)
-  })
-
-  it('finds by the title alone and combined with the name', () => {
-    const p = { prefix: 'นาย', name: 'สมชาย การช่าง' }
-    expect(matchesSearch(vendorSearchFields(p), 'นาย')).toBe(true)
-    expect(matchesSearch(vendorSearchFields(p), 'นาย สมชาย')).toBe(true)
-    expect(matchesSearch(vendorSearchFields(p), 'นายสมชาย')).toBe(true)
-  })
-
-  it('finds by the last four digits of the tax ID', () => {
-    // The whole reason the register is filtered client-side: the stored number
-    // is encrypted at rest, so no server-side search can reach this.
-    expect(matchesSearch(vendorSearchFields(v), '6789')).toBe(true)
+  it('finds by name, by the title alone, and combined', () => {
+    expect(vendorMatches(v, 'การช่าง')).toBe(true)
+    expect(vendorMatches(v, 'นาย')).toBe(true)
+    expect(vendorMatches(v, 'นาย สมชาย')).toBe(true)
+    expect(vendorMatches(v, 'นายสมชาย')).toBe(true)
   })
 
   it('finds by vendor number, padded, raw or as the displayed code', () => {
-    expect(matchesSearch(vendorSearchFields(v), '007')).toBe(true)
-    expect(matchesSearch(vendorSearchFields(v), '7')).toBe(true)
-    expect(matchesSearch(vendorSearchFields(v), 'VEN-007')).toBe(true)
+    expect(vendorMatches(v, '007')).toBe(true)
+    expect(vendorMatches(v, '7')).toBe(true)
+    expect(vendorMatches(v, 'VEN-007')).toBe(true)
   })
 
-  it('finds by phone, address, email and LINE id', () => {
-    expect(matchesSearch(vendorSearchFields(v), '081')).toBe(true)
-    expect(matchesSearch(vendorSearchFields(v), 'สุขุมวิท')).toBe(true)
-    expect(matchesSearch(vendorSearchFields(v), 'example')).toBe(true)
-    expect(matchesSearch(vendorSearchFields(v), 'U1234')).toBe(true)
+  it('finds by the FULL tax ID (digit-normalised) — last 4 included', () => {
+    expect(vendorMatches(v, '6789')).toBe(true)
+    expect(vendorMatches(v, '45678906789')).toBe(true)
+    expect(vendorMatches(v, '1-2345-67890-67-89')).toBe(true)
+  })
+
+  it('finds by phone regardless of its formatting', () => {
+    expect(vendorMatches(v, '081')).toBe(true)
+    expect(vendorMatches(v, '0812345678')).toBe(true)
+  })
+
+  it('finds by address', () => {
+    expect(vendorMatches(v, 'สุขุมวิท')).toBe(true)
+  })
+
+  it('does NOT search email, LINE id, bank account or account holder', () => {
+    expect(vendorMatches(v, 'example')).toBe(false)
+    expect(vendorMatches(v, 'U999000')).toBe(false)
+    expect(vendorMatches(v, '5555555')).toBe(false)
+    expect(vendorMatches(v, 'บัญชีพิเศษ')).toBe(false)
+  })
+
+  it('ignores a 1–2 digit query (no false hits from short numbers)', () => {
+    expect(vendorMatches(v, '89')).toBe(false)
   })
 
   it('tolerates a vendor with nothing but a name', () => {
-    expect(matchesSearch(vendorSearchFields({ name: 'ก' }), 'ก')).toBe(true)
-    expect(matchesSearch(vendorSearchFields({ name: 'ก' }), 'x')).toBe(false)
+    expect(vendorMatches({ name: 'ก' }, 'ก')).toBe(true)
+    expect(vendorMatches({ name: 'ก' }, 'x')).toBe(false)
   })
 })
 

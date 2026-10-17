@@ -29,43 +29,53 @@ export function matchesSearch(fields: SearchField[], q: string): boolean {
   })
 }
 
-/** Every field a vendor can be found by, in the order shown in the UI hint. */
-export function vendorSearchFields(v: {
+/** Digits only, so a phone/bank/tax input matches regardless of formatting. */
+const digitsOnly = (s: SearchField): string => String(s ?? '').replace(/\D/g, '')
+
+export interface VendorMatchable {
   prefix?: string
   name?: string
   address?: string
-  phone?: string
-  email?: string
-  lineUserId?: string
   vendorNo?: number
-  taxLast4?: string
-  maskedId?: string
-  bankAccount?: string
-  accountHolder?: string
-}): SearchField[] {
-  // vendorNo is matched raw, zero-padded, and as the displayed code (VEN-001),
-  // so "1", "001" and "VEN-001" all find the same supplier. The title is matched
-  // alone and combined with the name ("นาย", "นาย สมชาย", "นายสมชาย").
-  const no = v.vendorNo ?? 0
+  /** The FULL tax ID (the client payload carries it, decrypted). */
+  taxId?: string
+  phone?: string
+}
+
+/**
+ * The one vendor search used by both the register and the transaction-form
+ * picker, so they cannot drift. Name (with/without prefix), vendor code and
+ * address match as substrings; the numeric fields (full tax ID, phone) match
+ * digits-only so "0812345678" finds "081-234-5678". The full tax ID is searched
+ * — the register is filtered client-side on a payload that already carries it,
+ * and the last 4 digits are a substring of it.
+ *
+ * Deliberately NOT searched: email, LINE id, bank account, account holder
+ * (noisy for a quick lookup). An empty query matches everything.
+ */
+export function vendorMatches(v: VendorMatchable, q: string): boolean {
+  const needle = normalizeSearch(q)
+  if (!needle) return true
   const pfx = v.prefix ?? ''
   const name = v.name ?? ''
-  return [
+  const no = v.vendorNo ?? 0
+  const text: SearchField[] = [
     pfx,
-    v.name,
+    name,
     pfx ? `${pfx} ${name}` : '',
     pfx ? `${pfx}${name}` : '',
     v.address,
-    v.phone,
-    v.email,
-    v.lineUserId,
     String(no),
     String(no).padStart(3, '0'),
     vendorCode(no),
-    v.taxLast4,
-    v.maskedId,
-    v.bankAccount,
-    v.accountHolder,
   ]
+  if (text.some((t) => t && String(t).toLowerCase().includes(needle))) return true
+  const d = digitsOnly(q)
+  if (d.length >= 3) {
+    if (digitsOnly(v.taxId).includes(d)) return true
+    if (digitsOnly(v.phone).includes(d)) return true
+  }
+  return false
 }
 
 /** Every field a catalog item can be found by. */

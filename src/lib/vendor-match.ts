@@ -1,4 +1,5 @@
 import { normalizeTaxId } from './taxid'
+import { vendorMatches } from './search-match'
 
 // Vendor matching/verification helpers shared by the picker and the form.
 // Pure functions so they are unit-testable and identical to what the form uses.
@@ -6,8 +7,10 @@ import { normalizeTaxId } from './taxid'
 export interface MatchableVendor {
   name: string
   address: string
+  prefix?: string
+  vendorNo?: number
   taxId?: string
-  maskedId?: string
+  phone?: string
 }
 
 // true/false when the vendor has a registered ID; null when we have nothing to
@@ -17,17 +20,7 @@ export function vendorTaxIdMatches(vendor: { taxId?: string } | undefined, enter
   return normalizeTaxId(entered) === normalizeTaxId(vendor.taxId)
 }
 
+// One search everywhere — the register and the picker share `vendorMatches`.
 export function matchesVendorQuery(vendor: MatchableVendor, query: string): boolean {
-  const q = query.trim()
-  if (!q) return true
-  const lower = q.toLowerCase()
-  if (vendor.name.toLowerCase().includes(lower)) return true
-  if (vendor.address.toLowerCase().includes(lower)) return true
-  const digits = normalizeTaxId(q)
-  if (digits.length >= 3) {
-    const id = normalizeTaxId(vendor.taxId ?? '')
-    const masked = normalizeTaxId(vendor.maskedId ?? '')
-    if (id.includes(digits) || (masked.includes(digits) && digits.length >= 4)) return true
-  }
-  return false
+  return vendorMatches(vendor, query)
 }

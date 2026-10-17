@@ -103,7 +103,8 @@ export function nextVendorNo(tenantId: string): number {
 
 // Full ID for display in the mock/test UI (never masked here).
 export function displayTaxId(v: ClientVendor): string {
-  return v.taxId || v.maskedId
+  // The client owns the vendor data, so the full tax ID is shown — never a mask.
+  return v.taxId || '—'
 }
 
 export function maskFromLast4(last4: string): string {

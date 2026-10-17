@@ -112,7 +112,7 @@ export const ReceiptSheet = forwardRef<
           )}
           <p className="mt-0.5 text-label text-ink-600">
             <span className="text-ink-400">เลขบัตรประชาชน: </span>
-            <span className="font-mono">{vendor.taxId ?? vendor.maskedId}</span>
+            <span className="font-mono">{vendor.taxId ?? ''}</span>
           </p>
         </div>
         <div className="shrink-0 text-right">

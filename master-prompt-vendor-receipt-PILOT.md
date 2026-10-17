@@ -384,6 +384,16 @@ which also clears the legacy bare-filename values). `POST/DELETE
 inline for the on-detail preview (image zoom / PDF open); it can be attached any time
 before the document is void. The detail items table also drops the ส่วนลด column.
 
+**Unified supplier search + no client-side masking.** The register (`/vendors`) and the
+transaction-form picker now share one matcher (`vendorMatches`): name (with/without
+prefix), vendor code, address, and the **full tax ID + phone** matched digits-only so any
+formatting matches — the old 4-digit-only tax-ID search is gone (the full decrypted ID was
+already in the client payload). Email, LINE id, bank account and account holder are no
+longer searched (noisy for a quick lookup). On the **client portal** the vendor's tax ID is
+shown **in full** everywhere (list, detail, receipt, CSV, invite review); the mask
+(`x-xxxx-xxxxx-AB-C`) survives only on the vendor-facing **signing gate**, where it is the
+identity challenge.
+
 **Still deferred.** LINE Login/LIFF verification (vendor signs via versioned consent +
 signature for now); automated reminders (email/LINE OA); invite funnel analytics;
 gross-up re-enable (with a corrected receipt presentation); credit notes (plain

@@ -45,9 +45,10 @@ import { cn } from '../lib/cn'
 //     a failed fetch looked like an empty register.
 //
 // A supplier register is bounded by the supplier count, so it is fetched whole
-// and filtered locally (see useVendors) — the search reaches the last 4 digits
-// of a tax ID, which server-side pushdown cannot, because the stored number is
-// encrypted. Debouncing is what keeps that affordable.
+// and filtered locally (see useVendors → vendorMatches): name, vendor code,
+// address, and the full tax ID + phone matched digits-only (the stored number is
+// encrypted at rest, so no server-side pushdown can reach it). Debouncing is
+// what keeps that affordable.
 
 const VENDOR_SORT: Record<string, SortAccessor<ClientVendor>> = {
   code: (v) => v.vendorNo,
@@ -161,7 +162,7 @@ export function VendorsList() {
             searchId="vendor-search"
             search={search}
             onSearch={setSearch}
-            placeholder="ค้นหาชื่อ / ที่อยู่ / เลขบัตร 4 หลักท้าย / เบอร์โทร / เลขบัญชี / รหัสผู้ขาย…"
+            placeholder="ค้นหาชื่อ / รหัสผู้ขาย / เลขบัตรประชาชน / เบอร์โทร / ที่อยู่…"
             inputRef={searchRef}
             archived={showArchived}
             onArchived={setShowArchived}

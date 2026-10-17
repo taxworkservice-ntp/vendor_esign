@@ -59,4 +59,12 @@ describe('ReceiptSheet signing record', () => {
     expect(html).not.toContain('รหัสตรวจสอบ')
     expect(html).not.toContain('/verify/')
   })
+
+  it('prints the vendor tax ID in full, never masked', () => {
+    const html = renderToString(
+      <ReceiptSheet data={base({ vendor: { ...base().vendor, taxId: '1234567890123' } })} />,
+    )
+    expect(html).toContain('1234567890123')
+    expect(html).not.toContain('x-xxxx-xxxxx')
+  })
 })

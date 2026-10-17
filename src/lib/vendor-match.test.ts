@@ -5,7 +5,7 @@ const vendor = {
   name: 'สมชาย ใจดี',
   address: '12 ม.4 ขอนแก่น 40000',
   taxId: '1234567890123',
-  maskedId: 'x-xxxx-xxxxx-12-3',
+  phone: '081-234-5678',
 }
 
 describe('vendorTaxIdMatches', () => {
@@ -32,8 +32,13 @@ describe('matchesVendorQuery', () => {
     expect(matchesVendorQuery(vendor, 'ขอนแก่น')).toBe(true)
     expect(matchesVendorQuery(vendor, 'malee')).toBe(false)
   })
-  it('matches by tax id digits', () => {
+  it('matches the full tax id, formatted or as bare digits', () => {
     expect(matchesVendorQuery(vendor, '5678')).toBe(true)
+    expect(matchesVendorQuery(vendor, '1-2345-67890-12-3')).toBe(true)
     expect(matchesVendorQuery(vendor, '9999')).toBe(false)
+  })
+  it('matches a phone regardless of its formatting', () => {
+    expect(matchesVendorQuery(vendor, '0812345678')).toBe(true)
+    expect(matchesVendorQuery(vendor, '234-567')).toBe(true)
   })
 })
