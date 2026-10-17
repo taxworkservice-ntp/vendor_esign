@@ -11,6 +11,7 @@ This is the trimmed version for a pilot with **one client**. Build only what is 
 - **When the spec conflicts with the existing code, stop and ask.**
 - **Never invent tax rules.** Anything marked `[CONFIG]` must be editable configuration, never hard-coded. Anything marked `[VERIFY]` must be left as a labelled TODO and listed in your report for the accountant to confirm.
 - Small, reviewable commits. Every phase ships with tests.
+- **Migrations land before the code that needs them.** Apply every new `db/migrations/*.up.sql` to the live database as part of shipping the change: a column-adding migration must be applied **before** the deploy whose queries select it, or the API returns 500 (`column … does not exist`) and the page hangs on retries. Postgres is Neon; the pooler URL lives in `.env.local` as `DATABASE_URL`. `scripts/migrate.mjs` replays **all** `*.up.sql` from 001 with no applied-migrations tracking, so on an already-migrated DB prefer applying only the new file's statements (they are idempotent). Deploying the app is a merge to `main` (Vercel builds `dist` + `api/entry.js`).
 
 ## 1. Context
 
