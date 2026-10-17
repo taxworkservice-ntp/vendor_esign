@@ -81,7 +81,7 @@ export const SEED_TXNS: PaymentTransaction[] = [
   txn({
     id: 'DM-2003', tenantId: 'DEMO', vendor: DEMO_VENDORS[0], status: 'sent', inviteToken: 'tok_demo_sent',
     paymentType: 'ค่าขนส่ง', note: 'จัดส่งวัสดุสำนักงาน', whtRate: 1, transferDate: '2026-09-24', slipReference: 'TRF-DM-1001',
-    lineItems: [item('ค่าจัดส่งวัสดุสำนักงาน', 1200, { unit: 'เที่ยว', quantity: 1, unitPrice: 1500, discount: 300 })],
+    lineItems: [item('ค่าจัดส่งวัสดุสำนักงาน', 1500, { unit: 'เที่ยว', quantity: 1, unitPrice: 1500 })],
   }),
   txn({
     id: 'DM-2002', tenantId: 'DEMO', vendor: DEMO_VENDORS[1], status: 'issued', receiptNumber: 'RCT-002-2569-001',

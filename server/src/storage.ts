@@ -94,10 +94,16 @@ export async function saveBytesDurable(
   const safe = name.replace(/[^a-zA-Z0-9._-]/g, '_')
   const relPath = `${tenantId}/${area}/${safe}`
   if (r2Configured()) {
+    const ext = safe.split('.').pop()?.toLowerCase()
     const contentType =
       area === 'pdfs' ? 'application/pdf'
         : area === 'signatures' ? 'image/png'
-          : undefined
+          : area === 'slips'
+            ? ext === 'pdf' ? 'application/pdf'
+              : ext === 'png' ? 'image/png'
+                : ext === 'webp' ? 'image/webp'
+                  : 'image/jpeg'
+            : undefined
     await putObject(relPath, bytes, contentType)
     return relPath
   }

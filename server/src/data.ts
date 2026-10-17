@@ -136,6 +136,27 @@ export function parseDocDataUrl(dataUrl: string): { mime: string; bytes: Uint8Ar
   return { mime: m[1].toLowerCase() === 'image/jpg' ? 'image/jpeg' : m[1].toLowerCase(), bytes: new Uint8Array(buf) }
 }
 
+/**
+ * Parse an uploaded data URL that may be an image OR a PDF (payment slips).
+ * Same 5 MB ceiling. Returns the normalised mime + bytes, or null if invalid.
+ */
+export function parseUploadDataUrl(dataUrl: string): { mime: string; bytes: Uint8Array } | null {
+  const m = /^data:(image\/(png|jpe?g|webp)|application\/pdf);base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl)
+  if (!m) return null
+  const buf = Buffer.from(m[3], 'base64')
+  if (buf.length === 0 || buf.length > 5 * 1024 * 1024) return null
+  const raw = m[1].toLowerCase()
+  return { mime: raw === 'image/jpg' ? 'image/jpeg' : raw, bytes: new Uint8Array(buf) }
+}
+
+/** File extension for a stored artifact, from its mime type. */
+export function extForMime(mime: string): string {
+  if (mime === 'application/pdf') return 'pdf'
+  if (mime === 'image/png') return 'png'
+  if (mime === 'image/webp') return 'webp'
+  return 'jpg'
+}
+
 function toVendor(r: Record<string, unknown>) {  const enc = r.id_number_encrypted as string | null
   const last4 = decryptLast4(enc)
   return {

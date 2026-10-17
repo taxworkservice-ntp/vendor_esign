@@ -118,3 +118,16 @@ export async function prepareUpload(file: File, opts: PrepareOptions = {}): Prom
 
   return { dataUrl, name, bytes: dataUrlSize(dataUrl) }
 }
+
+/**
+ * Prepare a payment slip for upload. Images are downscaled + re-encoded to JPEG
+ * (as above); a PDF is passed through unchanged. Both are capped at 5 MB to
+ * match the server's parser.
+ */
+export async function prepareSlipUpload(file: File): Promise<PreparedImage> {
+  if (file.type === 'application/pdf') {
+    if (file.size > 5 * 1024 * 1024) throw new Error('too-large')
+    return { dataUrl: await fileToDataUrl(file), name: file.name, bytes: file.size }
+  }
+  return prepareUpload(file, { name: file.name, maxDim: 2000, quality: 0.85, maxBytes: 5 * 1024 * 1024 })
+}

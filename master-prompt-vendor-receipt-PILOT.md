@@ -372,6 +372,18 @@ onboarding stores JPEG bytes under a `.png` name; WebP is skipped), covering the
 (owner-only, `canManageVendors`); no photo or no permission → a clean 1-page receipt.
 Existing archived PDFs are not retrofitted.
 
+**Transaction form + slip.** The create form **numbers each picked line**, **drops the
+discount input** (no longer collected; legacy rows still render), and — below the
+มาตรา 50/1 threshold — offers an **owner/manager-only** "หักภาษี ณ ที่จ่ายแม้ยอดต่ำกว่าเกณฑ์"
+override (the existing `forceWht` escape hatch, already enforced server-side for
+`canManageCatalog`, now mirrored in the mock). The payment slip is a **real upload**:
+images are downscaled to JPEG, PDFs stored as-is (≤5 MB), under `slips/` — referenced by
+`slip_file_path` with the original name in the new `slip_file_name` column (migration 036,
+which also clears the legacy bare-filename values). `POST/DELETE
+/api/client/transactions/:id/slip` attach/replace/remove it and `GET …/slip` streams it
+inline for the on-detail preview (image zoom / PDF open); it can be attached any time
+before the document is void. The detail items table also drops the ส่วนลด column.
+
 **Still deferred.** LINE Login/LIFF verification (vendor signs via versioned consent +
 signature for now); automated reminders (email/LINE OA); invite funnel analytics;
 gross-up re-enable (with a corrected receipt presentation); credit notes (plain

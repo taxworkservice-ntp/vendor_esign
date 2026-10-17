@@ -12,10 +12,11 @@ import { itemsSummary, itemsTotal, normalizeLineItem } from '../../src/lib/line-
 import { emptyTotals, type TxnTotals } from '../../src/lib/txn-filters'
 import { parseListQuery } from '../../src/lib/txn-list-query'
 import { limitClause, orderByClause, totalsClause, whereClause } from './txn-sql'
-import { readStoredDurable } from './storage'
+import { readStoredDurable, saveBytesDurable } from './storage'
 import { decryptId, decryptToken, encryptToken } from './crypto'
 import { isoDay } from './dates'
 import { audit, one } from './shared'
+import { extForMime, parseUploadDataUrl } from './data'
 import { contentDisposition, documentFileName } from '../../src/lib/download-name'
 import type { PaymentTransaction } from '../../src/lib/types'
 
@@ -32,7 +33,7 @@ const maskFromLast4 = (last4: string) =>
 const SELECT = `
   select p.id, p.user_id, p.ref, p.vendor_id, p.payment_type, p.description, p.note, p.line_items,
     p.gross_amount, p.wht_rate, p.wht_mode, p.wht_amount, p.net_amount, p.transfer_date,
-    p.slip_reference, p.slip_file_path, p.status, p.void_reason, p.tax_id_last4, p.created_at,
+    p.slip_reference, p.slip_file_path, p.slip_file_name, p.status, p.void_reason, p.tax_id_last4, p.created_at,
     v.name as vendor_name, v.address as vendor_address, v.prefix as vendor_prefix, v.vendor_no as vendor_no,
     v.id_number_encrypted as vendor_id_encrypted,
     (select row_to_json(x) from (
@@ -149,7 +150,8 @@ export function toTxn(r: Record<string, unknown>): PaymentTransaction {
     netAmount: Number(r.net_amount ?? 0),
     transferDate: isoDay(r.transfer_date),
     slipReference: String(r.slip_reference ?? ''),
-    slipName: String(r.slip_file_path ?? ''),
+    slipName: String(r.slip_file_name ?? ''),
+    hasSlip: !!r.slip_file_path,
     status: (r.status as PaymentTransaction['status']) ?? 'draft',
     receiptNumber,
     verificationCode,
@@ -399,7 +401,7 @@ txnRoutes.post('/transactions', async (c) => {
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
   if (!canDo(g, 'canManageTransactions')) return c.json({ error: 'forbidden' }, 403)
   const b = (await c.req.json().catch(() => null)) as
-    | { vendorId?: string; paymentType?: string; note?: string; lineItems?: unknown; whtRate?: number; whtMode?: string; forceWht?: boolean; transferDate?: string; slipReference?: string; slipName?: string; vendorTaxId?: string }
+    | { vendorId?: string; paymentType?: string; note?: string; lineItems?: unknown; whtRate?: number; whtMode?: string; forceWht?: boolean; transferDate?: string; slipReference?: string; slipName?: string; slipFile?: { dataUrl?: string; name?: string }; vendorTaxId?: string }
     | null
   const items = (Array.isArray(b?.lineItems) ? b!.lineItems : [])
     .map((it) => normalizeLineItem(it as never))
@@ -446,6 +448,10 @@ txnRoutes.post('/transactions', async (c) => {
   const { gross, wht, net } = calcWht(base, eff.rate, whtMode)
   const note = (b.note ?? '').trim()
   const taxId = norm(b.vendorTaxId ?? '')
+  // Optional slip file (image or PDF), parsed up front so an invalid upload is
+  // rejected before the row is written.
+  const slip = b.slipFile?.dataUrl ? parseUploadDataUrl(String(b.slipFile.dataUrl)) : null
+  if (b.slipFile?.dataUrl && !slip) return c.json({ error: 'invalid-slip' }, 400)
   const row = await withTenant(g.ws, 'owner', async () => {
     const db = sql()
     const ins = (await db`
@@ -460,6 +466,20 @@ txnRoutes.post('/transactions', async (c) => {
       returning id`) as unknown as { id: string }[]
     return ins[0]
   })
+  // Store the slip against the new row (needs its id for the object key). The
+  // slip is optional, so a storage failure must not lose the transaction — the
+  // officer can attach it again from the detail page.
+  if (slip) {
+    try {
+      const path = await saveBytesDurable('slips', `${String(row.id)}.${extForMime(slip.mime)}`, slip.bytes, g.ws)
+      await withTenant(g.ws, 'owner', async () => {
+        await sql()`update vendor_payables set slip_file_path = ${path}, slip_file_name = ${String(b?.slipFile?.name ?? '').slice(0, 200)}
+          where id = ${String(row.id)} and user_id = ${g.ws}`
+      })
+    } catch (e) {
+      console.error('[txn-create] slip-save-failed', e instanceof Error ? e.message : String(e))
+    }
+  }
   return c.json({ ok: true, id: String(row.id) })
 })
 
@@ -548,20 +568,72 @@ txnRoutes.post('/transactions/:id/void', async (c) => {
   return c.json({ ok: true })
 })
 
-// Slip is optional at creation — attach/replace it later. Reference uniqueness
-// is enforced client-side (case/space-insensitive) to mirror the create rule.
+// Slip is optional at creation — attach/replace it later, or remove it. The
+// file (image or PDF) is stored durably and referenced by a path; the original
+// filename is kept for display. Reference uniqueness is enforced client-side
+// (case/space-insensitive) to mirror the create rule.
 txnRoutes.post('/transactions/:id/slip', async (c) => {
   const g = await guard(c)
   if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
   if (!canDo(g, 'canManageTransactions')) return c.json({ error: 'forbidden' }, 403)
-  const b = (await c.req.json().catch(() => null)) as { slipReference?: string; slipName?: string } | null
+  const b = (await c.req.json().catch(() => null)) as
+    | { slipReference?: string; slipName?: string; slipFile?: { dataUrl?: string; name?: string } }
+    | null
   const id = c.req.param('id')
   const ref = (b?.slipReference ?? '').trim()
-  const name = (b?.slipName ?? '').trim()
+  const slip = b?.slipFile?.dataUrl ? parseUploadDataUrl(String(b.slipFile.dataUrl)) : null
+  if (b?.slipFile?.dataUrl && !slip) return c.json({ error: 'invalid-slip' }, 400)
+  let path: string | null = null
+  let name = (b?.slipName ?? '').trim()
+  if (slip) {
+    path = await saveBytesDurable('slips', `${id}.${extForMime(slip.mime)}`, slip.bytes, g.ws)
+    name = (b?.slipFile?.name ?? '').trim().slice(0, 200)
+  }
   await withTenant(g.ws, 'owner', async () => {
     const db = sql()
-    await db`update vendor_payables set slip_reference = ${ref}, slip_file_path = ${name}
+    if (path) {
+      await db`update vendor_payables set slip_reference = ${ref}, slip_file_path = ${path}, slip_file_name = ${name}
+        where id = ${id} and user_id = ${g.ws}`
+    } else {
+      await db`update vendor_payables set slip_reference = ${ref}
+        where id = ${id} and user_id = ${g.ws}`
+    }
+  })
+  return c.json({ ok: true })
+})
+
+// Remove the slip file (the reference is left as-is).
+txnRoutes.delete('/transactions/:id/slip', async (c) => {
+  const g = await guard(c)
+  if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canManageTransactions')) return c.json({ error: 'forbidden' }, 403)
+  const id = c.req.param('id')
+  await withTenant(g.ws, 'owner', async () => {
+    await sql()`update vendor_payables set slip_file_path = null, slip_file_name = null
       where id = ${id} and user_id = ${g.ws}`
   })
   return c.json({ ok: true })
+})
+
+// Stream the stored slip (image or PDF) inline for the detail preview.
+txnRoutes.get('/transactions/:id/slip', async (c) => {
+  const g = await guard(c)
+  if ('error' in g) return c.json({ error: 'unauthorized' }, g.error)
+  if (!canDo(g, 'canManageTransactions')) return c.json({ error: 'forbidden' }, 403)
+  const id = c.req.param('id')
+  const rows = await withTenant(g.ws, 'client', async () => {
+    const db = sql()
+    return (await db`select slip_file_path from vendor_payables
+      where id = ${id} and user_id = ${g.ws}`) as unknown as { slip_file_path: string | null }[]
+  })
+  const path = rows[0]?.slip_file_path
+  const bytes = await readStoredDurable(g.ws, path ?? null)
+  if (!bytes) return c.json({ error: 'not-found' }, 404)
+  const ext = String(path ?? '').split('.').pop()?.toLowerCase()
+  const type = ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
+  return c.body(bytes as unknown as ArrayBuffer, 200, {
+    'Content-Type': type,
+    'Content-Disposition': 'inline',
+    'Cache-Control': 'private, no-store',
+  })
 })

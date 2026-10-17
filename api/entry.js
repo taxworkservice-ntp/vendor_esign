@@ -68113,7 +68113,8 @@ async function saveBytesDurable(area, name, bytes, tenantId) {
   const safe = name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const relPath = `${tenantId}/${area}/${safe}`;
   if (r2Configured()) {
-    const contentType = area === "pdfs" ? "application/pdf" : area === "signatures" ? "image/png" : void 0;
+    const ext = safe.split(".").pop()?.toLowerCase();
+    const contentType = area === "pdfs" ? "application/pdf" : area === "signatures" ? "image/png" : area === "slips" ? ext === "pdf" ? "application/pdf" : ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg" : void 0;
     await putObject(relPath, bytes, contentType);
     return relPath;
   }
@@ -69050,6 +69051,20 @@ function parseDocDataUrl(dataUrl) {
   if (buf.length === 0 || buf.length > 5 * 1024 * 1024) return null;
   return { mime: m2[1].toLowerCase() === "image/jpg" ? "image/jpeg" : m2[1].toLowerCase(), bytes: new Uint8Array(buf) };
 }
+function parseUploadDataUrl(dataUrl) {
+  const m2 = /^data:(image\/(png|jpe?g|webp)|application\/pdf);base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
+  if (!m2) return null;
+  const buf = Buffer.from(m2[3], "base64");
+  if (buf.length === 0 || buf.length > 5 * 1024 * 1024) return null;
+  const raw2 = m2[1].toLowerCase();
+  return { mime: raw2 === "image/jpg" ? "image/jpeg" : raw2, bytes: new Uint8Array(buf) };
+}
+function extForMime(mime) {
+  if (mime === "application/pdf") return "pdf";
+  if (mime === "image/png") return "png";
+  if (mime === "image/webp") return "webp";
+  return "jpg";
+}
 function toVendor(r) {
   const enc2 = r.id_number_encrypted;
   const last4 = decryptLast4(enc2);
@@ -69792,7 +69807,7 @@ var maskFromLast4 = (last4) => last4.length === 4 ? `x-xxxx-xxxxx-${last4.slice(
 var SELECT = `
   select p.id, p.user_id, p.ref, p.vendor_id, p.payment_type, p.description, p.note, p.line_items,
     p.gross_amount, p.wht_rate, p.wht_mode, p.wht_amount, p.net_amount, p.transfer_date,
-    p.slip_reference, p.slip_file_path, p.status, p.void_reason, p.tax_id_last4, p.created_at,
+    p.slip_reference, p.slip_file_path, p.slip_file_name, p.status, p.void_reason, p.tax_id_last4, p.created_at,
     v.name as vendor_name, v.address as vendor_address, v.prefix as vendor_prefix, v.vendor_no as vendor_no,
     v.id_number_encrypted as vendor_id_encrypted,
     (select row_to_json(x) from (
@@ -69881,7 +69896,8 @@ function toTxn(r) {
     netAmount: Number(r.net_amount ?? 0),
     transferDate: isoDay(r.transfer_date),
     slipReference: String(r.slip_reference ?? ""),
-    slipName: String(r.slip_file_path ?? ""),
+    slipName: String(r.slip_file_name ?? ""),
+    hasSlip: !!r.slip_file_path,
     status: r.status ?? "draft",
     receiptNumber,
     verificationCode,
@@ -70115,6 +70131,8 @@ txnRoutes.post("/transactions", async (c) => {
   const { gross, wht, net } = calcWht(base, eff.rate, whtMode);
   const note = (b2.note ?? "").trim();
   const taxId = norm(b2.vendorTaxId ?? "");
+  const slip = b2.slipFile?.dataUrl ? parseUploadDataUrl(String(b2.slipFile.dataUrl)) : null;
+  if (b2.slipFile?.dataUrl && !slip) return c.json({ error: "invalid-slip" }, 400);
   const row = await withTenant(g.ws, "owner", async () => {
     const db2 = sql();
     const ins = await db2`
@@ -70129,6 +70147,17 @@ txnRoutes.post("/transactions", async (c) => {
       returning id`;
     return ins[0];
   });
+  if (slip) {
+    try {
+      const path = await saveBytesDurable("slips", `${String(row.id)}.${extForMime(slip.mime)}`, slip.bytes, g.ws);
+      await withTenant(g.ws, "owner", async () => {
+        await sql()`update vendor_payables set slip_file_path = ${path}, slip_file_name = ${String(b2?.slipFile?.name ?? "").slice(0, 200)}
+          where id = ${String(row.id)} and user_id = ${g.ws}`;
+      });
+    } catch (e) {
+      console.error("[txn-create] slip-save-failed", e instanceof Error ? e.message : String(e));
+    }
+  }
   return c.json({ ok: true, id: String(row.id) });
 });
 txnRoutes.post("/transactions/:id/send", async (c) => {
@@ -70205,13 +70234,57 @@ txnRoutes.post("/transactions/:id/slip", async (c) => {
   const b2 = await c.req.json().catch(() => null);
   const id = c.req.param("id");
   const ref = (b2?.slipReference ?? "").trim();
-  const name = (b2?.slipName ?? "").trim();
+  const slip = b2?.slipFile?.dataUrl ? parseUploadDataUrl(String(b2.slipFile.dataUrl)) : null;
+  if (b2?.slipFile?.dataUrl && !slip) return c.json({ error: "invalid-slip" }, 400);
+  let path = null;
+  let name = (b2?.slipName ?? "").trim();
+  if (slip) {
+    path = await saveBytesDurable("slips", `${id}.${extForMime(slip.mime)}`, slip.bytes, g.ws);
+    name = (b2?.slipFile?.name ?? "").trim().slice(0, 200);
+  }
   await withTenant(g.ws, "owner", async () => {
     const db = sql();
-    await db`update vendor_payables set slip_reference = ${ref}, slip_file_path = ${name}
+    if (path) {
+      await db`update vendor_payables set slip_reference = ${ref}, slip_file_path = ${path}, slip_file_name = ${name}
+        where id = ${id} and user_id = ${g.ws}`;
+    } else {
+      await db`update vendor_payables set slip_reference = ${ref}
+        where id = ${id} and user_id = ${g.ws}`;
+    }
+  });
+  return c.json({ ok: true });
+});
+txnRoutes.delete("/transactions/:id/slip", async (c) => {
+  const g = await guard(c);
+  if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageTransactions")) return c.json({ error: "forbidden" }, 403);
+  const id = c.req.param("id");
+  await withTenant(g.ws, "owner", async () => {
+    await sql()`update vendor_payables set slip_file_path = null, slip_file_name = null
       where id = ${id} and user_id = ${g.ws}`;
   });
   return c.json({ ok: true });
+});
+txnRoutes.get("/transactions/:id/slip", async (c) => {
+  const g = await guard(c);
+  if ("error" in g) return c.json({ error: "unauthorized" }, g.error);
+  if (!canDo(g, "canManageTransactions")) return c.json({ error: "forbidden" }, 403);
+  const id = c.req.param("id");
+  const rows = await withTenant(g.ws, "client", async () => {
+    const db = sql();
+    return await db`select slip_file_path from vendor_payables
+      where id = ${id} and user_id = ${g.ws}`;
+  });
+  const path = rows[0]?.slip_file_path;
+  const bytes = await readStoredDurable(g.ws, path ?? null);
+  if (!bytes) return c.json({ error: "not-found" }, 404);
+  const ext = String(path ?? "").split(".").pop()?.toLowerCase();
+  const type = ext === "pdf" ? "application/pdf" : ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+  return c.body(bytes, 200, {
+    "Content-Type": type,
+    "Content-Disposition": "inline",
+    "Cache-Control": "private, no-store"
+  });
 });
 
 // src/lib/wht.ts

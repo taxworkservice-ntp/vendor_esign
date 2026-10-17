@@ -79,6 +79,8 @@ export interface PaymentTransaction {
   transferDate: string
   slipReference: string
   slipName: string
+  /** Whether a slip file has been stored (drives the detail preview). */
+  hasSlip?: boolean
   status: TxnStatus
   receiptNumber?: string // assigned once: RCT-{VENDORNO}-{BE_YEAR}-{SEQ}
   verificationCode?: string // printed on the issued receipt; drives the /verify page
@@ -124,5 +126,8 @@ export interface CreateTxnInput {
   transferDate: string
   slipReference: string
   slipName: string
+  /** The slip file itself (image downscaled to JPEG, or a PDF), uploaded with
+   *  the transaction. Optional — it can be attached later. */
+  slipFile?: { dataUrl: string; name: string }
   vendorTaxId: string // plaintext in transit only — hashed before storage
 }

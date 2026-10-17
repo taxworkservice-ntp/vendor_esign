@@ -21,6 +21,7 @@ import { EXPORT_LIMIT, pagedQuery, queryFromFilters, queryToParams } from '../li
 import { loadTxns, saveTxns } from '../lib/mock'
 import { loadItems } from '../lib/items-mock'
 import { loadVendors } from '../lib/vendors-mock'
+import { saveSlip, removeSlip as removeSlipMock } from '../lib/slips-mock'
 import { currentBeYear } from '../lib/settings'
 import { nextReceiptNumber } from '../lib/receipt-number'
 import { rememberVendorId } from '../lib/vendor-id'
@@ -204,8 +205,10 @@ export function useCreateTransaction() {
       if (!tax.ok) throw new Error('รายการที่เลือกมีประเภทภาษีต่างกัน — กรุณาแยกเป็นคนละรายการกัน')
       const base = itemsTotal(lineItems)
       // มาตรา 50/1 — same rule the server applies, so the mock cannot drift.
+      // The forced-below-threshold path is gated by the UI (managers only) and
+      // enforced authoritatively on the server; the mock mirrors the effect.
       const s = loadSettings(activeTenant)
-      const eff = applyWhtThreshold(base, whtRateFor(tax.paymentType, s), tax.paymentType, s.whtMinThreshold, false)
+      const eff = applyWhtThreshold(base, whtRateFor(tax.paymentType, s), tax.paymentType, s.whtMinThreshold, !!input.forceWht)
       const { gross, wht, net } = calcWht(base, eff.rate, input.whtMode)
       const found = loadVendors(activeTenant).find((v) => v.id === input.vendorId)
       if (!found) throw new Error('กรุณาเลือกผู้ขาย')
@@ -231,7 +234,8 @@ export function useCreateTransaction() {
         netAmount: net,
         transferDate: input.transferDate,
         slipReference: slipRef,
-        slipName: input.slipName,
+        slipName: input.slipFile?.name ?? input.slipName,
+        hasSlip: !!input.slipFile,
         status: 'draft',
         createdAt: now,
         inviteToken: `tok_${Math.random().toString(36).slice(2, 10)}`,
@@ -248,6 +252,7 @@ export function useCreateTransaction() {
         ],
       }
       write([txn, ...all])
+      if (input.slipFile) saveSlip(id, input.slipFile.dataUrl)
       await rememberVendorId(input.vendorId, input.vendorTaxId)
       return txn
     },
@@ -373,9 +378,9 @@ export function useTransactionActions() {
       // The mock has no server-issued PDF, so there is nothing to point at.
       return { number: receiptNumber }
     },
-    // Slip is optional at creation and can be attached later. Reference stays
-    // unique per tenant (case/space-insensitive), matching the create-time rule.
-    attachSlip: async (id: string, input: { slipReference: string; slipName: string }) => {
+    // Slip is optional at creation and can be attached/replaced later. Reference
+    // stays unique per tenant (case/space-insensitive), matching the create rule.
+    attachSlip: async (id: string, input: { slipReference: string; slipFile?: { dataUrl: string; name: string } }) => {
       if (hasServer) {
         await apiSend(`/api/client/transactions/${id}/slip`, 'POST', input)
         refresh()
@@ -391,19 +396,42 @@ export function useTransactionActions() {
       if (ref && isDuplicateSlipRef(ref, others)) {
         throw new Error('เลขที่อ้างอิงสลิปนี้ถูกใช้แล้ว — โปรดตรวจสอบสลิปซ้ำ')
       }
+      if (input.slipFile) saveSlip(id, input.slipFile.dataUrl)
       apply((rows) =>
         rows.map((t) =>
           t.id === id
             ? {
                 ...t,
                 slipReference: ref,
-                slipName: input.slipName.trim(),
+                slipName: input.slipFile?.name ?? t.slipName,
+                hasSlip: input.slipFile ? true : t.hasSlip,
                 checks: t.checks.map((c) =>
                   c.key === 'slip'
                     ? { ...c, label: ref ? 'สลิปตรงยอดสุทธิ' : 'ยังไม่มีสลิป — รอแนบภายหลัง', state: ref ? 'pass' : 'warn' }
                     : c,
                 ),
                 timeline: [...t.timeline, { at: new Date().toISOString(), label: 'แนบเอกสารอ้างอิงสลิป', detail: ref || undefined }],
+              }
+            : t,
+        ),
+      )
+    },
+    // Remove the slip file; the reference is left intact.
+    removeSlip: async (id: string) => {
+      if (hasServer) {
+        await apiSend(`/api/client/transactions/${id}/slip`, 'DELETE')
+        refresh()
+        return
+      }
+      removeSlipMock(id)
+      apply((rows) =>
+        rows.map((t) =>
+          t.id === id
+            ? {
+                ...t,
+                slipName: '',
+                hasSlip: false,
+                timeline: [...t.timeline, { at: new Date().toISOString(), label: 'ลบไฟล์สลิป' }],
               }
             : t,
         ),

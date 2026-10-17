@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Check, Info, Lock, Plus, ShieldAlert, ShieldCheck, Sparkles, Trash2, UploadCloud, X } from 'lucide-react'
+import { Check, Info, Loader2, Lock, Plus, ShieldAlert, ShieldCheck, Sparkles, Trash2, UploadCloud, X } from 'lucide-react'
 import { calcWht, isDuplicateSlipRef } from '../lib/config'
 import { applyWhtThreshold, belowWhtThreshold } from '../lib/wht-calc'
 import { defaultSettings, whtRateFor } from '../lib/settings'
@@ -16,6 +16,7 @@ import { useSettings } from '../hooks/useSettings'
 import { useClientAuth } from '../lib/client-auth'
 import type { CatalogItem } from '../lib/items-mock'
 import { VendorPicker } from '../components/vendor-picker'
+import { prepareSlipUpload } from '../lib/image-upload'
 import { Card, CardBody } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
 import { HelpLink } from '../components/ui/help-link'
@@ -30,7 +31,6 @@ import type { LineItem } from '../lib/types'
 
 // A picked catalog line. Description, unit and tax come from the item and are
 // never typed here; only quantity + unit price are facts the officer supplies.
-// Discount stays editable (a commercial fact, not a tax decision).
 interface Row {
   key: string
   itemId: string
@@ -38,21 +38,19 @@ interface Row {
   unit: string
   quantity: string
   unitPrice: string
-  discount: string
   paymentType: string
   subItems: string[]
   ticked: boolean[]
 }
 
 let rowSeq = 0
-const toPickedRow = (c: CatalogItem, overrides?: Partial<Pick<Row, 'quantity' | 'unitPrice' | 'discount'>>): Row => ({
+const toPickedRow = (c: CatalogItem, overrides?: Partial<Pick<Row, 'quantity' | 'unitPrice'>>): Row => ({
   key: `${c.id}-${Date.now().toString(36)}-${rowSeq++}`,
   itemId: c.id,
   name: c.name,
   unit: c.unit || 'รายการ',
   quantity: overrides?.quantity ?? '1',
   unitPrice: overrides?.unitPrice ?? String(c.unitPrice ?? 0),
-  discount: overrides?.discount ?? '',
   paymentType: c.paymentType ?? '',
   subItems: [...(c.subItems ?? [])],
   ticked: (c.subItems ?? []).map(() => true),
@@ -107,10 +105,16 @@ export function TransactionNew() {
   const [pickerQ, setPickerQ] = useState('')
   const [transferDate, setTransferDate] = useState(() => todayISO())
   const [slipRef, setSlipRef] = useState('')
-  const [slipName, setSlipName] = useState('')
+  const [slipFile, setSlipFile] = useState<{ dataUrl: string; name: string } | null>(null)
+  const [slipErr, setSlipErr] = useState('')
+  const [slipBusy, setSlipBusy] = useState(false)
   const [vendorTaxId, setVendorTaxId] = useState('')
   const [touched, setTouched] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  // มาตรา 50/1 escape hatch: a manager may withhold even below the threshold
+  // (continuous contracts / amounts that aggregate). The server honours this
+  // only for `canManageCatalog`, so the control is shown only to them.
+  const [forceWht, setForceWht] = useState(false)
 
   // Vendor memory: auto-fill if the user hasn't typed yet, else offer suggestions.
   const memory = useVendorMemory(vendorId)
@@ -153,7 +157,6 @@ export function TransactionNew() {
         toPickedRow(c, {
           quantity: String(it.quantity ?? 1),
           unitPrice: String(it.unitPrice ?? it.amount),
-          discount: it.discount ? String(it.discount) : '',
         }),
       )
     }
@@ -177,7 +180,6 @@ export function TransactionNew() {
           unit: r.unit,
           quantity: Number(r.quantity),
           unitPrice: Number(r.unitPrice),
-          discount: Number(r.discount),
           itemId: r.itemId,
           subItems: r.subItems.filter((_, si) => r.ticked[si]),
         }),
@@ -193,7 +195,7 @@ export function TransactionNew() {
     const priced = rows.filter(
       (r) =>
         r.name.trim() &&
-        lineTotal({ quantity: Number(r.quantity) || 0, unitPrice: Number(r.unitPrice) || 0, discount: Number(r.discount) || 0 }) > 0,
+        lineTotal({ quantity: Number(r.quantity) || 0, unitPrice: Number(r.unitPrice) || 0 }) > 0,
     )
     if (priced.length === 0) return { status: 'empty' as const }
     const res = resolveTransactionTax(priced.map((r) => ({ paymentType: r.paymentType })))
@@ -206,9 +208,9 @@ export function TransactionNew() {
   const effective = useMemo(
     () =>
       taxState.status === 'ready'
-        ? applyWhtThreshold(grossNum, baseRate, taxState.paymentType, cfg.whtMinThreshold, false)
+        ? applyWhtThreshold(grossNum, baseRate, taxState.paymentType, cfg.whtMinThreshold, forceWht)
         : { rate: 0, paymentType: '', noWht: true },
-    [grossNum, taxState, baseRate, cfg.whtMinThreshold],
+    [grossNum, taxState, baseRate, cfg.whtMinThreshold, forceWht],
   )
   const effectiveRate = effective.rate
   const effectivePaymentType = effective.paymentType
@@ -275,6 +277,25 @@ export function TransactionNew() {
     setShowSuggest(false)
   }
 
+  const onPickSlip = async (file: File | undefined) => {
+    if (!file) return
+    setSlipErr('')
+    setSlipBusy(true)
+    try {
+      setSlipFile(await prepareSlipUpload(file))
+    } catch (e) {
+      setSlipErr(
+        e instanceof Error && e.message === 'too-large'
+          ? 'ไฟล์ใหญ่เกิน 5MB — กรุณาย่อขนาดไฟล์'
+          : e instanceof Error && e.message === 'unsupported-image'
+            ? 'ไม่รองรับไฟล์นี้ กรุณาใช้รูป JPG/PNG หรือ PDF'
+            : 'ประมวลผลไฟล์ไม่สำเร็จ กรุณาลองใหม่',
+      )
+    } finally {
+      setSlipBusy(false)
+    }
+  }
+
   // Verify the entered ID against the vendor registry (when we have it).
   const taxDigits = vendorTaxId.replace(/\D/g, '').length
   const taxMatch = vendorTaxIdMatches(selectedVendor, vendorTaxId)
@@ -317,10 +338,11 @@ export function TransactionNew() {
         lineItems: validItems,
         whtRate: effectiveRate,
         whtMode: 'deduct',
-        forceWht: false,
+        forceWht,
         transferDate,
         slipReference: slipRef,
-        slipName,
+        slipName: slipFile?.name ?? '',
+        slipFile: slipFile ?? undefined,
         vendorTaxId,
       },
       { onSuccess: () => nav('/') },
@@ -483,20 +505,24 @@ export function TransactionNew() {
 
             {rows.length > 0 && (
               <div className="space-y-2.5">
-                {rows.map((r) => {
+                {rows.map((r, i) => {
                   const rowAmount = lineTotal({
                     quantity: Number(r.quantity) || 0,
                     unitPrice: Number(r.unitPrice) || 0,
-                    discount: Number(r.discount) || 0,
                   })
                   return (
                     <div key={r.key} className="rounded-control border border-card-border p-3">
                       <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold">{r.name}</p>
-                          <p className="mt-0.5 text-label text-ink-500">
-                            {r.paymentType} · {whtRateFor(r.paymentType, cfg)}% · {r.unit}
-                          </p>
+                        <div className="flex min-w-0 items-start gap-2">
+                          <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-control bg-ink-100 font-mono text-label text-ink-500">
+                            {i + 1}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold">{r.name}</p>
+                            <p className="mt-0.5 text-label text-ink-500">
+                              {r.paymentType} · {whtRateFor(r.paymentType, cfg)}% · {r.unit}
+                            </p>
+                          </div>
                         </div>
                         <button
                           type="button"
@@ -525,7 +551,7 @@ export function TransactionNew() {
                           ))}
                         </div>
                       )}
-                      <div className="mt-2 grid grid-cols-3 gap-2">
+                      <div className="mt-2 grid grid-cols-2 gap-2">
                         <div>
                           <Label>จำนวน</Label>
                           <Input value={r.quantity} onChange={(e) => setRow(r.key, { quantity: e.target.value })} inputMode="decimal" placeholder="1" className="text-right tabular-nums" />
@@ -533,10 +559,6 @@ export function TransactionNew() {
                         <div>
                           <Label>ราคา/หน่วย</Label>
                           <Input value={r.unitPrice} onChange={(e) => setRow(r.key, { unitPrice: e.target.value })} inputMode="decimal" placeholder="0.00" className="text-right tabular-nums" />
-                        </div>
-                        <div>
-                          <Label>ส่วนลด</Label>
-                          <Input value={r.discount} onChange={(e) => setRow(r.key, { discount: e.target.value })} inputMode="decimal" placeholder="0" className="text-right tabular-nums" />
                         </div>
                       </div>
                       <p className="mt-1.5 text-right text-body">
@@ -608,8 +630,21 @@ export function TransactionNew() {
                 <div className="mt-3 rounded-control bg-primary-soft p-3 text-body text-primary-text">
                   <p className="flex gap-2 font-medium">
                     <Info size={16} className="mt-0.5 shrink-0" />
-                    ยอด {fmtTHB(gross)} ต่ำกว่าเกณฑ์ {fmtTHB(cfg.whtMinThreshold)} — ไม่หักภาษี ณ ที่จ่าย (มาตรา 50/1)
+                    ยอด {fmtTHB(gross)} ต่ำกว่าเกณฑ์ {fmtTHB(cfg.whtMinThreshold)} — โดยปกติไม่หักภาษี ณ ที่จ่าย (มาตรา 50/1)
                   </p>
+                  {can('canManageCatalog') ? (
+                    <label className="mt-2 flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 h-4 w-4 accent-ink-900"
+                        checked={forceWht}
+                        onChange={(e) => setForceWht(e.target.checked)}
+                      />
+                      <span>หักภาษี ณ ที่จ่าย {baseRate}% แม้ยอดต่ำกว่าเกณฑ์ (สัญญาต่อเนื่อง/รวมยอดหลายครั้ง)</span>
+                    </label>
+                  ) : (
+                    <p className="mt-1.5 text-label opacity-80">ต้องมีสิทธิ์จัดการภาษี (เจ้าของบัญชี) จึงหักภาษีได้</p>
+                  )}
                 </div>
               )}
             </div>
@@ -625,15 +660,29 @@ export function TransactionNew() {
             <div>
               <Label>สลิปโอนเงิน</Label>
               <label className="flex h-11 cursor-pointer items-center gap-2 rounded-control border border-dashed border-ink-300 bg-ink-50 px-3.5 text-body font-medium text-ink-700 hover:border-ink-900">
-                <UploadCloud size={17} />
-                <span className="truncate">{slipName || 'เลือกไฟล์สลิป…'}</span>
+                {slipBusy ? <Loader2 size={17} className="animate-spin" /> : <UploadCloud size={17} />}
+                <span className="truncate">{slipFile?.name || 'เลือกไฟล์สลิป (รูป หรือ PDF)…'}</span>
                 <input
                   type="file"
                   className="hidden"
-                  accept="image/*,.pdf"
-                  onChange={(e) => setSlipName(e.target.files?.[0]?.name ?? '')}
+                  accept="image/*,application/pdf"
+                  onChange={(e) => {
+                    void onPickSlip(e.target.files?.[0])
+                    e.target.value = ''
+                  }}
                 />
               </label>
+              {slipFile && (
+                <button
+                  type="button"
+                  onClick={() => setSlipFile(null)}
+                  className="mt-1.5 inline-flex items-center gap-1 text-body font-medium text-ink-500 transition hover:text-danger"
+                >
+                  <X size={13} /> ลบไฟล์ที่เลือก
+                </button>
+              )}
+              {slipErr && <FieldError msg={slipErr} />}
+              <p className="mt-1.5 text-label text-ink-400">แนบรูปสลิปหรือไฟล์ PDF (ไม่เกิน 5MB) — แนบภายหลังได้</p>
             </div>
           </Section>
 
@@ -682,6 +731,7 @@ export function TransactionNew() {
 
             <div className="divide-y divide-ink-100 rounded-control border border-card-border">
               <div className="flex items-baseline gap-2 bg-ink-50/70 px-3 py-1.5 text-label font-medium text-ink-500">
+                <span className="w-5 shrink-0 text-right">#</span>
                 <span className="min-w-0 flex-1">รายละเอียด</span>
                 <span className="w-10 shrink-0 text-right">จำนวน</span>
                 <span className="w-16 shrink-0 text-right">หน่วย</span>
@@ -690,6 +740,7 @@ export function TransactionNew() {
               </div>
               {validItems.map((it, i) => (
                 <div key={i} className="flex items-baseline gap-2 px-3 py-1.5 text-body">
+                  <span className="w-5 shrink-0 text-right font-mono text-label text-ink-400">{i + 1}</span>
                   <span className="min-w-0 flex-1 truncate">{it.description}</span>
                   <span className="w-10 shrink-0 text-right tabular-nums">{it.quantity ?? 1}</span>
                   <span className="w-16 shrink-0 text-right text-ink-500">{it.unit || 'รายการ'}</span>
@@ -716,9 +767,9 @@ export function TransactionNew() {
               </div>
             </div>
 
-            {(slipRef.trim() || slipName) && (
+            {(slipRef.trim() || slipFile) && (
               <p className="text-body text-ink-500">
-                เอกสารอ้างอิง · {slipRef.trim() || '—'}{slipName ? ` · ${slipName}` : ''}
+                เอกสารอ้างอิง · {slipRef.trim() || '—'}{slipFile ? ` · ${slipFile.name}` : ''}
               </p>
             )}
             <p className="text-label text-ink-400">

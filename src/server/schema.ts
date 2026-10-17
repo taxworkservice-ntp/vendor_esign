@@ -81,6 +81,7 @@ export const vendorPayables = pgTable('vendor_payables', {
   netAmount: numeric('net_amount', { precision: 12, scale: 2 }).notNull(),
   transferDate: date('transfer_date').notNull(),
   slipFilePath: text('slip_file_path'),
+  slipFileName: text('slip_file_name'),
   slipReference: text('slip_reference').notNull(),
   status: text('status').notNull(),
   // Added after this mirror was first written: 003 (tax-ID gate — hash only,

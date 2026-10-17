@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { CheckCircle2, Copy, ExternalLink, FileSearch, Link2, RotateCcw, ShieldAlert, ShieldCheck, UploadCloud } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { CheckCircle2, Copy, ExternalLink, FileSearch, FileText, Link2, Loader2, RotateCcw, ShieldAlert, ShieldCheck, UploadCloud, X } from 'lucide-react'
 import { useTransaction, useTransactionActions } from '../hooks/useTransactions'
 import { useSettings } from '../hooks/useSettings'
 import { useReceiptAuthorization } from '../hooks/useReceiptAuthorization'
@@ -16,6 +17,8 @@ import { PanelSkeleton } from '../components/ui/table-skeleton'
 import { Breadcrumb } from '../components/ui/page-header'
 import { defaultSettings, renderInviteMessage } from '../lib/settings'
 import { itemsTotal, normalizeLineItem } from '../lib/line-items'
+import { prepareSlipUpload } from '../lib/image-upload'
+import { fetchSlipSrc } from '../lib/slip-source'
 import { vendorDisplayName } from '../lib/vendor-name'
 import { fmtTHB, fmtDateTH, fmtDateTimeTH } from '../lib/format'
 import { signMethodLabel } from '../lib/typed-signature'
@@ -39,9 +42,11 @@ export function TransactionDetail() {
   const [confirmRevoke, setConfirmRevoke] = useState(false)
   const [confirmVoid, setConfirmVoid] = useState(false)
   const [slipRef, setSlipRef] = useState('')
-  const [slipName, setSlipName] = useState('')
+  const [slipFile, setSlipFile] = useState<{ dataUrl: string; name: string } | null>(null)
   const [slipErr, setSlipErr] = useState('')
   const [slipBusy, setSlipBusy] = useState(false)
+  const [slipZoom, setSlipZoom] = useState(false)
+  const [confirmSlipRemove, setConfirmSlipRemove] = useState(false)
 
   // Corrections come from the authorization record. They used to be read from
   // mock-only storage, so on the server path a vendor who corrected the client's
@@ -56,6 +61,18 @@ export function TransactionDetail() {
   // and stays disabled.
   const { data: auth } = useReceiptAuthorization(t?.id)
   const corrections = auth?.corrections ?? []
+
+  // The stored slip (image or PDF). Server: streamed through the owner-only
+  // proxy; mock: a stored data URL. Only fetched when one exists.
+  const qc = useQueryClient()
+  const slipQ = useQuery({
+    queryKey: ['slip', t?.id, t?.hasSlip],
+    enabled: !!t?.id && !!t?.hasSlip,
+    queryFn: () => fetchSlipSrc(t!.id),
+    staleTime: 5 * 60_000,
+  })
+  const slipSrc = slipQ.data ?? null
+  const slipIsPdf = !!t?.slipName && /\.pdf$/i.test(t.slipName)
 
   // Loading, failure and not-found are three different things. Collapsing them
   // into "ไม่พบรายการ" told the user a record did not exist when in fact the
@@ -141,10 +158,45 @@ export function TransactionDetail() {
     setSlipErr('')
     setSlipBusy(true)
     try {
-      await acts.attachSlip(t.id, { slipReference: slipRef, slipName })
-      setSlipName('')
+      await acts.attachSlip(t.id, { slipReference: slipRef, slipFile: slipFile ?? undefined })
+      setSlipFile(null)
+      setSlipRef('')
+      qc.invalidateQueries({ queryKey: ['slip', t.id] })
     } catch (e) {
       setSlipErr(e instanceof Error ? e.message : 'บันทึกสลิปไม่สำเร็จ')
+    } finally {
+      setSlipBusy(false)
+    }
+  }
+
+  const onPickSlip = async (file: File | undefined) => {
+    if (!file) return
+    setSlipErr('')
+    setSlipBusy(true)
+    try {
+      setSlipFile(await prepareSlipUpload(file))
+    } catch (e) {
+      setSlipErr(
+        e instanceof Error && e.message === 'too-large'
+          ? 'ไฟล์ใหญ่เกิน 5MB — กรุณาย่อขนาดไฟล์'
+          : e instanceof Error && e.message === 'unsupported-image'
+            ? 'ไม่รองรับไฟล์นี้ กรุณาใช้รูป JPG/PNG หรือ PDF'
+            : 'ประมวลผลไฟล์ไม่สำเร็จ กรุณาลองใหม่',
+      )
+    } finally {
+      setSlipBusy(false)
+    }
+  }
+
+  const removeSlip = async () => {
+    setConfirmSlipRemove(false)
+    setSlipErr('')
+    setSlipBusy(true)
+    try {
+      await acts.removeSlip(t.id)
+      qc.invalidateQueries({ queryKey: ['slip', t.id] })
+    } catch (e) {
+      setSlipErr(e instanceof Error ? e.message : 'ลบสลิปไม่สำเร็จ')
     } finally {
       setSlipBusy(false)
     }
@@ -263,7 +315,6 @@ export function TransactionDetail() {
                       <th className="px-2 py-2 text-right">จำนวน</th>
                       <th className="px-2 py-2 text-right">หน่วย</th>
                       <th className="px-2 py-2 text-right">ราคา/หน่วย</th>
-                      <th className="px-2 py-2 text-right">ส่วนลด</th>
                       <th className="px-2 py-2 text-right">จำนวนเงิน (บาท)</th>
                     </tr>
                   </thead>
@@ -275,14 +326,13 @@ export function TransactionDetail() {
                         <td className="px-2 py-2 text-right tabular-nums">{it.quantity ?? 1}</td>
                         <td className="px-2 py-2 text-right text-ink-600">{it.unit || 'รายการ'}</td>
                         <td className="px-2 py-2 text-right tabular-nums">{fmtTHB(it.unitPrice ?? it.amount)}</td>
-                        <td className="px-2 py-2 text-right tabular-nums text-ink-500">{it.discount ? fmtTHB(it.discount) : '—'}</td>
                         <td className="px-2 py-2 text-right font-semibold tabular-nums">{fmtTHB(it.amount)}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr className="font-semibold [&>td]:border-t [&>td]:border-card-border">
-                      <td colSpan={6} className="py-2 pr-2 text-right">รวม</td>
+                      <td colSpan={5} className="py-2 pr-2 text-right">รวม</td>
                       <td className="px-2 py-2 text-right tabular-nums">{fmtTHB(itemsTotal(items))}</td>
                     </tr>
                   </tfoot>
@@ -401,27 +451,122 @@ export function TransactionDetail() {
 
           <Card>
             <CardBody className="space-y-3">
-              <h2 className="font-semibold">สลิปโอนเงิน</h2>
-              <p className="text-body text-ink-500">สลิป {t.slipReference || '— ยังไม่แนบ'} · {t.slipName || '—'}</p>
-              {!t.slipReference && can('canManageTransactions') && (
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="font-semibold">สลิปโอนเงิน</h2>
+                {t.hasSlip && can('canManageTransactions') && (
+                  <button
+                    type="button"
+                    disabled={slipBusy}
+                    onClick={() => setConfirmSlipRemove(true)}
+                    className="inline-flex items-center gap-1 text-body font-medium text-ink-400 transition hover:text-danger disabled:opacity-50"
+                  >
+                    <X size={14} /> ลบไฟล์สลิป
+                  </button>
+                )}
+              </div>
+              <p className="text-body text-ink-500">
+                เลขที่อ้างอิง {t.slipReference || '— ยังไม่แนบ'}
+                {t.hasSlip ? ` · ${t.slipName || 'แนบไฟล์แล้ว'}` : ' · ยังไม่มีไฟล์'}
+              </p>
+
+              {t.hasSlip && (
+                <div>
+                  {slipQ.isLoading ? (
+                    <div className="flex h-40 items-center justify-center rounded-control bg-ink-50 text-ink-400">
+                      <Loader2 size={20} className="animate-spin" />
+                    </div>
+                  ) : !slipSrc ? (
+                    <p className="rounded-control bg-ink-50 p-3 text-body text-ink-500">โหลดไฟล์สลิปไม่สำเร็จ</p>
+                  ) : slipIsPdf ? (
+                    <a
+                      href={slipSrc}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 rounded-control border border-card-border bg-white p-3.5 text-body font-medium text-ink-700 hover:border-ink-300"
+                    >
+                      <FileText size={18} className="text-ink-400" aria-hidden /> เปิดไฟล์สลิป (PDF)
+                      <ExternalLink size={14} className="ml-auto text-ink-400" aria-hidden />
+                    </a>
+                  ) : (
+                    <button type="button" onClick={() => setSlipZoom(true)} className="block w-full" title="แตะเพื่อดูขนาดเต็ม">
+                      <img src={slipSrc} alt="สลิปโอนเงิน" className="max-h-64 w-full rounded-control border border-card-border object-contain" />
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {can('canManageTransactions') && t.status !== 'void' && (
                 <div className="space-y-2 rounded-control bg-ink-50 p-3">
-                  <Label>แนบสลิปภายหลัง (ไม่บังคับ)</Label>
+                  <Label>{t.hasSlip ? 'แทนที่สลิป / แก้เลขที่อ้างอิง' : 'แนบสลิป (ไม่บังคับ)'}</Label>
                   <Input value={slipRef} onChange={(e) => setSlipRef(e.target.value)} placeholder="เลขที่อ้างอิงสลิป เช่น TRF-881201" className="font-mono" />
                   <label className="flex h-11 cursor-pointer items-center gap-2 rounded-control border border-dashed border-ink-300 bg-white px-3.5 text-body font-medium text-ink-700 hover:border-ink-900">
-                    <UploadCloud size={17} />
-                    <span className="truncate">{slipName || 'เลือกไฟล์สลิป…'}</span>
-                    <input type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => setSlipName(e.target.files?.[0]?.name ?? '')} />
+                    {slipBusy ? <Loader2 size={17} className="animate-spin" /> : <UploadCloud size={17} />}
+                    <span className="truncate">{slipFile?.name || (t.hasSlip ? 'เลือกไฟล์ใหม่เพื่อแทนที่…' : 'เลือกไฟล์สลิป (รูป หรือ PDF)…')}</span>
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="image/*,application/pdf"
+                      onChange={(e) => {
+                        void onPickSlip(e.target.files?.[0])
+                        e.target.value = ''
+                      }}
+                    />
                   </label>
+                  {slipFile && (
+                    <button
+                      type="button"
+                      onClick={() => setSlipFile(null)}
+                      className="inline-flex items-center gap-1 text-body font-medium text-ink-500 transition hover:text-danger"
+                    >
+                      <X size={13} /> ลบไฟล์ที่เลือก
+                    </button>
+                  )}
                   <FieldError msg={slipErr} />
-                  <Button variant="secondary" className="w-full" disabled={slipBusy || (!slipRef.trim() && !slipName)} onClick={attachSlip}>
-                    {slipBusy ? 'กำลังบันทึก…' : 'บันทึกสลิป'}
+                  <Button
+                    variant="secondary"
+                    className="w-full"
+                    disabled={slipBusy || (!slipRef.trim() && !slipFile && !t.hasSlip)}
+                    onClick={attachSlip}
+                  >
+                    {slipBusy ? 'กำลังบันทึก…' : t.hasSlip ? 'บันทึกการเปลี่ยนแปลง' : 'บันทึกสลิป'}
                   </Button>
+                  <p className="text-label text-ink-400">แนบรูปสลิปหรือไฟล์ PDF (ไม่เกิน 5MB)</p>
                 </div>
               )}
             </CardBody>
           </Card>
         </div>
       </div>
+
+      {slipZoom && slipSrc && !slipIsPdf && (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-ink-900/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="สลิปโอนเงิน"
+          onClick={() => setSlipZoom(false)}
+        >
+          <button
+            type="button"
+            onClick={() => setSlipZoom(false)}
+            aria-label="ปิด"
+            className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/90 text-ink-900"
+          >
+            <X size={20} aria-hidden />
+          </button>
+          <img src={slipSrc} alt="สลิปโอนเงิน" className="max-h-[90vh] max-w-[90vw] rounded-card object-contain" />
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={confirmSlipRemove}
+        title="ยืนยันการลบไฟล์สลิป"
+        message={<>ไฟล์สลิปของรายการนี้จะถูกลบออก (เลขที่อ้างอิงยังคงอยู่) และไม่สามารถกู้คืนได้</>}
+        confirmLabel="ลบไฟล์สลิป"
+        busy={slipBusy}
+        onConfirm={() => void removeSlip()}
+        onCancel={() => setConfirmSlipRemove(false)}
+      />
 
       <ConfirmDialog
         open={confirmIssue}
