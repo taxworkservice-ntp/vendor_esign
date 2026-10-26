@@ -93,7 +93,7 @@ that are drawn twice (upper/lower) share a value. `AMT_W = 260`, `WHT_W = 180`.
 
 | name | configTop | left | fontSize | notes |
 | --- | --- | --- | --- | --- |
-| `wht_id` | 187 | 1317 | 32 | certificate no, or derived from BE year + month + seq |
+| `wht_id` | 187 | 1317 | 30 | certificate no, or derived from BE year + month + seq |
 | `payer_name` | 279 | 165 | 32 | `profile.company_name_th`, `width: 583` |
 | `payer_taxid-0..12` | 241 | measured (§5) | 45 bold | buyer/payer 13-digit tax ID |
 | `payer_address` | 337 | 166 | 31 | `wrap`, `width: 1166` |
