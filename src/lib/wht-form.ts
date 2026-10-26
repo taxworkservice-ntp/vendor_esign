@@ -114,7 +114,7 @@ export function buildFields(record: WhtRecordWithVendor, profile: WhtProfile, se
   const WHT_W = 180
 
   return [
-    { name: 'wht_id', top: cssTop(187, 33), left: 1317, fontSize: 33, value: whtId },
+    { name: 'wht_id', top: cssTop(187, 32), left: 1317, fontSize: 32, value: whtId },
     { name: 'payer_name', top: cssTop(279, 32), left: 165, fontSize: 32, width: 583, value: profile.company_name_th || '' },
     ...taxIdFields('payer_taxid', 241, profile.tax_id),
     { name: 'payer_address', top: cssTop(337, 31), left: 166, fontSize: 31, wrap: true, width: 1166, value: profile.address || '' },
