@@ -439,6 +439,10 @@ adminApp.post('/api/admin/tenants/:id/reset', async (c) => {
       txn`delete from sessions where user_id in (select member_user_id from client_members where workspace_user_id = ${id})`,
     ]
     if (resetSequences) {
+      // Payees are wiped above, so the vendor-number counter restarts too —
+      // otherwise the first vendor of the fresh workspace inherits the old max.
+      q.push(txn`delete from doc_number_sequences
+        where user_id = ${id} and doc_type = 'vendor_payee'`)
       q.push(txn`insert into doc_number_sequences (user_id, doc_type, be_year, vendor_no, last_number)
         values (${id}, 'vendor_receipt', ${beYear}, 0, ${start - 1})
         on conflict (user_id, doc_type, be_year, vendor_no) do update set last_number = excluded.last_number`)

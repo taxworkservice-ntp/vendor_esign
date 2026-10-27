@@ -50,8 +50,8 @@ const testTaxHash = createHash('sha256').update(TEST_TAX_ID).digest('hex')
 
 // Fresh vendor + txn + request (idempotent reruns)
 const v = await sql.query(
-  `insert into vendor_payees (user_id, name, address, id_number_encrypted)
-   values ('ABC','Smoke Test (fake)','Bangkok (fake)','enc:FAKE-SMOKE') returning id`)
+  `insert into vendor_payees (user_id, vendor_no, name, address, id_number_encrypted)
+   values ('ABC', generate_vendor_no('ABC'), 'Smoke Test (fake)','Bangkok (fake)','enc:FAKE-SMOKE') returning id`)
 const vendorId = v[0].id
 const ref = `SMOKE-${stamp}`
 const slip = `SMOKE-SLIP-${stamp}`

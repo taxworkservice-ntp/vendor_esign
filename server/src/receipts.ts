@@ -22,7 +22,7 @@ import { CLIENT_DISPLAY, PILOT_BE_YEAR, PUBLIC_BASE, audit, one, tenantProfile }
 // MAX()+1 — `generate_doc_number` locks the counter row).
 export type FinalizeResult =
   | { ok: true; number: string; verificationCode: string; pdfSha256: string; pdfPath: string; pdfBytes: Uint8Array }
-  | { ok: false; error: 'already-issued' | 'not-signed' }
+  | { ok: false; error: 'already-issued' | 'not-signed' | 'no-vendor-number' }
 
 export async function finalizeReceipt(txnId: string, ip: string): Promise<FinalizeResult> {
   const db = sql()
@@ -70,11 +70,30 @@ export async function finalizeReceipt(txnId: string, ip: string): Promise<Finali
     // year ahead just because it was signed in a later January).
     const payDate = isoDay(vno?.transfer_date)
     const beYear = payDate ? Number(payDate.slice(0, 4)) + 543 : currentBeYear()
-    const n = await db`select generate_doc_number(${rowTenant}, 'vendor_receipt', ${beYear}, ${Number(vno?.vendor_no ?? 0)}) as number`
-    number = String(one<Record<string, unknown>>(n)?.number)
-    await db`insert into vendor_receipts (user_id, transaction_id, number, issue_date, verification_code, status)
-      values (${rowTenant}, ${txnId}, ${number}, CURRENT_DATE, ${code}, 'issued')`
-    await db`update vendor_payables set status = 'issued' where id = ${txnId}`
+    // A payee with no vendor number cannot have a receipt series. Refuse loudly
+    // instead of printing RCT-000-… (which happened before 038 backfilled them).
+    const vendorNo = Number(vno?.vendor_no ?? 0)
+    if (!Number.isInteger(vendorNo) || vendorNo <= 0) return { ok: false, error: 'no-vendor-number' }
+    // Allocate the number and insert the receipt in ONE statement. On Neon's
+    // HTTP driver each statement is its own transaction, so `FOR UPDATE` inside
+    // generate_doc_number() only protects a block that commits atomically with
+    // the insert — otherwise a failed insert burns a number and leaves a gap
+    // (this is how LSE's 001–003 went missing). The CTE makes allocation, the
+    // receipt row, and the payable's status all-or-nothing.
+    const issued = (await db`
+      with n as (
+        select generate_doc_number(${rowTenant}, 'vendor_receipt', ${beYear}, ${vendorNo}) as number
+      ), ins as (
+        insert into vendor_receipts (user_id, transaction_id, number, issue_date, verification_code, status)
+        select ${rowTenant}, ${txnId}, n.number, CURRENT_DATE, ${code}, 'issued' from n
+        returning number
+      ), upd as (
+        update vendor_payables set status = 'issued'
+        where id = ${txnId} and user_id = ${rowTenant}
+        returning id
+      )
+      select number from ins`) as unknown as { number: string }[]
+    number = String(one<{ number: string }>(issued)?.number)
     await withTenant(rowTenant, 'client', async () =>
       audit(rowTenant, 'vendor_receipts', txnId, 'receipt.issued', 'system', { number }, ip))
   }

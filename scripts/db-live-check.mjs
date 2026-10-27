@@ -94,6 +94,21 @@ try {
   await client.query(`insert into client_profiles (id, name, client_code, display_name, status, be_year)
     values ('ABC','ABC','ABC','บริษัท ทดสอบ จำกัด','active',2569) on conflict do nothing`)
 
+  // Regression (037): a polluted legacy base row must NOT leak into a vendor's
+  // book. Before 037 this row seeded vendor 001 at 3, so its first receipt was
+  // RCT-001-2569-004 and 001–003 never existed. The configured start wins.
+  await client.query(`insert into doc_number_sequences (user_id, doc_type, be_year, vendor_no, last_number)
+    values ('ABC','vendor_receipt',2569,0,3)`)
+
+  // A workspace migrating off paper can open every book at a chosen start; the
+  // same configured value is applied per vendor, not once globally.
+  await client.query(`insert into client_profiles (id, name, client_code, display_name, status, be_year, start_number)
+    values ('HI-START','HI-START','HI-START','เริ่มที่ 501','active',2569,501)`)
+  const hiStart = await client.query(`select generate_doc_number('HI-START','vendor_receipt',2569,1) n`)
+  hiStart.rows[0].n === 'RCT-001-2569-501'
+    ? ok(`configured start honoured → ${hiStart.rows[0].n}`)
+    : fail(`configured start got ${hiStart.rows[0].n}`)
+
   const docNo = await client.query(`select generate_doc_number('ABC','vendor_receipt',2569,1) n`)
   docNo.rows[0].n === 'RCT-001-2569-001' ? ok(`generate_doc_number → ${docNo.rows[0].n}`) : fail(`doc number got ${docNo.rows[0].n}`)
 
@@ -103,9 +118,40 @@ try {
   const docNo3 = await client.query(`select generate_doc_number('ABC','vendor_receipt',2569,2) n`)
   docNo3.rows[0].n === 'RCT-002-2569-001' ? ok(`new vendor starts at 001 → ${docNo3.rows[0].n}`) : fail(`vendor series got ${docNo3.rows[0].n}`)
 
+  // 037: a `000` vendor segment is not a vendor — refuse rather than mint one.
+  let zeroRejected = false
+  try {
+    await client.query(`select generate_doc_number('ABC','vendor_receipt',2569,0)`)
+  } catch { zeroRejected = true }
+  zeroRejected ? ok('generate_doc_number rejects vendor_no 0') : fail('generate_doc_number minted an RCT-000 number')
+
+  // 038: vendor numbers are allocated atomically, above any existing number,
+  // and enforced unique per workspace.
+  const vn1 = await client.query(`select generate_vendor_no('ABC') n`)
+  await client.query(`insert into vendor_payees (user_id, vendor_no, name, address, id_number_encrypted)
+    values ('ABC', $1, 'ผู้ขาย หนึ่ง','ที่อยู่','')`, [vn1.rows[0].n])
+  const vn2 = await client.query(`select generate_vendor_no('ABC') n`)
+  vn2.rows[0].n === vn1.rows[0].n + 1
+    ? ok(`generate_vendor_no allocates in order → ${vn1.rows[0].n}, ${vn2.rows[0].n}`)
+    : fail(`generate_vendor_no got ${vn1.rows[0].n} then ${vn2.rows[0].n}`)
+
+  let dupVendorNo = false
+  try {
+    await client.query(`insert into vendor_payees (user_id, vendor_no, name, address, id_number_encrypted)
+      values ('ABC', $1, 'ผู้ขาย ซ้ำ','ที่อยู่','')`, [vn1.rows[0].n])
+  } catch { dupVendorNo = true }
+  dupVendorNo ? ok('duplicate vendor_no rejected') : fail('duplicate vendor_no accepted — two vendors would share one receipt book')
+
+  let zeroVendorNo = false
+  try {
+    await client.query(`insert into vendor_payees (user_id, name, address, id_number_encrypted)
+      values ('ABC','ผู้ขาย ไม่มีเลข','ที่อยู่','')`)
+  } catch { zeroVendorNo = true }
+  zeroVendorNo ? ok('payee without vendor_no rejected') : fail('payee without vendor_no accepted — would issue RCT-000')
+
   await client.query(`insert into wht_vendors (user_id, name, tax_id, vendor_type) values ('ABC','ผู้ขาย ทดสอบ','1234567890123','individual')`)
   const cert = await client.query(`select generate_wht_certificate_no('ABC', '2026-09-18'::date) n`)
-  cert.rows[0].n === '26091001' ? ok(`wht cert → ${cert.rows[0].n}`) : fail(`wht cert got ${cert.rows[0].n}`)
+  cert.rows[0].n === 'WT26091001' ? ok(`wht cert → ${cert.rows[0].n}`) : fail(`wht cert got ${cert.rows[0].n}`)
 
   // RLS smoke: enforced for a NON-owner role (superusers/owners bypass RLS).
   await client.query(`insert into items (user_id, name, unit, unit_price) values ('ABC','ค่าทดสอบ','งาน',100)`)
@@ -132,7 +178,7 @@ try {
   // Covers draft → sent → opened → signed → issued → void.
   const v = await client.query(
     `insert into vendor_payees (user_id, vendor_no, prefix, name, address, id_number_encrypted)
-     values ('ABC', 1, 'นาย', 'ผู้ขาย โฟลว์', 'ที่อยู่ทดสอบ', '') returning id`)
+     values ('ABC', generate_vendor_no('ABC'), 'นาย', 'ผู้ขาย โฟลว์', 'ที่อยู่ทดสอบ', '') returning id`)
   const vendorId = v.rows[0].id
   const p = await client.query(
     `insert into vendor_payables (user_id, ref, vendor_id, payment_type, description, line_items,
@@ -198,7 +244,7 @@ try {
      values ('ABC','invite-hash', now() + interval '30 days','submitted','ผู้ขาย เชิญ','ที่อยู่ทดสอบ','hash-invite','กสิกร','ผู้ขาย เชิญ', now())`)
   await client.query(
     `insert into vendor_payees (user_id, vendor_no, prefix, name, address, id_number_encrypted, id_number_hash, bank_name, account_holder)
-     values ('ABC', (select coalesce(max(vendor_no),0)+1 from vendor_payees where user_id='ABC'), 'นาย','ผู้ขาย เชิญ','ที่อยู่ทดสอบ','', 'hash-invite','กสิกร','ผู้ขาย เชิญ')`)
+     values ('ABC', generate_vendor_no('ABC'), 'นาย','ผู้ขาย เชิญ','ที่อยู่ทดสอบ','', 'hash-invite','กสิกร','ผู้ขาย เชิญ')`)
   const dup = await client.query(
     `select (select v.id from vendor_payees v where v.user_id=i.user_id and v.id_number_hash=i.tax_id_hash limit 1) as dup
      from vendor_invites i where i.token_hash='invite-hash'`)

@@ -168,7 +168,7 @@ inviteClientRoutes.post('/vendor-invites/:id/approve', async (c) => {
         (user_id, vendor_no, prefix, name, address, id_number_encrypted, id_number_hash,
          line_user_id, phone, email, bank_name, bank_account_encrypted, account_holder, id_doc_path, bank_doc_path)
       values (${g.ws},
-        (select coalesce(max(vendor_no), 0) + 1 from vendor_payees where user_id = ${g.ws}),
+        generate_vendor_no(${g.ws}),
         ${inv.prefix ?? ''}, ${inv.name}, ${inv.address}, ${inv.tax_id_encrypted ?? ''}, ${inv.tax_id_hash},
         ${inv.line_user_id}, ${inv.phone}, ${inv.email}, ${inv.bank_name}, ${inv.bank_account_encrypted},
         ${inv.account_holder}, ${inv.id_doc_path}, ${inv.bank_doc_path})

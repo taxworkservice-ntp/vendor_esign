@@ -69148,7 +69148,7 @@ dataRoutes.post("/vendors", async (c) => {
     const db = sql();
     const ins = await db`insert into vendor_payees (user_id, vendor_no, prefix, name, address, id_number_encrypted, id_number_hash, line_user_id, phone, email, is_vat_registered, bank_name, bank_account_encrypted, account_holder)
       values (${g.ws},
-        (select coalesce(max(vendor_no), 0) + 1 from vendor_payees where user_id = ${g.ws}),
+        generate_vendor_no(${g.ws}),
         ${isVendorPrefix(prefix) ? prefix : ""}, ${name}, ${(b2?.address ?? "").trim()}, ${safeEncrypt(b2?.taxId ?? "")}, ${taxHash},
         ${b2?.lineUserId?.trim() ?? null}, ${b2?.phone?.trim() ?? null}, ${b2?.email?.trim() ?? null}, ${Boolean(b2?.isVatRegistered)},
         ${b2?.bankName?.trim() || null}, ${b2?.bankAccount ? safeEncryptAccount(b2.bankAccount) || null : null}, ${b2?.accountHolder?.trim() || null})
@@ -71137,11 +71137,22 @@ async function finalizeReceipt(txnId, ip) {
       where p.id = ${txnId} and p.user_id = ${rowTenant}`);
     const payDate = isoDay(vno?.transfer_date);
     const beYear = payDate ? Number(payDate.slice(0, 4)) + 543 : currentBeYear();
-    const n = await db`select generate_doc_number(${rowTenant}, 'vendor_receipt', ${beYear}, ${Number(vno?.vendor_no ?? 0)}) as number`;
-    number = String(one(n)?.number);
-    await db`insert into vendor_receipts (user_id, transaction_id, number, issue_date, verification_code, status)
-      values (${rowTenant}, ${txnId}, ${number}, CURRENT_DATE, ${code}, 'issued')`;
-    await db`update vendor_payables set status = 'issued' where id = ${txnId}`;
+    const vendorNo = Number(vno?.vendor_no ?? 0);
+    if (!Number.isInteger(vendorNo) || vendorNo <= 0) return { ok: false, error: "no-vendor-number" };
+    const issued = await db`
+      with n as (
+        select generate_doc_number(${rowTenant}, 'vendor_receipt', ${beYear}, ${vendorNo}) as number
+      ), ins as (
+        insert into vendor_receipts (user_id, transaction_id, number, issue_date, verification_code, status)
+        select ${rowTenant}, ${txnId}, n.number, CURRENT_DATE, ${code}, 'issued' from n
+        returning number
+      ), upd as (
+        update vendor_payables set status = 'issued'
+        where id = ${txnId} and user_id = ${rowTenant}
+        returning id
+      )
+      select number from ins`;
+    number = String(one(issued)?.number);
     await withTenant(rowTenant, "client", async () => audit(rowTenant, "vendor_receipts", txnId, "receipt.issued", "system", { number }, ip));
   }
   const rows = await db`
@@ -71390,7 +71401,7 @@ inviteClientRoutes.post("/vendor-invites/:id/approve", async (c) => {
         (user_id, vendor_no, prefix, name, address, id_number_encrypted, id_number_hash,
          line_user_id, phone, email, bank_name, bank_account_encrypted, account_holder, id_doc_path, bank_doc_path)
       values (${g.ws},
-        (select coalesce(max(vendor_no), 0) + 1 from vendor_payees where user_id = ${g.ws}),
+        generate_vendor_no(${g.ws}),
         ${inv.prefix ?? ""}, ${inv.name}, ${inv.address}, ${inv.tax_id_encrypted ?? ""}, ${inv.tax_id_hash},
         ${inv.line_user_id}, ${inv.phone}, ${inv.email}, ${inv.bank_name}, ${inv.bank_account_encrypted},
         ${inv.account_holder}, ${inv.id_doc_path}, ${inv.bank_doc_path})
@@ -72517,6 +72528,8 @@ adminApp.post("/api/admin/tenants/:id/reset", async (c) => {
       txn`delete from sessions where user_id in (select member_user_id from client_members where workspace_user_id = ${id})`
     ];
     if (resetSequences) {
+      q.push(txn`delete from doc_number_sequences
+        where user_id = ${id} and doc_type = 'vendor_payee'`);
       q.push(txn`insert into doc_number_sequences (user_id, doc_type, be_year, vendor_no, last_number)
         values (${id}, 'vendor_receipt', ${beYear}, 0, ${start - 1})
         on conflict (user_id, doc_type, be_year, vendor_no) do update set last_number = excluded.last_number`);

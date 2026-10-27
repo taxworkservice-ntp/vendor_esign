@@ -56,9 +56,21 @@ Then: `cp .env.example .env.local` and paste the string as `DATABASE_URL=...`
   (`server/src/*`, `src/server/db.ts`) use service credentials.
 - RLS: `withTenant()` sets `app.user_id` (workspace) + `app.role` per request;
   policies read `user_id = app_user_id()` (bookkeeper/super_admin bypass).
-- Receipt numbers: call `generate_doc_number(user_id, doc_type, year, prefix)`
+- Receipt numbers: call `generate_doc_number(user_id, doc_type, year, vendor_no)`
   INSIDE the same txn as the `vendor_receipts` insert (`FOR UPDATE` lock — never
-  `MAX()+1`). Unique `(user_id, number)` is the backstop.
+  `MAX()+1`). Unique `(user_id, number)` is the backstop. The series is
+  per-vendor: `RCT-{vendor_no}-{BE_YEAR}-{SEQ}`, and each vendor's book opens at
+  `client_profiles.start_number` (default 1 → `…-001`). The `vendor_no = 0` row
+  is only a legacy seed and must never drive a new series (see `037`).
+- Vendor numbers: allocate with `generate_vendor_no(user_id)` — never
+  `max(vendor_no) + 1`, which races. Enforced by `CHECK (vendor_no > 0)` and
+  `UNIQUE (user_id, vendor_no)` (`038`), so no payee can share a receipt book and
+  none can issue an `RCT-000-…` document. The counter lives in
+  `doc_number_sequences` under `doc_type = 'vendor_payee'`.
+- Issuance is one statement (`finalizeReceipt`): `generate_doc_number()` in a
+  CTE with the `vendor_receipts` insert and the payable's status update. On
+  Neon's HTTP driver each bare statement is its own transaction, so separating
+  them lets a failed insert burn a series number and leave a gap.
 - Audit is append-only via trigger; `UPDATE/DELETE` raises.
 - Vendor recall (`006`): partial index `idx_pt_vendor_recent` on
   `(user_id, vendor_id, created_at DESC) WHERE status NOT IN

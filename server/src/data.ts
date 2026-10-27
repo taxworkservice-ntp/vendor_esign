@@ -252,7 +252,7 @@ dataRoutes.post('/vendors', async (c) => {
     const db = sql()
     const ins = (await db`insert into vendor_payees (user_id, vendor_no, prefix, name, address, id_number_encrypted, id_number_hash, line_user_id, phone, email, is_vat_registered, bank_name, bank_account_encrypted, account_holder)
       values (${g.ws},
-        (select coalesce(max(vendor_no), 0) + 1 from vendor_payees where user_id = ${g.ws}),
+        generate_vendor_no(${g.ws}),
         ${isVendorPrefix(prefix) ? prefix : ''}, ${name}, ${(b?.address ?? '').trim()}, ${safeEncrypt(b?.taxId ?? '')}, ${taxHash},
         ${b?.lineUserId?.trim() ?? null}, ${b?.phone?.trim() ?? null}, ${b?.email?.trim() ?? null}, ${Boolean(b?.isVatRegistered)},
         ${b?.bankName?.trim() || null}, ${b?.bankAccount ? safeEncryptAccount(b.bankAccount) || null : null}, ${b?.accountHolder?.trim() || null})

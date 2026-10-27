@@ -154,7 +154,7 @@ try {
 
   // Two slip-less transactions per workspace used to be impossible (UNIQUE on
   // a NOT NULL ''), which broke the second POST /transactions.
-  await client.query(`insert into vendor_payees (id, user_id, name, address, id_number_encrypted) values ($1,$2,'สมชาย','กรุงเทพ','x')`, [
+  await client.query(`insert into vendor_payees (id, user_id, vendor_no, name, address, id_number_encrypted) values ($1,$2, generate_vendor_no($2),'สมชาย','กรุงเทพ','x')`, [
     V1,
     WS,
   ])
@@ -234,7 +234,7 @@ try {
 
   // Tenant isolation: another workspace exists but must not appear.
   await client.query(`insert into client_profiles (id, name, client_code, status, be_year) values ('ZZZ','อื่น','ZZZ','active',2569)`)
-  await client.query(`insert into vendor_payees (id, user_id, name, address, id_number_encrypted) values ($1,'ZZZ','อื่น','กรุงเทพ','x')`, [V2])
+  await client.query(`insert into vendor_payees (id, user_id, vendor_no, name, address, id_number_encrypted) values ($1,'ZZZ', generate_vendor_no('ZZZ'),'อื่น','กรุงเทพ','x')`, [V2])
   await client.query(
     `insert into vendor_payables (user_id, ref, vendor_id, payment_type, description, gross_amount, wht_rate, wht_amount, net_amount, transfer_date, slip_reference, status)
      values ('ZZZ','TX-99',$1,'ค่าบริการ','งาน',999,0,0,999,'2026-09-01','','draft')`,
